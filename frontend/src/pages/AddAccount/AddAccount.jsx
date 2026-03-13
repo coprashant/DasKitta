@@ -1,50 +1,43 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { addAccountApi, getAccountsApi, deleteAccountApi } from "../../api/accounts";
+import { addAccountApi, getAccountsApi, deleteAccountApi, getDpListApi } from "../../api/accounts";
 import Navbar from "../../components/Navbar";
 import toast from "react-hot-toast";
 import "./AddAccount.css";
-
-const DPID_LIST = [
-  { id: "13200", name: "Kumari Bank" },
-  { id: "13300", name: "NIC Asia Bank" },
-  { id: "13000", name: "Nepal Investment Bank" },
-  { id: "13100", name: "Nabil Bank" },
-  { id: "13400", name: "Laxmi Bank" },
-  { id: "13500", name: "Siddhartha Bank" },
-  { id: "13600", name: "Global IME Bank" },
-  { id: "13700", name: "Citizens Bank" },
-  { id: "13800", name: "Prime Commercial Bank" },
-  { id: "13900", name: "Sunrise Bank" },
-  { id: "14000", name: "Century Bank" },
-  { id: "14100", name: "Sanima Bank" },
-  { id: "14200", name: "Mega Bank" },
-  { id: "14300", name: "Civil Bank" },
-  { id: "14400", name: "Nepal SBI Bank" },
-  { id: "14500", name: "Everest Bank" },
-  { id: "14600", name: "Prabhu Bank" },
-  { id: "14700", name: "Rastriya Banijya Bank" },
-  { id: "14800", name: "Agricultural Development Bank" },
-  { id: "14900", name: "Nepal Bank" },
-];
 
 const AddAccount = () => {
   const navigate = useNavigate();
   const [form, setForm] = useState({ dpId: "", username: "", password: "" });
   const [accounts, setAccounts] = useState([]);
+  const [dpList, setDpList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(null);
+  const [dpLoading, setDpLoading] = useState(true);
 
   useEffect(() => {
     fetchAccounts();
+    fetchDpList();
+    return () => setForm({ dpId: "", username: "", password: "" });
   }, []);
+
+  const fetchDpList = async () => {
+    setDpLoading(true);
+    try {
+      const res = await getDpListApi();
+      setDpList(res.data);
+    } catch (err) {
+      toast.error("Failed to load DP list. Please refresh.");
+    } finally {
+      setDpLoading(false);
+    }
+  };
 
   const fetchAccounts = async () => {
     try {
       const res = await getAccountsApi();
       setAccounts(res.data);
     } catch (err) {
-      console.error(err);
+      toast.error("Failed to load saved accounts.");
     }
   };
 
@@ -54,6 +47,14 @@ const AddAccount = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form.dpId || !form.username || !form.password) {
+      toast.error("All fields are required");
+      return;
+    }
+    if (form.password.length < 6) {
+      toast.error("Password seems too short");
+      return;
+    }
     setLoading(true);
     try {
       await addAccountApi(form);
@@ -68,6 +69,7 @@ const AddAccount = () => {
   };
 
   const handleDelete = async (id) => {
+    if (!window.confirm("Remove this Meroshare account?")) return;
     setDeleting(id);
     try {
       await deleteAccountApi(id);
@@ -100,9 +102,12 @@ const AddAccount = () => {
                   value={form.dpId}
                   onChange={handleChange}
                   required
+                  disabled={dpLoading}
                 >
-                  <option value="">Select your bank / DP</option>
-                  {DPID_LIST.map((dp) => (
+                  <option value="">
+                    {dpLoading ? "Loading DPs..." : "Select your bank / DP"}
+                  </option>
+                  {dpList.map((dp) => (
                     <option key={dp.id} value={dp.id}>
                       {dp.name} ({dp.id})
                     </option>
@@ -138,7 +143,11 @@ const AddAccount = () => {
                 Your password is AES-encrypted before being saved to the database.
               </div>
 
-              <button type="submit" className="btn btn-primary" disabled={loading}>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={loading || dpLoading}
+              >
                 {loading ? "Verifying & Adding..." : "Add Account"}
               </button>
             </form>

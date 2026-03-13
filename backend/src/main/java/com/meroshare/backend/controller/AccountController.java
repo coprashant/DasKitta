@@ -3,6 +3,7 @@ package com.meroshare.backend.controller;
 import com.meroshare.backend.dto.MeroshareAccountRequest;
 import com.meroshare.backend.dto.MeroshareAccountResponse;
 import com.meroshare.backend.service.MeroshareAccountService;
+import com.meroshare.backend.service.MeroshareApiService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -11,6 +12,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/accounts")
@@ -18,6 +20,12 @@ import java.util.List;
 public class AccountController {
 
     private final MeroshareAccountService accountService;
+    private final MeroshareApiService meroshareApiService;
+
+    @GetMapping("/dp-list")
+    public ResponseEntity<List<Map>> getDpList() {
+        return ResponseEntity.ok(meroshareApiService.getDpList());
+    }
 
     @PostMapping
     public ResponseEntity<MeroshareAccountResponse> addAccount(
