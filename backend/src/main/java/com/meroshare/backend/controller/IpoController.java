@@ -20,7 +20,6 @@ public class IpoController {
 
     private final IpoService ipoService;
 
-    // Get currently open IPOs from CDSC
     @GetMapping("/open")
     public ResponseEntity<List> getOpenIpos(
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -29,7 +28,14 @@ public class IpoController {
                 ipoService.getOpenIpos(userDetails.getUsername()));
     }
 
-    // Apply for an IPO across multiple accounts
+    @GetMapping("/closed")
+    public ResponseEntity<List> getClosedIpos(
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        return ResponseEntity.ok(
+                ipoService.getClosedIpos(userDetails.getUsername()));
+    }
+
     @PostMapping("/apply")
     public ResponseEntity<List<IpoApplyResult>> applyIpo(
             @Valid @RequestBody IpoApplyRequest request,
@@ -39,9 +45,6 @@ public class IpoController {
                 ipoService.applyForAll(request, userDetails.getUsername()));
     }
 
-    // Public endpoint - no login required
-    // If logged in, checks results for that user's accounts
-    // If not logged in, checks by BOID directly
     @GetMapping("/result/{shareId}")
     public ResponseEntity<List<IpoApplicationResponse>> checkResult(
             @PathVariable String shareId,
@@ -61,7 +64,6 @@ public class IpoController {
         return ResponseEntity.badRequest().build();
     }
 
-    // Full application history for the logged in user
     @GetMapping("/history")
     public ResponseEntity<List<IpoApplicationResponse>> getHistory(
             @AuthenticationPrincipal UserDetails userDetails) {

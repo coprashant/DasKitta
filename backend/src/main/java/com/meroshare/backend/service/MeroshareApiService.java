@@ -23,7 +23,11 @@ public class MeroshareApiService {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private WebClient buildClient() {
-        return WebClient.builder()
+        return buildClientWithToken(null);
+    }
+
+    private WebClient buildClientWithToken(String token) {
+        WebClient.Builder builder = WebClient.builder()
                 .baseUrl(baseUrl)
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .defaultHeader(HttpHeaders.ACCEPT, "application/json, text/plain, */*")
@@ -39,8 +43,14 @@ public class MeroshareApiService {
                 .defaultHeader("Sec-Fetch-Mode", "cors")
                 .defaultHeader("Sec-Fetch-Site", "same-site")
                 .defaultHeader("Connection", "keep-alive")
-                .codecs(config -> config.defaultCodecs().maxInMemorySize(2 * 1024 * 1024))
-                .build();
+                .codecs(config -> config.defaultCodecs().maxInMemorySize(2 * 1024 * 1024));
+
+        if (token != null && !token.isBlank()) {
+            builder.defaultHeader("Authorization", token)
+                   .defaultHeader("Cookie", "Authorization=" + token);
+        }
+
+        return builder.build();
     }
 
     private Map parseJsonResponse(String raw, String context) {
@@ -73,7 +83,6 @@ public class MeroshareApiService {
             log.info("[DP_LIST] Raw response: {}", raw);
 
             if (raw == null || raw.isBlank() || raw.trim().startsWith("<")) {
-                log.warn("[DP_LIST] Invalid response from CDSC, returning empty list");
                 return List.of();
             }
 
@@ -85,55 +94,52 @@ public class MeroshareApiService {
         }
     }
 
-public String login(String dpId, String username, String password) {
-    Map<String, Object> body = new HashMap<>();
-    body.put("clientId", Integer.parseInt(dpId));
-    body.put("username", username);
-    body.put("password", password);
+    public String login(String dpId, String username, String password) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("clientId", Integer.parseInt(dpId));
+        body.put("username", username);
+        body.put("password", password);
 
-    log.info("Attempting Meroshare login for user: {} dpId: {}", username, dpId);
+        log.info("Attempting Meroshare login for user: {} dpId: {}", username, dpId);
 
-    var response = buildClient().post()
-            .uri("/meroShare/auth/")
-            .bodyValue(body)
-            .retrieve()
-            .toEntity(String.class)
-            .block();
+        var response = buildClient().post()
+                .uri("/meroShare/auth/")
+                .bodyValue(body)
+                .retrieve()
+                .toEntity(String.class)
+                .block();
 
-    String raw = response.getBody();
-    log.info("[LOGIN] Raw response: {}", raw);
+        String raw = response.getBody();
+        log.info("[LOGIN] Raw response: {}", raw);
 
-    if (raw == null || raw.trim().startsWith("<")) {
-        throw new RuntimeException("CDSC returned an HTML error page.");
-    }
+        if (raw == null || raw.trim().startsWith("<")) {
+            throw new RuntimeException("CDSC returned an HTML error page.");
+        }
 
-    // Extract token from Authorization cookie
-    List<String> cookies = response.getHeaders().get(HttpHeaders.SET_COOKIE);
-    if (cookies != null) {
-        for (String cookie : cookies) {
-            if (cookie.startsWith("Authorization=")) {
-                String token = cookie.split(";")[0].replace("Authorization=", "");
-                log.info("Login successful, token extracted from cookie for user: {}", username);
-                return token;
+        List<String> cookies = response.getHeaders().get(HttpHeaders.SET_COOKIE);
+        if (cookies != null) {
+            for (String cookie : cookies) {
+                if (cookie.startsWith("Authorization=")) {
+                    String token = cookie.split(";")[0].replace("Authorization=", "");
+                    log.info("Login successful, token extracted from cookie for user: {}", username);
+                    return token;
+                }
             }
         }
-    }
 
-    // Fallback: check response body for Authorization header
-    String authHeader = response.getHeaders().getFirst("Authorization");
-    if (authHeader != null && !authHeader.isBlank()) {
-        log.info("Login successful, token extracted from Authorization header");
-        return authHeader;
-    }
+        String authHeader = response.getHeaders().getFirst("Authorization");
+        if (authHeader != null && !authHeader.isBlank()) {
+            log.info("Login successful, token extracted from Authorization header for user: {}", username);
+            return authHeader;
+        }
 
-    log.error("No token found in cookies or headers. Cookies: {}", cookies);
-    throw new RuntimeException("Login succeeded but no token found. Check cookie names in logs.");
-}
+        log.error("No token found in cookies or headers. Cookies: {}", cookies);
+        throw new RuntimeException("Login succeeded but no token found.");
+    }
 
     public AccountDetails fetchAccountDetails(String token) {
-        String raw = buildClient().get()
+        String raw = buildClientWithToken(token).get()
                 .uri("/meroShare/ownDetail/")
-                .header("Authorization", token)
                 .retrieve()
                 .bodyToMono(String.class)
                 .block();
@@ -148,14 +154,19 @@ public String login(String dpId, String username, String password) {
         log.info("Account details fetched: name={} boid={}", details.getFullName(), details.getBoid());
 
         fetchBankId(token, details);
+
+        if (details.getBankId() == null && response.get("clientCode") != null) {
+            details.setBankId(String.valueOf(response.get("clientCode")));
+            log.info("Bank ID set from clientCode: {}", details.getBankId());
+        }
+
         return details;
     }
 
     private void fetchBankId(String token, AccountDetails details) {
         try {
-            String raw = buildClient().get()
+            String raw = buildClientWithToken(token).get()
                     .uri("/bankRequest/")
-                    .header("Authorization", token)
                     .retrieve()
                     .bodyToMono(String.class)
                     .block();
@@ -176,23 +187,53 @@ public String login(String dpId, String username, String password) {
     }
 
     public List<Map> getOpenIpos(String token) {
-        String raw = buildClient().get()
-                .uri("/meroShare/active/")
-                .header("Authorization", token)
-                .retrieve()
-                .bodyToMono(String.class)
-                .block();
-
-        log.info("[OPEN_IPOS] Raw response: {}", raw);
-
         try {
+            String raw = buildClientWithToken(token).get()
+                    .uri("/meroShare/active/")
+                    .retrieve()
+                    .onStatus(status -> status.is5xxServerError(), response -> {
+                        log.warn("[OPEN_IPOS] CDSC returned 5xx - no open IPOs available");
+                        return reactor.core.publisher.Mono.empty();
+                    })
+                    .bodyToMono(String.class)
+                    .block();
+
             if (raw == null || raw.isBlank() || raw.trim().startsWith("<")) {
+                log.info("[OPEN_IPOS] No open IPOs or empty response");
                 return List.of();
             }
+
+            log.info("[OPEN_IPOS] Raw response: {}", raw);
             return objectMapper.readValue(raw,
                     objectMapper.getTypeFactory().constructCollectionType(List.class, Map.class));
         } catch (Exception e) {
-            log.error("Failed to parse open IPOs: {}", e.getMessage());
+            log.warn("[OPEN_IPOS] Failed: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    public List<Map> getClosedIpos(String token) {
+        try {
+            String raw = buildClientWithToken(token).get()
+                    .uri("/meroShare/applicant/report/")
+                    .retrieve()
+                    .onStatus(status -> status.is5xxServerError(), response -> {
+                        log.warn("[CLOSED_IPOS] CDSC returned 5xx");
+                        return reactor.core.publisher.Mono.empty();
+                    })
+                    .bodyToMono(String.class)
+                    .block();
+
+            if (raw == null || raw.isBlank() || raw.trim().startsWith("<")) {
+                log.info("[CLOSED_IPOS] No closed IPOs or empty response");
+                return List.of();
+            }
+
+            log.info("[CLOSED_IPOS] Raw response: {}", raw);
+            return objectMapper.readValue(raw,
+                    objectMapper.getTypeFactory().constructCollectionType(List.class, Map.class));
+        } catch (Exception e) {
+            log.warn("[CLOSED_IPOS] Failed: {}", e.getMessage());
             return List.of();
         }
     }
@@ -212,9 +253,8 @@ public String login(String dpId, String username, String password) {
 
         log.info("Applying IPO shareId={} boid={} kitta={}", shareId, boid, kitta);
 
-        String raw = buildClient().post()
+        String raw = buildClientWithToken(token).post()
                 .uri("/meroShare/applicant/")
-                .header("Authorization", token)
                 .bodyValue(body)
                 .retrieve()
                 .bodyToMono(String.class)
@@ -241,11 +281,14 @@ public String login(String dpId, String username, String password) {
         result.setStatus("UNKNOWN");
 
         try {
-            String raw = buildClient().post()
+            String raw = buildClientWithToken(token).post()
                     .uri("/meroShare/applicant/report/detail/")
-                    .header("Authorization", token)
                     .bodyValue(Map.of("boid", boid, "shareId", shareId))
                     .retrieve()
+                    .onStatus(status -> status.is5xxServerError(), response -> {
+                        log.warn("[CHECK_RESULT] CDSC returned 5xx for boid={} shareId={}", boid, shareId);
+                        return reactor.core.publisher.Mono.empty();
+                    })
                     .bodyToMono(String.class)
                     .block();
 

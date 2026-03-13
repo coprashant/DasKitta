@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { checkResultApi } from "../../api/ipo";
+import { useState, useEffect } from "react";
+import { checkResultApi, getOpenIposApi, getClosedIposApi } from "../../api/ipo";
 import { useAuth } from "../../context/AuthContext";
 import { Link } from "react-router-dom";
 import Navbar from "../../components/Navbar";
@@ -13,11 +13,53 @@ const ResultChecker = () => {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [checked, setChecked] = useState(false);
+  const [ipoList, setIpoList] = useState([]);
+  const [ipoListLoading, setIpoListLoading] = useState(true);
+
+  useEffect(() => {
+    fetchIpoList();
+  }, []);
+
+  const fetchIpoList = async () => {
+    setIpoListLoading(true);
+    try {
+      const [openRes, closedRes] = await Promise.allSettled([
+        getOpenIposApi(),
+        user ? getClosedIposApi() : Promise.resolve({ data: [] }),
+      ]);
+
+      const open = openRes.status === "fulfilled" ? (openRes.value.data || []) : [];
+      const closed = closedRes.status === "fulfilled" ? (closedRes.value.data || []) : [];
+
+      const seen = new Set();
+      const merged = [...open, ...closed].filter((ipo) => {
+        const key = ipo.id || ipo.shareId;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      const sorted = merged.sort((a, b) => {
+        const dateA = new Date(a.issueOpenDate || a.openDate || a.closingDate || 0);
+        const dateB = new Date(b.issueOpenDate || b.openDate || b.closingDate || 0);
+        return dateB - dateA;
+      });
+
+      setIpoList(sorted);
+      if (sorted.length > 0) {
+        setShareId(String(sorted[0].id || sorted[0].shareId || ""));
+      }
+    } catch (err) {
+      toast.error("Failed to load IPO list");
+    } finally {
+      setIpoListLoading(false);
+    }
+  };
 
   const handleCheck = async (e) => {
     e.preventDefault();
     if (!shareId.trim()) {
-      toast.error("Enter a Share ID");
+      toast.error("Select an IPO");
       return;
     }
     if (!user && !boid.trim()) {
@@ -30,16 +72,15 @@ const ResultChecker = () => {
     setChecked(false);
 
     try {
-      const url = user
-        ? checkResultApi(shareId)
-        : checkResultApi(`${shareId}?boid=${boid}`);
+      const res = user
+        ? await checkResultApi(shareId)
+        : await checkResultApi(`${shareId}?boid=${boid}`);
 
-      const res = await url;
       setResults(res.data);
       setChecked(true);
 
       if (res.data.length === 0) {
-        toast("No results found for this Share ID");
+        toast("No results found for this IPO");
       }
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to check result");
@@ -47,6 +88,10 @@ const ResultChecker = () => {
       setLoading(false);
     }
   };
+
+  const selectedIpo = ipoList.find(
+    (ipo) => String(ipo.id || ipo.shareId) === shareId
+  );
 
   return (
     <div>
@@ -72,24 +117,39 @@ const ResultChecker = () => {
         <p className="page-subtitle">
           {user
             ? "Check results for all your Meroshare accounts at once."
-            : "Check your IPO result without signing in. Enter your BOID and Share ID."}
+            : "Check your IPO result without signing in. Enter your BOID and select the IPO."}
         </p>
 
         <div className="result-checker-layout">
           <div className="card result-form">
             <form onSubmit={handleCheck}>
               <div className="form-group">
-                <label>Share ID</label>
-                <input
-                  type="text"
+                <label>IPO / Share</label>
+                <select
                   value={shareId}
                   onChange={(e) => setShareId(e.target.value)}
-                  placeholder="e.g. 2185"
                   required
-                />
-                <span className="input-hint">
-                  Find the Share ID on the CDSC website or Meroshare app.
-                </span>
+                  disabled={ipoListLoading}
+                >
+                  <option value="">
+                    {ipoListLoading ? "Loading IPOs..." : "Select an IPO"}
+                  </option>
+                  {ipoList.map((ipo) => (
+                    <option
+                      key={ipo.id || ipo.shareId}
+                      value={String(ipo.id || ipo.shareId)}
+                    >
+                      {ipo.companyName || ipo.name || `Share ID: ${ipo.id || ipo.shareId}`}
+                    </option>
+                  ))}
+                </select>
+                {selectedIpo && (
+                  <span className="input-hint">
+                    Share ID: {selectedIpo.id || selectedIpo.shareId}
+                    {selectedIpo.issueOpenDate && ` · Open: ${new Date(selectedIpo.issueOpenDate).toLocaleDateString()}`}
+                    {selectedIpo.issueCloseDate && ` · Close: ${new Date(selectedIpo.issueCloseDate).toLocaleDateString()}`}
+                  </span>
+                )}
               </div>
 
               {!user && (
@@ -114,7 +174,7 @@ const ResultChecker = () => {
               <button
                 type="submit"
                 className="btn btn-primary result-check-btn"
-                disabled={loading}
+                disabled={loading || ipoListLoading}
               >
                 {loading ? "Checking..." : "Check Result"}
               </button>
@@ -145,9 +205,17 @@ const ResultChecker = () => {
                         <p className="result-card-name">
                           {r.accountFullName || r.accountUsername}
                         </p>
-                        <p className="result-card-share">Share ID: {r.shareId}</p>
+                        <p className="result-card-share">
+                          {r.companyName || `Share ID: ${r.shareId}`}
+                        </p>
                       </div>
-                      <span className={`badge result-badge ${r.resultStatus === "ALLOTTED" ? "badge-success" : r.resultStatus === "NOT_ALLOTTED" ? "badge-danger" : "badge-muted"}`}>
+                      <span className={`badge result-badge ${
+                        r.resultStatus === "ALLOTTED"
+                          ? "badge-success"
+                          : r.resultStatus === "NOT_ALLOTTED"
+                          ? "badge-danger"
+                          : "badge-muted"
+                      }`}>
                         {r.resultStatus || "UNKNOWN"}
                       </span>
                     </div>
