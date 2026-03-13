@@ -43,9 +43,9 @@ public class SecurityConfig {
             .sessionManagement(session ->
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // Public routes
                 .requestMatchers("/api/auth/**").permitAll()
-                // Everything else requires a valid JWT
+                // Anyone can check IPO results without logging in
+                .requestMatchers("/api/ipo/result/**").permitAll()
                 .anyRequest().authenticated()
             )
             .authenticationProvider(authenticationProvider())

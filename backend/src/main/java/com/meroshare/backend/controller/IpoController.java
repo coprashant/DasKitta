@@ -39,14 +39,26 @@ public class IpoController {
                 ipoService.applyForAll(request, userDetails.getUsername()));
     }
 
-    // Check IPO result for a specific share across all accounts
+    // Public endpoint - no login required
+    // If logged in, checks results for that user's accounts
+    // If not logged in, checks by BOID directly
     @GetMapping("/result/{shareId}")
     public ResponseEntity<List<IpoApplicationResponse>> checkResult(
             @PathVariable String shareId,
+            @RequestParam(required = false) String boid,
             @AuthenticationPrincipal UserDetails userDetails) {
 
-        return ResponseEntity.ok(
-                ipoService.checkResults(shareId, userDetails.getUsername()));
+        if (userDetails != null) {
+            return ResponseEntity.ok(
+                    ipoService.checkResults(shareId, userDetails.getUsername()));
+        }
+
+        if (boid != null && !boid.isBlank()) {
+            return ResponseEntity.ok(
+                    ipoService.checkResultByBoid(shareId, boid));
+        }
+
+        return ResponseEntity.badRequest().build();
     }
 
     // Full application history for the logged in user

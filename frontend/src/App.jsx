@@ -1,15 +1,16 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import Dashboard from "./pages/Dashboard";
-import AddAccount from "./pages/AddAccount";
-import IPOApply from "./pages/IPOApply";
-import ResultChecker from "./pages/ResultChecker";
-import History from "./pages/History";
+import Landing from "./pages/Home/Home";
+import Login from "./pages/Auth/Login";
+import Register from "./pages/Auth/Register";
+import Dashboard from "./pages/Dashboard/Dashboard";
+import AddAccount from "./pages/AddAccount/AddAccount";
+import IPOApply from "./pages/IPOApply/IPOApply";
+import ResultChecker from "./pages/ResultChecker/ResultChecker";
+import History from "./pages/History/History";
 
 const App = () => {
   return (
@@ -17,9 +18,10 @@ const App = () => {
       <AuthProvider>
         <Toaster position="top-right" />
         <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/ipo/result" element={<ResultChecker />} />
 
           <Route path="/dashboard" element={
             <ProtectedRoute><Dashboard /></ProtectedRoute>
@@ -29,9 +31,6 @@ const App = () => {
           } />
           <Route path="/ipo/apply" element={
             <ProtectedRoute><IPOApply /></ProtectedRoute>
-          } />
-          <Route path="/ipo/result" element={
-            <ProtectedRoute><ResultChecker /></ProtectedRoute>
           } />
           <Route path="/history" element={
             <ProtectedRoute><History /></ProtectedRoute>

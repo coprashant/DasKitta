@@ -30,20 +30,17 @@ public class IpoService {
     private final MeroshareApiService meroshareApiService;
     private final EncryptionUtil encryptionUtil;
 
-    // Apply IPO for multiple accounts in one call
     public List<IpoApplyResult> applyForAll(IpoApplyRequest request, String username) {
         List<IpoApplyResult> results = new ArrayList<>();
 
         for (Long accountId : request.getAccountIds()) {
-            MeroshareAccount account = accountRepository.findById(accountId)
-                    .orElse(null);
+            MeroshareAccount account = accountRepository.findById(accountId).orElse(null);
 
             if (account == null) {
                 results.add(buildResult(accountId, null, null, "FAILED", "Account not found"));
                 continue;
             }
 
-            // Skip if already applied
             if (ipoApplicationRepository.existsByMeroshareAccountIdAndShareId(
                     accountId, request.getShareId())) {
                 results.add(buildResult(accountId, account.getUsername(),
@@ -68,20 +65,12 @@ public class IpoService {
 
         try {
             String decryptedPassword = encryptionUtil.decrypt(account.getPassword());
-
             String token = meroshareApiService.login(
-                    account.getDpId(),
-                    account.getUsername(),
-                    decryptedPassword
-            );
+                    account.getDpId(), account.getUsername(), decryptedPassword);
 
             String message = meroshareApiService.applyIpo(
-                    token,
-                    request.getShareId(),
-                    account.getBoid(),
-                    account.getBankId(),
-                    request.getKitta()
-            );
+                    token, request.getShareId(), account.getBoid(),
+                    account.getBankId(), request.getKitta());
 
             application.setStatus(IpoApplication.ApplicationStatus.SUCCESS);
             application.setStatusMessage(message);
@@ -91,7 +80,7 @@ public class IpoService {
                     account.getFullName(), "SUCCESS", message);
 
         } catch (Exception e) {
-            log.error("IPO apply failed for account {}: {}", account.getUsername(), e.getMessage());
+            log.error("IPO apply failed for {}: {}", account.getUsername(), e.getMessage());
             application.setStatus(IpoApplication.ApplicationStatus.FAILED);
             application.setStatusMessage(e.getMessage());
             ipoApplicationRepository.save(application);
@@ -101,7 +90,6 @@ public class IpoService {
         }
     }
 
-    // Check result for all accounts that applied for a specific share
     public List<IpoApplicationResponse> checkResults(String shareId, String username) {
         AppUser appUser = appUserRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -117,13 +105,10 @@ public class IpoService {
             try {
                 String decryptedPassword = encryptionUtil.decrypt(account.getPassword());
                 String token = meroshareApiService.login(
-                        account.getDpId(),
-                        account.getUsername(),
-                        decryptedPassword
-                );
+                        account.getDpId(), account.getUsername(), decryptedPassword);
 
-                MeroshareApiService.ResultInfo result = meroshareApiService.checkResult(
-                        token, account.getBoid(), shareId);
+                MeroshareApiService.ResultInfo result =
+                        meroshareApiService.checkResult(token, account.getBoid(), shareId);
 
                 application.setResultStatus(mapResultStatus(result.getStatus()));
                 application.setAllottedKitta(result.getAllottedKitta());
@@ -140,7 +125,31 @@ public class IpoService {
         return applications.stream().map(this::toResponse).collect(Collectors.toList());
     }
 
-    // Get full application history for the logged in user
+    // Public result check by BOID, no login needed
+    public List<IpoApplicationResponse> checkResultByBoid(String shareId, String boid) {
+        List<MeroshareAccount> accounts = accountRepository.findAll();
+        if (accounts.isEmpty()) {
+            throw new RuntimeException("No accounts available to perform result check");
+        }
+
+        MeroshareAccount account = accounts.get(0);
+        String decryptedPassword = encryptionUtil.decrypt(account.getPassword());
+        String token = meroshareApiService.login(
+                account.getDpId(), account.getUsername(), decryptedPassword);
+
+        MeroshareApiService.ResultInfo result =
+                meroshareApiService.checkResult(token, boid, shareId);
+
+        IpoApplicationResponse response = IpoApplicationResponse.builder()
+                .shareId(shareId)
+                .resultStatus(mapResultStatus(result.getStatus()).name())
+                .allottedKitta(result.getAllottedKitta())
+                .accountUsername(boid)
+                .build();
+
+        return List.of(response);
+    }
+
     public List<IpoApplicationResponse> getHistory(String username) {
         AppUser appUser = appUserRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -151,7 +160,6 @@ public class IpoService {
                 .collect(Collectors.toList());
     }
 
-    // Get currently open IPOs using any one account's token
     public List getOpenIpos(String username) {
         AppUser appUser = appUserRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"));
