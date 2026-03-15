@@ -95,7 +95,6 @@ const Dashboard = () => {
   );
 };
 
-// Sub-components for cleaner code
 const StatCard = ({ label, value, variant }) => (
   <div className={`stat-card ${variant || ""}`}>
     <span className="stat-label">{label}</span>
