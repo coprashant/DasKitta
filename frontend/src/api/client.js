@@ -13,11 +13,26 @@ client.interceptors.request.use((config) => {
   return config;
 });
 
-// If token is expired or invalid, log the user out
+// PUBLIC routes that should never trigger a logout redirect even if they
+// return 401/403 (e.g. unauthenticated access to a partially-public endpoint).
+const PUBLIC_PATHS = [
+  "/ipo/shares",
+  "/ipo/result/",
+  "/auth/login",
+  "/auth/register",
+];
+
+const isPublicPath = (url = "") =>
+  PUBLIC_PATHS.some((p) => url.includes(p));
+
+// If token is expired or invalid on a PROTECTED route, log the user out.
 client.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 403 || error.response?.status === 401) {
+    const status = error.response?.status;
+    const url = error.config?.url ?? "";
+
+    if ((status === 401 || status === 403) && !isPublicPath(url)) {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
       window.location.href = "/login";

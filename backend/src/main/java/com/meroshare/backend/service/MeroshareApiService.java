@@ -84,9 +84,6 @@ public class MeroshareApiService {
 
     // ─── JSON helpers ─────────────────────────────────────────────────────────
 
-    /**
-     * Converts a JSON array node to List<Map>.
-     */
     private List<Map> nodeArrayToList(JsonNode arrayNode) {
         List<Map> result = new ArrayList<>();
         for (JsonNode item : arrayNode) {
@@ -95,9 +92,6 @@ public class MeroshareApiService {
         return result;
     }
 
-    /**
-     * Parses a JSON string that is known to be a root array.
-     */
     private List<Map> parseJsonArraySafely(String raw, String context) {
         if (raw == null || raw.isBlank() || raw.trim().startsWith("<")) {
             log.info("[{}] Empty or HTML response", context);
@@ -114,13 +108,6 @@ public class MeroshareApiService {
         }
     }
 
-    /**
-     * Smart parser that handles several CDSC response shapes:
-     *   - [...] root array
-     *   - { "object": [...] }  (Meroshare paginated)
-     *   - { "body": [...] }
-     *   - { "body": { "companyShareList": [...] } }  ← actual CDSC result-site format
-     */
     private List<Map> parseJsonResponse(String raw, String context) {
         if (raw == null || raw.isBlank() || raw.trim().startsWith("<")) {
             log.info("[{}] Empty or HTML response", context);
@@ -152,8 +139,8 @@ public class MeroshareApiService {
         }
     }
 
-    /** Extracts a "message" field from a JSON string, or returns the raw string. */
     private String extractMessageFromJson(String raw) {
+        if (raw == null || raw.isBlank()) return "Unknown error";
         try {
             JsonNode node = objectMapper.readTree(raw);
             if (node.has("message")) return node.get("message").asText(raw);
@@ -179,8 +166,10 @@ public class MeroshareApiService {
 
     /**
      * Logs in to Meroshare and returns the bearer token.
-     * NOTE: All JSON parsing is done inside a single try-catch so that checked
-     * exceptions (JsonProcessingException etc.) are always handled.
+     * FIX: Removed the unreachable WebClientResponseException catch block that
+     * was after the RuntimeException catch block — this caused a compile-time
+     * Error at runtime (Unresolved compilation problem) because
+     * WebClientResponseException is a RuntimeException subclass.
      */
     public String login(String dpId, String username, String password) {
         int clientId;
@@ -212,7 +201,7 @@ public class MeroshareApiService {
             String raw = response.getBody();
             log.info("[LOGIN] Status: {} Body: {}", response.getStatusCode(), raw);
 
-            // Check for an error message in the body — all JSON parsing is caught below
+            // Check for an error message in the body
             if (raw != null && !raw.isBlank() && !raw.trim().startsWith("<")) {
                 try {
                     JsonNode node = objectMapper.readTree(raw);
@@ -262,11 +251,13 @@ public class MeroshareApiService {
             log.error("[LOGIN] No token found. Cookies: {}", cookies);
             throw new RuntimeException("Login succeeded but no token received. Please verify your credentials.");
 
-        } catch (RuntimeException re) {
-            throw re;
         } catch (WebClientResponseException e) {
+            // FIX: WebClientResponseException is caught BEFORE the generic Exception
+            // so the compiler sees it as reachable. Order matters!
             log.error("[LOGIN] HTTP {} error: {}", e.getStatusCode(), e.getResponseBodyAsString());
             throw new RuntimeException("Meroshare login failed: " + extractMessageFromJson(e.getResponseBodyAsString()));
+        } catch (RuntimeException re) {
+            throw re;
         } catch (Exception e) {
             log.error("[LOGIN] Unexpected error: {}", e.getMessage());
             throw new RuntimeException("Meroshare login failed: " + e.getMessage());
@@ -457,6 +448,9 @@ public class MeroshareApiService {
         } catch (WebClientResponseException e) {
             log.error("[APPLY_IPO] HTTP {}: {}", e.getStatusCode(), e.getResponseBodyAsString());
             throw new RuntimeException(extractMessageFromJson(e.getResponseBodyAsString()));
+        } catch (Exception e) {
+            log.error("[APPLY_IPO] Failed: {}", e.getMessage());
+            throw new RuntimeException("Failed to apply IPO: " + e.getMessage());
         }
     }
 

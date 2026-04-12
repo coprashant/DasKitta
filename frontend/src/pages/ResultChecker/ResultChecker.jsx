@@ -15,6 +15,7 @@ const ResultChecker = () => {
   const [checked, setChecked] = useState(false);
   const [ipoList, setIpoList] = useState([]);
   const [ipoListLoading, setIpoListLoading] = useState(true);
+  const [ipoListError, setIpoListError] = useState(false);
 
   useEffect(() => {
     fetchIpoList();
@@ -22,19 +23,22 @@ const ResultChecker = () => {
 
   const fetchIpoList = async () => {
     setIpoListLoading(true);
+    setIpoListError(false);
     setIpoList([]);
     setShareId("");
     try {
       const res = await getPublicShareListApi();
-      // Backend returns the companyShareList array directly
       const shares = Array.isArray(res.data) ? res.data : [];
       setIpoList(shares);
       if (shares.length > 0) {
-        setShareId(String(shares[0].id ?? shares[0].shareId ?? ""));
+        // Pre-select the first entry
+        const firstId = String(shares[0].id ?? shares[0].shareId ?? "");
+        setShareId(firstId);
       }
     } catch (err) {
       console.error("Failed to load IPO list", err);
-      toast.error("Failed to load IPO list");
+      setIpoListError(true);
+      toast.error("Failed to load IPO list. Try refreshing.");
     } finally {
       setIpoListLoading(false);
     }
@@ -43,7 +47,13 @@ const ResultChecker = () => {
   const handleCheck = async (e) => {
     e.preventDefault();
     if (!shareId.trim()) { toast.error("Select an IPO"); return; }
+
+    // Guest mode requires a BOID
     if (!user && !boid.trim()) { toast.error("Enter your BOID"); return; }
+    if (!user && boid.trim().length !== 16) {
+      toast.error("BOID must be exactly 16 digits");
+      return;
+    }
 
     setLoading(true);
     setResults([]);
@@ -52,26 +62,31 @@ const ResultChecker = () => {
     try {
       const res = user
         ? await checkResultApi(shareId)
-        : await checkResultGuestApi(shareId, boid);
+        : await checkResultGuestApi(shareId, boid.trim());
 
       const data = Array.isArray(res.data) ? res.data : [];
       setResults(data);
       setChecked(true);
-      if (data.length === 0) toast("No results found for this IPO.");
+      if (data.length === 0) {
+        toast("No results found. The result may not be published yet.");
+      }
     } catch (err) {
-      toast.error(err.response?.data?.message || err.message || "Failed to check result");
+      const msg = err.response?.data?.message || err.message || "Failed to check result";
+      toast.error(msg);
+      setChecked(true); // still show the "no results" state
     } finally {
       setLoading(false);
     }
   };
 
-  // CDSC share list returns { id, name, scrip } — note "name", not "companyName"
   const getIpoDisplayName = (ipo) =>
     ipo.companyName || ipo.name || `Share #${ipo.id ?? ipo.shareId}`;
 
   const selectedIpo = ipoList.find(
     (ipo) => String(ipo.id ?? ipo.shareId) === shareId
   );
+
+  const isFormDisabled = ipoListLoading || ipoListError || ipoList.length === 0;
 
   return (
     <div>
@@ -113,25 +128,47 @@ const ResultChecker = () => {
             <form onSubmit={handleCheck}>
               <div className="form-group">
                 <label>IPO / Share</label>
-                <select
-                  value={shareId}
-                  onChange={(e) => setShareId(e.target.value)}
-                  required
-                  disabled={ipoListLoading}
-                >
-                  <option value="">
-                    {ipoListLoading ? "Loading IPOs…" : ipoList.length === 0 ? "No IPOs available" : "Select an IPO"}
-                  </option>
-                  {ipoList.map((ipo) => {
-                    const id = String(ipo.id ?? ipo.shareId ?? "");
-                    return (
-                      <option key={id} value={id}>
-                        {getIpoDisplayName(ipo)}
-                        {ipo.scrip ? ` (${ipo.scrip})` : ""}
-                      </option>
-                    );
-                  })}
-                </select>
+                {ipoListError ? (
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <span style={{ color: "var(--danger)", fontSize: 13 }}>
+                      Failed to load IPO list.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={fetchIpoList}
+                      style={{
+                        background: "none", border: "none", color: "var(--accent)",
+                        cursor: "pointer", fontSize: 13, padding: 0,
+                      }}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : (
+                  <select
+                    value={shareId}
+                    onChange={(e) => setShareId(e.target.value)}
+                    required
+                    disabled={ipoListLoading}
+                  >
+                    <option value="">
+                      {ipoListLoading
+                        ? "Loading IPOs…"
+                        : ipoList.length === 0
+                        ? "No IPOs available"
+                        : "Select an IPO"}
+                    </option>
+                    {ipoList.map((ipo) => {
+                      const id = String(ipo.id ?? ipo.shareId ?? "");
+                      return (
+                        <option key={id} value={id}>
+                          {getIpoDisplayName(ipo)}
+                          {ipo.scrip ? ` (${ipo.scrip})` : ""}
+                        </option>
+                      );
+                    })}
+                  </select>
+                )}
                 {selectedIpo && (
                   <span className="input-hint">
                     Share ID: {selectedIpo.id ?? selectedIpo.shareId}
@@ -140,18 +177,26 @@ const ResultChecker = () => {
                 )}
               </div>
 
+              {/* BOID input — only shown for guests */}
               {!user && (
                 <div className="form-group">
                   <label>Your BOID</label>
                   <input
                     type="text"
                     value={boid}
-                    onChange={(e) => setBoid(e.target.value.replace(/\D/g, ""))}
+                    onChange={(e) => setBoid(e.target.value.replace(/\D/g, "").slice(0, 16))}
                     placeholder="16-digit BOID number"
                     maxLength={16}
                     required
                   />
-                  <span className="input-hint">16-digit BOID from your Meroshare profile</span>
+                  <span className="input-hint">
+                    16-digit BOID from your Meroshare profile
+                    {boid.length > 0 && boid.length < 16 && (
+                      <span style={{ color: "var(--danger)", marginLeft: 6 }}>
+                        ({16 - boid.length} digits remaining)
+                      </span>
+                    )}
+                  </span>
                 </div>
               )}
 
@@ -164,7 +209,7 @@ const ResultChecker = () => {
               <button
                 type="submit"
                 className="btn btn-primary result-check-btn"
-                disabled={loading || ipoListLoading || ipoList.length === 0}
+                disabled={loading || isFormDisabled}
               >
                 {loading ? "Checking…" : "Check Result"}
               </button>
@@ -208,7 +253,9 @@ const ResultChecker = () => {
                             : "badge-muted"
                         }`}
                       >
-                        {r.resultStatus ? r.resultStatus.replace(/_/g, " ") : "UNKNOWN"}
+                        {r.resultStatus
+                          ? r.resultStatus.replace(/_/g, " ")
+                          : "UNKNOWN"}
                       </span>
                     </div>
 

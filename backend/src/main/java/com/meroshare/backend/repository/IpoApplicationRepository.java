@@ -12,12 +12,17 @@ import java.util.Optional;
 public interface IpoApplicationRepository extends JpaRepository<IpoApplication, Long> {
 
     List<IpoApplication> findByMeroshareAccountId(Long accountId);
+
     Optional<IpoApplication> findByMeroshareAccountIdAndShareId(Long accountId, String shareId);
 
-    // Get full history for all accounts belonging to an app user
-    @Query("SELECT i FROM IpoApplication i WHERE i.meroshareAccount.appUser.id = :userId ORDER BY i.appliedAt DESC")
+    @Query("""
+        SELECT i FROM IpoApplication i
+        JOIN FETCH i.meroshareAccount ma
+        JOIN FETCH ma.appUser au
+        WHERE au.id = :userId
+        ORDER BY i.appliedAt DESC
+        """)
     List<IpoApplication> findAllByAppUserId(@Param("userId") Long userId);
 
-    // Check if an account already applied for a specific IPO
     boolean existsByMeroshareAccountIdAndShareId(Long accountId, String shareId);
 }

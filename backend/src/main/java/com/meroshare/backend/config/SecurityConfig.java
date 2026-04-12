@@ -43,9 +43,16 @@ public class SecurityConfig {
             .sessionManagement(session ->
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                // Auth endpoints — public
                 .requestMatchers("/api/auth/**").permitAll()
+                // DP list — needed on the add-account page (also hit before login)
+                .requestMatchers("/api/accounts/dp-list").permitAll()
+                // IPO public endpoints
                 .requestMatchers("/api/ipo/shares").permitAll()
+                // Result check is permitAll so both guest (?boid=) and logged-in users
+                // can hit it; the controller itself decides which path to take.
                 .requestMatchers("/api/ipo/result/**").permitAll()
+                // Everything else requires a valid JWT
                 .anyRequest().authenticated()
             )
             .authenticationProvider(authenticationProvider())
@@ -57,7 +64,13 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of(allowedOrigins));
+        // Support both localhost dev variants
+        config.setAllowedOrigins(List.of(
+            allowedOrigins,
+            "http://localhost:5173",
+            "http://localhost:5174",
+            "http://localhost:3000"
+        ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
