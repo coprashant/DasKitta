@@ -4,11 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import { getAccountsApi } from "../../api/accounts";
 import { getHistoryApi } from "../../api/ipo";
 import Navbar from "../../components/Navbar";
-import {
-  LineChart, Line, PieChart, Pie, Cell,
-  ResponsiveContainer, Tooltip, XAxis, YAxis
-} from "recharts";
-import { motion } from "framer-motion";
+import { LineChart, Line, PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import "./Dashboard.css";
 
 const Dashboard = () => {
@@ -16,22 +12,16 @@ const Dashboard = () => {
   const [data, setData] = useState({ accounts: [], history: [], loading: true });
 
   useEffect(() => {
-    const fetchData = async () => {
+    (async () => {
       try {
         const [accRes, histRes] = await Promise.all([getAccountsApi(), getHistoryApi()]);
-        const sortedHistory = (Array.isArray(histRes?.data) ? histRes.data : [])
+        const sorted = (Array.isArray(histRes?.data) ? histRes.data : [])
           .sort((a, b) => new Date(b.appliedAt) - new Date(a.appliedAt));
-
-        setData({
-          accounts: Array.isArray(accRes?.data) ? accRes.data : [],
-          history: sortedHistory,
-          loading: false,
-        });
+        setData({ accounts: Array.isArray(accRes?.data) ? accRes.data : [], history: sorted, loading: false });
       } catch {
         setData({ accounts: [], history: [], loading: false });
       }
-    };
-    fetchData();
+    })();
   }, []);
 
   const stats = useMemo(() => ({
@@ -56,186 +46,151 @@ const Dashboard = () => {
     { name: "Failed", value: stats.failed },
   ];
 
-  const sparkData = data.history.slice(-10).map((_, i) => ({ v: i + 1 }));
+  const tooltipStyle = {
+    contentStyle: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12, boxShadow: "var(--shadow)" },
+    labelStyle: { color: "var(--text-2)" },
+  };
 
   return (
-    <div className="dashboard-root">
+    <div>
       <Navbar />
-      <div className="dashboard-page">
+      <div className="page">
 
-        <motion.header
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="dash-hero"
-        >
+        <div className="dash-header">
           <div>
-            <h1 className="page-title">Operations</h1>
-            <p className="page-subtitle">
-              Welcome back, <span className="user-span">{user?.username}</span>
-            </p>
+            <h1 className="page-title">Dashboard</h1>
+            <p className="page-subtitle">Welcome back, {user?.username}</p>
           </div>
-          <div className="hero-actions">
-            <Link to="/accounts/add" className="btn btn-secondary">Add Account</Link>
-            <Link to="/ipo/apply" className="btn btn-primary">Apply IPO</Link>
+          <div className="dash-header-actions">
+            <Link to="/accounts/add" className="btn btn-secondary btn-sm">Add Account</Link>
+            <Link to="/ipo/apply" className="btn btn-primary btn-sm">Apply IPO</Link>
           </div>
-        </motion.header>
+        </div>
 
-        <section className="stats-highlight">
-          <motion.div
-            className="main-stat card"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <div>
-              <span className="stat-label">Total Applications</span>
-              <h2 className="main-value">{stats.total}</h2>
-            </div>
-            <div className="mini-chart">
-              <ResponsiveContainer width="100%" height={60}>
-                <LineChart data={sparkData}>
-                  <Line dataKey="v" stroke="#7c5cff" strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </motion.div>
-
-          <div className="side-stats">
-            <motion.div
-              className="stat-box success"
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-            >
-              <span>Allotted</span>
-              <strong>{stats.allotted}</strong>
-            </motion.div>
-            <motion.div
-              className="stat-box danger"
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.1 }}
-            >
-              <span>Failed</span>
-              <strong>{stats.failed}</strong>
-            </motion.div>
+        <div className="dash-stats">
+          <div className="stat-card">
+            <p className="stat-label">Total Applied</p>
+            <p className="stat-value">{stats.total}</p>
           </div>
-        </section>
+          <div className="stat-card">
+            <p className="stat-label">Allotted</p>
+            <p className="stat-value green">{stats.allotted}</p>
+          </div>
+          <div className="stat-card">
+            <p className="stat-label">Failed</p>
+            <p className="stat-value red">{stats.failed}</p>
+          </div>
+        </div>
 
-        <section className="charts-grid">
-          <motion.div
-            className="card chart-card"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <div className="chart-header">Applications Trend</div>
-            {lineData.length === 0 ? <EmptyState /> : (
-              <ResponsiveContainer width="100%" height={180}>
+        {data.history.length > 0 && (
+          <div className="dash-charts">
+            <div className="card">
+              <p className="chart-label">Applications Over Time</p>
+              <ResponsiveContainer width="100%" height={150}>
                 <LineChart data={lineData}>
-                  <XAxis dataKey="date" hide />
-                  <YAxis hide />
-                  <Line type="monotone" dataKey="count" stroke="#7c5cff" strokeWidth={3} dot={false} />
-                  <Tooltip />
+                  <Line type="monotone" dataKey="count" stroke="var(--accent)" strokeWidth={2} dot={false} />
+                  <Tooltip {...tooltipStyle} />
                 </LineChart>
               </ResponsiveContainer>
-            )}
-          </motion.div>
-
-          <motion.div
-            className="card chart-card"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
-            <div className="chart-header">Result Breakdown</div>
-            {pieData.every((p) => p.value === 0) ? <EmptyState /> : (
-              <ResponsiveContainer width="100%" height={180}>
-                <PieChart>
-                  <Pie data={pieData} dataKey="value" outerRadius={70}>
-                    <Cell fill="#22c55e" />
-                    <Cell fill="#ef4444" />
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            )}
-          </motion.div>
-        </section>
-
-        <div className="main-layout">
-          <section>
-            <div className="section-header">
-              <h2>Recent Activity</h2>
-              <Link to="/history" className="view-all">All Logs</Link>
             </div>
-            <div className="card table-wrapper">
+            <div className="card">
+              <p className="chart-label">Result Breakdown</p>
+              {pieData.every((p) => p.value === 0) ? (
+                <div className="inline-empty">No results yet</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={150}>
+                  <PieChart>
+                    <Pie data={pieData} dataKey="value" outerRadius={55} innerRadius={28}>
+                      <Cell fill="var(--success)" />
+                      <Cell fill="var(--danger)" />
+                    </Pie>
+                    <Tooltip {...tooltipStyle} />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="dash-main">
+          <div>
+            <div className="section-head">
+              <span className="section-title">Recent Activity</span>
+              <Link to="/history" className="section-link">View all →</Link>
+            </div>
+            <div className="card">
               {data.loading ? (
-                <LoadingPulse />
+                <div className="inline-empty">Loading…</div>
               ) : recent.length === 0 ? (
-                <EmptyState />
+                <div className="inline-empty">
+                  No applications yet. <Link to="/ipo/apply" style={{ color: "var(--accent)" }}>Apply for an IPO</Link>
+                </div>
               ) : (
-                <HistoryTable items={recent} />
+                <div className="table-scroll">
+                  <table className="dash-table">
+                    <thead>
+                      <tr>
+                        <th>Company</th>
+                        <th>Account</th>
+                        <th>Status</th>
+                        <th>Result</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recent.map((item) => (
+                        <tr key={item.id}>
+                          <td><span className="cell-primary">{item.companyName}</span></td>
+                          <td><span className="cell-dim">{item.accountUsername}</span></td>
+                          <td>
+                            <span className={`badge ${item.status === "FAILED" ? "badge-danger" : item.status === "ALREADY_APPLIED" ? "badge-warning" : "badge-success"}`}>
+                              {item.status}
+                            </span>
+                          </td>
+                          <td>
+                            {item.resultStatus ? (
+                              <span className={`badge ${item.resultStatus === "ALLOTTED" ? "badge-success" : item.resultStatus === "NOT_ALLOTTED" ? "badge-danger" : "badge-muted"}`}>
+                                {item.resultStatus.replace(/_/g, " ")}
+                              </span>
+                            ) : <span className="cell-dim">—</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
-          </section>
+          </div>
 
-          <aside>
-            <div className="section-header">
-              <h2>Accounts ({data.accounts.length})</h2>
-              <Link to="/accounts/add" className="view-all">Manage</Link>
+          <div>
+            <div className="section-head">
+              <span className="section-title">Accounts ({data.accounts.length})</span>
+              <Link to="/accounts/add" className="section-link">Manage →</Link>
             </div>
-            <div className="card nodes-list">
+            <div className="card">
               {data.accounts.length === 0 ? (
-                <EmptyState />
+                <div className="inline-empty">
+                  <Link to="/accounts/add" style={{ color: "var(--accent)" }}>Add an account</Link>
+                </div>
               ) : (
-                data.accounts.map((acc) => (
-                  <div key={acc.id} className="node-item">
-                    <div className="node-avatar">{acc.fullName?.[0] || "?"}</div>
-                    <div>
-                      <p className="node-name">{acc.fullName}</p>
-                      <p className="node-meta">{acc.username}</p>
+                <div className="account-list">
+                  {data.accounts.map((acc) => (
+                    <div key={acc.id} className="account-row">
+                      <div className="account-initial">{acc.fullName?.[0] || "?"}</div>
+                      <div>
+                        <p className="account-name">{acc.fullName}</p>
+                        <p className="account-meta">{acc.username}</p>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  ))}
+                </div>
               )}
             </div>
-          </aside>
+          </div>
         </div>
       </div>
     </div>
   );
 };
-
-const EmptyState = () => <div className="empty">No data yet</div>;
-const LoadingPulse = () => <div className="loading-pulse">Loading...</div>;
-
-const HistoryTable = ({ items }) => (
-  <table className="dash-table">
-    <thead>
-      <tr>
-        <th>Company</th>
-        <th>Account</th>
-        <th>Status</th>
-        <th>Result</th>
-      </tr>
-    </thead>
-    <tbody>
-      {items.map((item) => (
-        <tr key={item.id}>
-          <td><span className="company-text">{item.companyName}</span></td>
-          <td className="dim">{item.accountUsername}</td>
-          <td>
-            <span className={`tag ${item.status === "FAILED" ? "failed" : "success"}`}>
-              {item.status}
-            </span>
-          </td>
-          <td>
-            <span className={item.resultStatus === "ALLOTTED" ? "success" : "dim"}>
-              {item.resultStatus ? item.resultStatus.replace(/_/g, " ") : "-"}
-            </span>
-          </td>
-        </tr>
-      ))}
-    </tbody>
-  </table>
-);
 
 export default Dashboard;

@@ -12,7 +12,7 @@ const links = [
 
 const Navbar = () => {
   const { user, logout } = useAuth();
-  const location = useLocation();
+  const { pathname } = useLocation();
 
   return (
     <nav className="navbar">
@@ -23,22 +23,16 @@ const Navbar = () => {
         </Link>
 
         <div className="navbar-links">
-          {links.map((link) => (
-            <Link
-              key={link.path}
-              to={link.path}
-              className={`navbar-link ${location.pathname === link.path ? "active" : ""}`}
-            >
-              {link.label}
+          {links.map((l) => (
+            <Link key={l.path} to={l.path} className={`navbar-link${pathname === l.path ? " active" : ""}`}>
+              {l.label}
             </Link>
           ))}
         </div>
 
         <div className="navbar-user">
           <span className="navbar-username">{user?.username}</span>
-          <button onClick={logout} className="navbar-logout">
-            Logout
-          </button>
+          <button onClick={logout} className="navbar-logout">Logout</button>
         </div>
       </div>
     </nav>

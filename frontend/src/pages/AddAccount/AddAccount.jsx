@@ -38,9 +38,7 @@ const AddAccount = () => {
     }
   };
 
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -80,17 +78,16 @@ const AddAccount = () => {
       <Navbar />
       <div className="page">
         <h1 className="page-title">Meroshare Accounts</h1>
-        <p className="page-subtitle">
-          Add your Meroshare credentials. Passwords are encrypted before storing.
-        </p>
+        <p className="page-subtitle">Add and manage your Meroshare credentials. Passwords are encrypted before storing.</p>
 
         <div className="add-account-layout">
-          <div className="add-account-form card">
+          <div className="card">
             <h2 className="form-section-title">Add New Account</h2>
             <form onSubmit={handleSubmit}>
               <div className="form-group">
-                <label>Depository Participant (DP)</label>
+                <label className="form-label">Depository Participant (DP)</label>
                 <select
+                  className="input"
                   name="dpId"
                   value={form.dpId}
                   onChange={handleChange}
@@ -98,7 +95,7 @@ const AddAccount = () => {
                   disabled={dpLoading}
                 >
                   <option value="">
-                    {dpLoading ? "Loading DPs..." : "Select your bank / DP"}
+                    {dpLoading ? "Loading DPs…" : "Select your bank / DP"}
                   </option>
                   {dpList.map((dp) => (
                     <option key={dp.id} value={dp.id}>
@@ -109,67 +106,36 @@ const AddAccount = () => {
               </div>
 
               <div className="form-group">
-                <label>Meroshare Username</label>
-                <input
-                  type="text"
-                  name="username"
-                  value={form.username}
-                  onChange={handleChange}
-                  placeholder="Your Meroshare username"
-                  required
-                />
+                <label className="form-label">Meroshare Username</label>
+                <input className="input" type="text" name="username" value={form.username} onChange={handleChange} placeholder="Your Meroshare username" required />
               </div>
 
               <div className="form-group">
-                <label>Meroshare Password</label>
-                <input
-                  type="password"
-                  name="password"
-                  value={form.password}
-                  onChange={handleChange}
-                  placeholder="Your Meroshare password"
-                  required
-                />
+                <label className="form-label">Meroshare Password</label>
+                <input className="input" type="password" name="password" value={form.password} onChange={handleChange} placeholder="Your Meroshare password" required />
               </div>
 
               <div className="form-group">
-                <label>CRN Number</label>
-                <input
-                  type="text"
-                  name="crn"
-                  value={form.crn}
-                  onChange={handleChange}
-                  placeholder="Bank CRN number (required for IPO apply)"
-                />
+                <label className="form-label">CRN Number</label>
+                <input className="input" type="text" name="crn" value={form.crn} onChange={handleChange} placeholder="Bank CRN (required for IPO apply)" />
               </div>
 
               <div className="form-group">
-                <label>Transaction PIN</label>
-                <input
-                  type="password"
-                  name="pin"
-                  value={form.pin}
-                  onChange={handleChange}
-                  placeholder="Meroshare transaction PIN"
-                />
+                <label className="form-label">Transaction PIN</label>
+                <input className="input" type="password" name="pin" value={form.pin} onChange={handleChange} placeholder="Meroshare transaction PIN" />
               </div>
 
               <div className="form-note">
-                Your password and PIN are AES-encrypted before being saved to the database.
-                CRN and PIN are needed to apply for IPOs.
+                Your password and PIN are AES-encrypted before being saved. CRN and PIN are needed to apply for IPOs.
               </div>
 
-              <button
-                type="submit"
-                className="btn btn-primary"
-                disabled={loading || dpLoading}
-              >
-                {loading ? "Verifying and Adding..." : "Add Account"}
+              <button type="submit" className="btn btn-primary btn-full" disabled={loading || dpLoading}>
+                {loading ? "Verifying and Adding…" : "Add Account"}
               </button>
             </form>
           </div>
 
-          <div className="add-account-list">
+          <div>
             <h2 className="form-section-title">Saved Accounts ({accounts.length})</h2>
 
             {accounts.length === 0 ? (
@@ -177,29 +143,27 @@ const AddAccount = () => {
                 <p>No accounts added yet.</p>
               </div>
             ) : (
-              accounts.map((acc) => (
-                <div className="saved-account card" key={acc.id}>
-                  <div className="saved-account-avatar">
-                    {acc.fullName?.charAt(0) || "?"}
+              <div className="saved-accounts-list">
+                {accounts.map((acc) => (
+                  <div className="card saved-account-card" key={acc.id}>
+                    <div className="saved-account-avatar">
+                      {acc.fullName?.charAt(0) || "?"}
+                    </div>
+                    <div className="saved-account-info">
+                      <p className="saved-account-name">{acc.fullName}</p>
+                      <p className="saved-account-meta">{acc.username} · DP {acc.dpId}</p>
+                      {acc.boid && <p className="saved-account-boid">BOID: {acc.boid}</p>}
+                    </div>
+                    <button
+                      className="btn btn-danger btn-sm"
+                      onClick={() => handleDelete(acc.id)}
+                      disabled={deleting === acc.id}
+                    >
+                      {deleting === acc.id ? "…" : "Remove"}
+                    </button>
                   </div>
-                  <div className="saved-account-info">
-                    <p className="saved-account-name">{acc.fullName}</p>
-                    <p className="saved-account-meta">
-                      {acc.username} &middot; DP {acc.dpId}
-                    </p>
-                    {acc.boid && (
-                      <p className="saved-account-boid">BOID: {acc.boid}</p>
-                    )}
-                  </div>
-                  <button
-                    className="btn btn-danger"
-                    onClick={() => handleDelete(acc.id)}
-                    disabled={deleting === acc.id}
-                  >
-                    {deleting === acc.id ? "Removing..." : "Remove"}
-                  </button>
-                </div>
-              ))
+                ))}
+              </div>
             )}
           </div>
         </div>
