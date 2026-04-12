@@ -12,6 +12,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/ipo")
@@ -20,31 +21,49 @@ public class IpoController {
 
     private final IpoService ipoService;
 
+    /**
+     * Public: returns all IPO share IDs available for result checking
+     * (proxied from CDSC result site to avoid browser CORS issues)
+     */
+    @GetMapping("/shares")
+    public ResponseEntity<List<Map>> getPublicShareList() {
+        return ResponseEntity.ok(ipoService.getPublicShareList());
+    }
+
+    @GetMapping("/lists")
+    public ResponseEntity<Map<String, List>> getIpoLists(
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(ipoService.getIpoLists(userDetails.getUsername()));
+    }
+
     @GetMapping("/open")
     public ResponseEntity<List> getOpenIpos(
             @AuthenticationPrincipal UserDetails userDetails) {
-
-        return ResponseEntity.ok(
-                ipoService.getOpenIpos(userDetails.getUsername()));
+        return ResponseEntity.ok(ipoService.getOpenIpos(userDetails.getUsername()));
     }
 
     @GetMapping("/closed")
     public ResponseEntity<List> getClosedIpos(
             @AuthenticationPrincipal UserDetails userDetails) {
-
-        return ResponseEntity.ok(
-                ipoService.getClosedIpos(userDetails.getUsername()));
+        return ResponseEntity.ok(ipoService.getClosedIpos(userDetails.getUsername()));
     }
 
     @PostMapping("/apply")
     public ResponseEntity<List<IpoApplyResult>> applyIpo(
             @Valid @RequestBody IpoApplyRequest request,
             @AuthenticationPrincipal UserDetails userDetails) {
-
-        return ResponseEntity.ok(
-                ipoService.applyForAll(request, userDetails.getUsername()));
+        return ResponseEntity.ok(ipoService.applyForAll(request, userDetails.getUsername()));
     }
 
+    /**
+     * Result check endpoint — works for both authenticated users and guests.
+     *
+     * Authenticated:  GET /api/ipo/result/{shareId}
+     *   → checks all saved accounts for this user
+     *
+     * Guest:          GET /api/ipo/result/{shareId}?boid=1234567890123456
+     *   → checks a single BOID via the public CDSC endpoint
+     */
     @GetMapping("/result/{shareId}")
     public ResponseEntity<List<IpoApplicationResponse>> checkResult(
             @PathVariable String shareId,
@@ -52,13 +71,13 @@ public class IpoController {
             @AuthenticationPrincipal UserDetails userDetails) {
 
         if (userDetails != null) {
-            return ResponseEntity.ok(
-                    ipoService.checkResults(shareId, userDetails.getUsername()));
+            // Authenticated user: check all their accounts
+            return ResponseEntity.ok(ipoService.checkResults(shareId, userDetails.getUsername()));
         }
 
         if (boid != null && !boid.isBlank()) {
-            return ResponseEntity.ok(
-                    ipoService.checkResultByBoid(shareId, boid));
+            // Guest user: check by BOID only
+            return ResponseEntity.ok(ipoService.checkResultByBoid(shareId, boid));
         }
 
         return ResponseEntity.badRequest().build();
@@ -67,8 +86,6 @@ public class IpoController {
     @GetMapping("/history")
     public ResponseEntity<List<IpoApplicationResponse>> getHistory(
             @AuthenticationPrincipal UserDetails userDetails) {
-
-        return ResponseEntity.ok(
-                ipoService.getHistory(userDetails.getUsername()));
+        return ResponseEntity.ok(ipoService.getHistory(userDetails.getUsername()));
     }
 }

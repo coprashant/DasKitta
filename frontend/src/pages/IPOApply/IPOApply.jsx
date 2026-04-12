@@ -18,14 +18,12 @@ const IPOApply = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [ipoRes, accRes] = await Promise.all([
+        const [ipoRes, accRes] = await Promise.allSettled([
           getOpenIposApi(),
           getAccountsApi(),
         ]);
-        setIpos(ipoRes.data);
-        setAccounts(accRes.data);
-      } catch (err) {
-        toast.error("Failed to load data");
+        setIpos(ipoRes.status === "fulfilled" ? (ipoRes.value.data || []) : []);
+        setAccounts(accRes.status === "fulfilled" ? accRes.value.data : []);
       } finally {
         setLoading(false);
       }
@@ -48,22 +46,14 @@ const IPOApply = () => {
   };
 
   const handleApply = async () => {
-    if (!selectedIpo) {
-      toast.error("Select an IPO first");
-      return;
-    }
-    if (selectedAccounts.length === 0) {
-      toast.error("Select at least one account");
-      return;
-    }
-
+    if (!selectedIpo) { toast.error("Select an IPO first"); return; }
+    if (selectedAccounts.length === 0) { toast.error("Select at least one account"); return; }
     setApplying(true);
     setResults([]);
-
     try {
       const res = await applyIpoApi({
-        shareId: String(selectedIpo.id),
-        companyName: selectedIpo.companyName,
+        shareId: String(selectedIpo.companyShareId || selectedIpo.id),
+        companyName: selectedIpo.companyName || selectedIpo.scrip || "Unknown",
         kitta,
         accountIds: selectedAccounts,
       });
@@ -78,22 +68,13 @@ const IPOApply = () => {
   };
 
   const statusBadge = (status) => {
-    const map = {
-      SUCCESS: "badge-success",
-      FAILED: "badge-danger",
-      ALREADY_APPLIED: "badge-warning",
-    };
+    const map = { SUCCESS: "badge-success", FAILED: "badge-danger", ALREADY_APPLIED: "badge-warning" };
     return map[status] || "badge-muted";
   };
 
   if (loading) {
     return (
-      <div>
-        <Navbar />
-        <div className="page">
-          <p className="loading-text">Loading open IPOs...</p>
-        </div>
-      </div>
+      <div><Navbar /><div className="page"><p className="loading-text">Loading open IPOs...</p></div></div>
     );
   }
 
@@ -102,50 +83,42 @@ const IPOApply = () => {
       <Navbar />
       <div className="page">
         <h1 className="page-title">Apply IPO</h1>
-        <p className="page-subtitle">
-          Select an IPO and accounts to apply in one click.
-        </p>
-
+        <p className="page-subtitle">Select an IPO and accounts to apply in one click.</p>
         <div className="apply-layout">
           <div className="apply-left">
             <div className="card">
               <h2 className="form-section-title">Open IPOs</h2>
               {ipos.length === 0 ? (
-                <div className="empty-state">
-                  <p>No IPOs are currently open.</p>
-                </div>
+                <div className="empty-state"><p>No IPOs are currently open.</p></div>
               ) : (
                 <div className="ipo-list">
-                  {ipos.map((ipo) => (
-                    <div
-                      key={ipo.id}
-                      className={`ipo-item ${selectedIpo?.id === ipo.id ? "selected" : ""}`}
-                      onClick={() => setSelectedIpo(ipo)}
-                    >
-                      <div className="ipo-item-info">
-                        <p className="ipo-item-name">{ipo.companyName}</p>
-                        <p className="ipo-item-meta">
-                          Share ID: {ipo.id} &middot; {ipo.subGroup || "IPO"}
-                        </p>
+                  {ipos.map((ipo) => {
+                    const id = ipo.companyShareId || ipo.id;
+                    const name = ipo.companyName || ipo.scrip || "Unknown";
+                    const subGroup = ipo.shareTypeName || ipo.subGroup || "IPO";
+                    return (
+                      <div
+                        key={id}
+                        className={`ipo-item ${selectedIpo?.companyShareId === ipo.companyShareId ? "selected" : ""}`}
+                        onClick={() => setSelectedIpo(ipo)}
+                      >
+                        <div className="ipo-item-info">
+                          <p className="ipo-item-name">{name}</p>
+                          <p className="ipo-item-meta">Share ID: {id} &middot; {subGroup}</p>
+                        </div>
+                        {selectedIpo?.companyShareId === ipo.companyShareId && (
+                          <span className="ipo-selected-dot" />
+                        )}
                       </div>
-                      {selectedIpo?.id === ipo.id && (
-                        <span className="ipo-selected-dot" />
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
-
             <div className="card">
               <h2 className="form-section-title">Kitta to Apply</h2>
               <div className="kitta-input-row">
-                <button
-                  className="kitta-btn"
-                  onClick={() => setKitta(Math.max(10, kitta - 10))}
-                >
-                  -
-                </button>
+                <button className="kitta-btn" onClick={() => setKitta(Math.max(10, kitta - 10))}>-</button>
                 <input
                   type="number"
                   className="kitta-input"
@@ -154,31 +127,20 @@ const IPOApply = () => {
                   step={10}
                   onChange={(e) => setKitta(Number(e.target.value))}
                 />
-                <button
-                  className="kitta-btn"
-                  onClick={() => setKitta(kitta + 10)}
-                >
-                  +
-                </button>
+                <button className="kitta-btn" onClick={() => setKitta(kitta + 10)}>+</button>
               </div>
             </div>
           </div>
-
           <div className="apply-right">
             <div className="card">
               <div className="accounts-header">
                 <h2 className="form-section-title">Select Accounts</h2>
                 <button className="select-all-btn" onClick={selectAll}>
-                  {selectedAccounts.length === accounts.length
-                    ? "Deselect All"
-                    : "Select All"}
+                  {selectedAccounts.length === accounts.length ? "Deselect All" : "Select All"}
                 </button>
               </div>
-
               {accounts.length === 0 ? (
-                <div className="empty-state">
-                  <p>No accounts added yet.</p>
-                </div>
+                <div className="empty-state"><p>No accounts added yet.</p></div>
               ) : (
                 <div className="account-checkboxes">
                   {accounts.map((acc) => (
@@ -188,22 +150,17 @@ const IPOApply = () => {
                       onClick={() => toggleAccount(acc.id)}
                     >
                       <div className={`checkbox ${selectedAccounts.includes(acc.id) ? "checked" : ""}`}>
-                        {selectedAccounts.includes(acc.id) && (
-                          <span className="checkmark">✓</span>
-                        )}
+                        {selectedAccounts.includes(acc.id) && <span className="checkmark">✓</span>}
                       </div>
                       <div className="account-checkbox-info">
                         <p className="account-checkbox-name">{acc.fullName}</p>
-                        <p className="account-checkbox-meta">
-                          {acc.username} &middot; DP {acc.dpId}
-                        </p>
+                        <p className="account-checkbox-meta">{acc.username} &middot; DP {acc.dpId}</p>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
             </div>
-
             <button
               className="btn btn-primary apply-btn"
               onClick={handleApply}
@@ -213,7 +170,6 @@ const IPOApply = () => {
                 ? `Applying to ${selectedAccounts.length} account(s)...`
                 : `Apply to ${selectedAccounts.length} account(s)`}
             </button>
-
             {results.length > 0 && (
               <div className="card apply-results">
                 <h2 className="form-section-title">Application Results</h2>
@@ -224,9 +180,7 @@ const IPOApply = () => {
                         <p className="result-name">{r.fullName || r.username}</p>
                         <p className="result-message">{r.message}</p>
                       </div>
-                      <span className={`badge ${statusBadge(r.status)}`}>
-                        {r.status}
-                      </span>
+                      <span className={`badge ${statusBadge(r.status)}`}>{r.status}</span>
                     </div>
                   ))}
                 </div>

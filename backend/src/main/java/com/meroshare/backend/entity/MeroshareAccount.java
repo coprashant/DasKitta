@@ -18,30 +18,38 @@ public class MeroshareAccount {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // DPID is the depository participant ID (e.g. 13200, 13300)
     @Column(nullable = false)
     private String dpId;
 
     @Column(nullable = false)
     private String username;
 
-    // Stored encrypted
     @Column(nullable = false)
     private String password;
 
-    // Full name as registered in Meroshare
     private String fullName;
 
-    // BOID fetched after login
     private String boid;
 
-    // Bank ID fetched after login, needed for IPO application
+    private String demat;
+
     private String bankId;
+
+    private String accountNumber;
+
+    private String accountBranchId;
+
+    private String accountTypeId;
+
+    private String customerId;
+
+    private String crn;
+
+    private String pin;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
-    // Many Meroshare accounts belong to one app user
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "app_user_id", nullable = false)
     private AppUser appUser;

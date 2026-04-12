@@ -8,46 +8,49 @@ import com.meroshare.backend.repository.AppUserRepository;
 import com.meroshare.backend.repository.MeroshareAccountRepository;
 import com.meroshare.backend.security.EncryptionUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class MeroshareAccountService {
 
     private final MeroshareAccountRepository accountRepository;
     private final AppUserRepository appUserRepository;
-    private final EncryptionUtil encryptionUtil;
     private final MeroshareApiService meroshareApiService;
+    private final EncryptionUtil encryptionUtil;
 
     public MeroshareAccountResponse addAccount(MeroshareAccountRequest request, String username) {
-        AppUser appUser = getAppUser(username);
+        AppUser appUser = appUserRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
-        if (accountRepository.existsByUsernameAndAppUserId(request.getUsername(), appUser.getId())) {
-            throw new RuntimeException("This Meroshare account is already added");
-        }
+        String token = meroshareApiService.login(request.getDpId(), request.getUsername(), request.getPassword());
+        MeroshareApiService.AccountDetails details = meroshareApiService.fetchAccountDetails(token);
 
-        // Verify credentials are valid by attempting login with CDSC
-        String meroshareToken = meroshareApiService.login(
-                request.getDpId(),
-                request.getUsername(),
-                request.getPassword()
-        );
-
-        // Fetch BOID and bank details using the token
-        MeroshareApiService.AccountDetails details =
-                meroshareApiService.fetchAccountDetails(meroshareToken);
+        String demat = details.getDemat() != null
+                ? details.getDemat()
+                : "130" + request.getDpId() + request.getUsername();
 
         MeroshareAccount account = MeroshareAccount.builder()
+                .appUser(appUser)
                 .dpId(request.getDpId())
                 .username(request.getUsername())
                 .password(encryptionUtil.encrypt(request.getPassword()))
                 .fullName(details.getFullName())
-                .boid(details.getBoid())
+                .boid(details.getBoid() != null ? details.getBoid() : request.getUsername())
+                .demat(demat)
                 .bankId(details.getBankId())
-                .appUser(appUser)
+                .accountNumber(details.getAccountNumber())
+                .accountBranchId(details.getAccountBranchId())
+                .accountTypeId(details.getAccountTypeId())
+                .customerId(details.getCustomerId())
+                .crn(request.getCrn())
+                .pin(request.getPin() != null && !request.getPin().isBlank()
+                        ? encryptionUtil.encrypt(request.getPin()) : null)
                 .build();
 
         accountRepository.save(account);
@@ -55,7 +58,9 @@ public class MeroshareAccountService {
     }
 
     public List<MeroshareAccountResponse> getAccounts(String username) {
-        AppUser appUser = getAppUser(username);
+        AppUser appUser = appUserRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
         return accountRepository.findByAppUserId(appUser.getId())
                 .stream()
                 .map(this::toResponse)
@@ -63,7 +68,9 @@ public class MeroshareAccountService {
     }
 
     public void deleteAccount(Long accountId, String username) {
-        AppUser appUser = getAppUser(username);
+        AppUser appUser = appUserRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
         MeroshareAccount account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new RuntimeException("Account not found"));
 
@@ -74,11 +81,6 @@ public class MeroshareAccountService {
         accountRepository.delete(account);
     }
 
-    private AppUser getAppUser(String username) {
-        return appUserRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("App user not found"));
-    }
-
     private MeroshareAccountResponse toResponse(MeroshareAccount account) {
         return MeroshareAccountResponse.builder()
                 .id(account.getId())
@@ -86,6 +88,7 @@ public class MeroshareAccountService {
                 .username(account.getUsername())
                 .fullName(account.getFullName())
                 .boid(account.getBoid())
+                .bankId(account.getBankId())
                 .createdAt(account.getCreatedAt())
                 .build();
     }

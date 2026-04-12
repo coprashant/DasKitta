@@ -78,6 +78,17 @@ body {
   background: var(--accent-hover);
 }
 
+.btn-secondary {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+
 .btn-danger {
   background: transparent;
   color: var(--danger);
@@ -121,6 +132,17 @@ body {
 .badge-muted {
   background: var(--surface-2);
   color: var(--text-muted);
+}
+
+.td-muted {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.loading-text {
+  color: var(--text-muted);
+  font-size: 14px;
+  padding: 20px 0;
 }
 
 .empty-state {

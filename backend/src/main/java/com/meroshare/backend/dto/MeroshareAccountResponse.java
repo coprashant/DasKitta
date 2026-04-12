@@ -13,7 +13,6 @@ public class MeroshareAccountResponse {
     private String username;
     private String fullName;
     private String boid;
+    private String bankId;
     private LocalDateTime createdAt;
-
-    // Password is never sent back to the frontend
 }

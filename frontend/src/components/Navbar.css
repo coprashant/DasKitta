@@ -30,15 +30,9 @@
 .navbar-logo {
   width: 32px;
   height: 32px;
-  background: var(--accent);
-  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Syne', sans-serif;
-  font-weight: 800;
-  font-size: 15px;
-  color: white;
 }
 
 .navbar-name {

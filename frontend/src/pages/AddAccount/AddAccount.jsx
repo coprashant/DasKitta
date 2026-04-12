@@ -1,13 +1,11 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { addAccountApi, getAccountsApi, deleteAccountApi, getDpListApi } from "../../api/accounts";
 import Navbar from "../../components/Navbar";
 import toast from "react-hot-toast";
 import "./AddAccount.css";
 
 const AddAccount = () => {
-  const navigate = useNavigate();
-  const [form, setForm] = useState({ dpId: "", username: "", password: "" });
+  const [form, setForm] = useState({ dpId: "", username: "", password: "", crn: "", pin: "" });
   const [accounts, setAccounts] = useState([]);
   const [dpList, setDpList] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -17,7 +15,6 @@ const AddAccount = () => {
   useEffect(() => {
     fetchAccounts();
     fetchDpList();
-    return () => setForm({ dpId: "", username: "", password: "" });
   }, []);
 
   const fetchDpList = async () => {
@@ -25,7 +22,7 @@ const AddAccount = () => {
     try {
       const res = await getDpListApi();
       setDpList(res.data);
-    } catch (err) {
+    } catch {
       toast.error("Failed to load DP list. Please refresh.");
     } finally {
       setDpLoading(false);
@@ -36,7 +33,7 @@ const AddAccount = () => {
     try {
       const res = await getAccountsApi();
       setAccounts(res.data);
-    } catch (err) {
+    } catch {
       toast.error("Failed to load saved accounts.");
     }
   };
@@ -48,18 +45,14 @@ const AddAccount = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.dpId || !form.username || !form.password) {
-      toast.error("All fields are required");
-      return;
-    }
-    if (form.password.length < 6) {
-      toast.error("Password seems too short");
+      toast.error("DP, username and password are required");
       return;
     }
     setLoading(true);
     try {
       await addAccountApi(form);
       toast.success("Account added successfully");
-      setForm({ dpId: "", username: "", password: "" });
+      setForm({ dpId: "", username: "", password: "", crn: "", pin: "" });
       fetchAccounts();
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to add account");
@@ -75,7 +68,7 @@ const AddAccount = () => {
       await deleteAccountApi(id);
       toast.success("Account removed");
       setAccounts(accounts.filter((a) => a.id !== id));
-    } catch (err) {
+    } catch {
       toast.error("Failed to remove account");
     } finally {
       setDeleting(null);
@@ -139,8 +132,31 @@ const AddAccount = () => {
                 />
               </div>
 
+              <div className="form-group">
+                <label>CRN Number</label>
+                <input
+                  type="text"
+                  name="crn"
+                  value={form.crn}
+                  onChange={handleChange}
+                  placeholder="Bank CRN number (required for IPO apply)"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Transaction PIN</label>
+                <input
+                  type="password"
+                  name="pin"
+                  value={form.pin}
+                  onChange={handleChange}
+                  placeholder="Meroshare transaction PIN"
+                />
+              </div>
+
               <div className="form-note">
-                Your password is AES-encrypted before being saved to the database.
+                Your password and PIN are AES-encrypted before being saved to the database.
+                CRN and PIN are needed to apply for IPOs.
               </div>
 
               <button
@@ -148,7 +164,7 @@ const AddAccount = () => {
                 className="btn btn-primary"
                 disabled={loading || dpLoading}
               >
-                {loading ? "Verifying & Adding..." : "Add Account"}
+                {loading ? "Verifying and Adding..." : "Add Account"}
               </button>
             </form>
           </div>

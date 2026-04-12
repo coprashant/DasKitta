@@ -18,7 +18,7 @@ const Navbar = () => {
     <nav className="navbar">
       <div className="navbar-inner">
         <Link to="/dashboard" className="navbar-brand">
-          <span className="navbar-logo">M</span>
+          <img src="/favicon.png" className="navbar-logo" alt="Logo" />
           <span className="navbar-name">Meroshare Bot</span>
         </Link>
 

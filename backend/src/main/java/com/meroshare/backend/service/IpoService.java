@@ -31,7 +31,49 @@ public class IpoService {
     private final MeroshareApiService meroshareApiService;
     private final EncryptionUtil encryptionUtil;
 
+    private MeroshareAccount getFirstAccount(String username) {
+        AppUser appUser = appUserRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        List<MeroshareAccount> accounts = accountRepository.findByAppUserId(appUser.getId());
+        if (accounts.isEmpty()) {
+            throw new RuntimeException("Add at least one Meroshare account first");
+        }
+        return accounts.get(0);
+    }
+
+    private String loginAccount(MeroshareAccount account) {
+        String decryptedPassword = encryptionUtil.decrypt(account.getPassword());
+        return meroshareApiService.login(account.getDpId(), account.getUsername(), decryptedPassword);
+    }
+
+    public List<Map> getPublicShareList() {
+        return meroshareApiService.getPublicShareList();
+    }
+
+    public Map<String, List> getIpoLists(String username) {
+        MeroshareAccount account = getFirstAccount(username);
+        String token = loginAccount(account);
+        List open = meroshareApiService.getOpenIpos(token);
+        List closed = meroshareApiService.getClosedIpos(token);
+        return Map.of("open", open, "closed", closed);
+    }
+
+    public List getOpenIpos(String username) {
+        MeroshareAccount account = getFirstAccount(username);
+        String token = loginAccount(account);
+        return meroshareApiService.getOpenIpos(token);
+    }
+
+    public List getClosedIpos(String username) {
+        MeroshareAccount account = getFirstAccount(username);
+        String token = loginAccount(account);
+        return meroshareApiService.getClosedIpos(token);
+    }
+
     public List<IpoApplyResult> applyForAll(IpoApplyRequest request, String username) {
+        AppUser appUser = appUserRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
         List<IpoApplyResult> results = new ArrayList<>();
 
         for (Long accountId : request.getAccountIds()) {
@@ -39,6 +81,12 @@ public class IpoService {
 
             if (account == null) {
                 results.add(buildResult(accountId, null, null, "FAILED", "Account not found"));
+                continue;
+            }
+
+            if (!account.getAppUser().getId().equals(appUser.getId())) {
+                results.add(buildResult(accountId, account.getUsername(),
+                        account.getFullName(), "FAILED", "Unauthorized"));
                 continue;
             }
 
@@ -65,13 +113,24 @@ public class IpoService {
                 .build();
 
         try {
-            String decryptedPassword = encryptionUtil.decrypt(account.getPassword());
-            String token = meroshareApiService.login(
-                    account.getDpId(), account.getUsername(), decryptedPassword);
+            String token = loginAccount(account);
+            String decryptedPin = account.getPin() != null
+                    ? encryptionUtil.decrypt(account.getPin()) : "";
 
             String message = meroshareApiService.applyIpo(
-                    token, request.getShareId(), account.getBoid(),
-                    account.getBankId(), request.getKitta());
+                    token,
+                    request.getShareId(),
+                    account.getDemat(),
+                    account.getBoid(),
+                    account.getAccountNumber(),
+                    account.getCustomerId(),
+                    account.getAccountBranchId(),
+                    account.getAccountTypeId(),
+                    account.getBankId(),
+                    request.getKitta(),
+                    account.getCrn(),
+                    decryptedPin
+            );
 
             application.setStatus(IpoApplication.ApplicationStatus.SUCCESS);
             application.setStatusMessage(message);
@@ -104,14 +163,40 @@ public class IpoService {
 
         for (MeroshareAccount account : accounts) {
             try {
-                String decryptedPassword = encryptionUtil.decrypt(account.getPassword());
-                String token = meroshareApiService.login(
-                        account.getDpId(), account.getUsername(), decryptedPassword);
+                String token = loginAccount(account);
 
-                MeroshareApiService.ResultInfo result =
-                        meroshareApiService.checkResult(token, account.getBoid(), shareId);
+                List<Map> report = meroshareApiService.getApplicationReport(token);
+                Map matchingApp = report.stream()
+                        .filter(item -> shareId.equals(String.valueOf(item.get("companyShareId"))))
+                        .findFirst()
+                        .orElse(null);
 
-                IpoApplication.ResultStatus mappedStatus = mapResultStatus(result.getStatus());
+                IpoApplication.ResultStatus mappedStatus;
+                int allottedKitta = 0;
+
+                if (matchingApp != null) {
+                    String statusName = (String) matchingApp.get("statusName");
+                    if ("TRANSACTION_SUCCESS".equals(statusName) || "APPROVED".equals(statusName)) {
+                        String applicationFormId = String.valueOf(matchingApp.get("applicantFormId"));
+                        MeroshareApiService.ResultInfo result =
+                                meroshareApiService.checkResult(token, applicationFormId);
+                        mappedStatus = mapResultStatus(result.getStatus());
+                        allottedKitta = result.getAllottedKitta();
+                    } else {
+                        mappedStatus = mapResultStatus(statusName);
+                    }
+                } else {
+                    // No application found in report — check via public CDSC endpoint
+                    String boid = account.getBoid();
+                    if (boid != null && !boid.isBlank()) {
+                        MeroshareApiService.ResultInfo result =
+                                meroshareApiService.checkResultPublic(boid, shareId);
+                        mappedStatus = mapResultStatus(result.getStatus());
+                        allottedKitta = result.getAllottedKitta();
+                    } else {
+                        mappedStatus = IpoApplication.ResultStatus.UNKNOWN;
+                    }
+                }
 
                 IpoApplication application = ipoApplicationRepository
                         .findByMeroshareAccountIdAndShareId(account.getId(), shareId)
@@ -124,7 +209,7 @@ public class IpoService {
                                 .build());
 
                 application.setResultStatus(mappedStatus);
-                application.setAllottedKitta(result.getAllottedKitta());
+                application.setAllottedKitta(allottedKitta);
                 application.setResultCheckedAt(LocalDateTime.now());
                 ipoApplicationRepository.save(application);
 
@@ -132,7 +217,7 @@ public class IpoService {
                         .shareId(shareId)
                         .companyName(application.getCompanyName())
                         .resultStatus(mappedStatus.name())
-                        .allottedKitta(result.getAllottedKitta())
+                        .allottedKitta(allottedKitta)
                         .resultCheckedAt(application.getResultCheckedAt())
                         .accountUsername(account.getUsername())
                         .accountFullName(account.getFullName())
@@ -152,28 +237,36 @@ public class IpoService {
         return responses;
     }
 
+    /**
+     * Guest result check — uses public CDSC API via backend proxy.
+     * Returns a single result for the given BOID.
+     */
     public List<IpoApplicationResponse> checkResultByBoid(String shareId, String boid) {
-        List<MeroshareAccount> accounts = accountRepository.findAll();
-        if (accounts.isEmpty()) {
-            throw new RuntimeException("No accounts available to perform result check");
+        try {
+            MeroshareApiService.ResultInfo result =
+                    meroshareApiService.checkResultPublic(boid, shareId);
+
+            IpoApplication.ResultStatus status = mapResultStatus(result.getStatus());
+
+            return List.of(IpoApplicationResponse.builder()
+                    .shareId(shareId)
+                    .companyName("")
+                    .resultStatus(status.name())
+                    .allottedKitta(result.getAllottedKitta())
+                    .accountUsername(boid)
+                    .accountFullName("Guest")
+                    .build());
+        } catch (Exception e) {
+            log.error("[GUEST_RESULT] Failed for boid={}: {}", boid, e.getMessage());
+            return List.of(IpoApplicationResponse.builder()
+                    .shareId(shareId)
+                    .companyName("")
+                    .resultStatus(IpoApplication.ResultStatus.UNKNOWN.name())
+                    .allottedKitta(0)
+                    .accountUsername(boid)
+                    .accountFullName("Guest")
+                    .build());
         }
-
-        MeroshareAccount account = accounts.get(0);
-        String decryptedPassword = encryptionUtil.decrypt(account.getPassword());
-        String token = meroshareApiService.login(
-                account.getDpId(), account.getUsername(), decryptedPassword);
-
-        MeroshareApiService.ResultInfo result =
-                meroshareApiService.checkResult(token, boid, shareId);
-
-        IpoApplicationResponse response = IpoApplicationResponse.builder()
-                .shareId(shareId)
-                .resultStatus(mapResultStatus(result.getStatus()).name())
-                .allottedKitta(result.getAllottedKitta())
-                .accountUsername(boid)
-                .build();
-
-        return List.of(response);
     }
 
     public List<IpoApplicationResponse> getHistory(String username) {
@@ -186,46 +279,19 @@ public class IpoService {
                 .collect(Collectors.toList());
     }
 
-    public List getOpenIpos(String username) {
-        AppUser appUser = appUserRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        List<MeroshareAccount> accounts = accountRepository.findByAppUserId(appUser.getId());
-        if (accounts.isEmpty()) {
-            throw new RuntimeException("Add at least one Meroshare account first");
-        }
-
-        MeroshareAccount account = accounts.get(0);
-        String decryptedPassword = encryptionUtil.decrypt(account.getPassword());
-        String token = meroshareApiService.login(
-                account.getDpId(), account.getUsername(), decryptedPassword);
-
-        return meroshareApiService.getOpenIpos(token);
-    }
-
-    public List getClosedIpos(String username) {
-        AppUser appUser = appUserRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        List<MeroshareAccount> accounts = accountRepository.findByAppUserId(appUser.getId());
-        if (accounts.isEmpty()) {
-            throw new RuntimeException("Add at least one Meroshare account first");
-        }
-
-        MeroshareAccount account = accounts.get(0);
-        String decryptedPassword = encryptionUtil.decrypt(account.getPassword());
-        String token = meroshareApiService.login(
-                account.getDpId(), account.getUsername(), decryptedPassword);
-
-        return meroshareApiService.getClosedIpos(token);
-    }
-
     private IpoApplication.ResultStatus mapResultStatus(String status) {
-        if (status == null) return IpoApplication.ResultStatus.UNKNOWN;
-        return switch (status.toUpperCase()) {
-            case "ALLOTED" -> IpoApplication.ResultStatus.ALLOTTED;
-            case "NOT ALLOTED" -> IpoApplication.ResultStatus.NOT_ALLOTTED;
-            default -> IpoApplication.ResultStatus.UNKNOWN;
+        if (status == null) return IpoApplication.ResultStatus.NOT_PUBLISHED;
+        return switch (status.toUpperCase().trim()) {
+            case "ALLOTED", "ALLOCATE", "SHARE_ALLOTED", "ALLOTTED" ->
+                    IpoApplication.ResultStatus.ALLOTTED;
+            case "NOT ALLOTED", "NOT_ALLOTED", "SHARE_NOT_ALLOTED", "NOT ALLOTTED" ->
+                    IpoApplication.ResultStatus.NOT_ALLOTTED;
+            case "NOT_PUBLISHED" ->
+                    IpoApplication.ResultStatus.NOT_PUBLISHED;
+            case "UNKNOWN" ->
+                    IpoApplication.ResultStatus.NOT_PUBLISHED;
+            default ->
+                    IpoApplication.ResultStatus.UNKNOWN;
         };
     }
 

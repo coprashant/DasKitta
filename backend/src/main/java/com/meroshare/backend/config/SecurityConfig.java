@@ -44,7 +44,7 @@ public class SecurityConfig {
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**").permitAll()
-                // Anyone can check IPO results without logging in
+                .requestMatchers("/api/ipo/shares").permitAll()
                 .requestMatchers("/api/ipo/result/**").permitAll()
                 .anyRequest().authenticated()
             )
