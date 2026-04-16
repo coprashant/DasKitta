@@ -151,8 +151,6 @@ jwt.expiration=86400000
 aes.secret=YOUR_AES_SECRET_KEY
 ```
 
-> **Note:** Never commit real secrets to version control. Add `.env` and `application.properties` to `.gitignore`.
-
 ### 3. Run the Backend
 
 ```bash
