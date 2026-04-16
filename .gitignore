@@ -1,1 +1,86 @@
-.vscode/
+# ------------------------------------------
+# Backend — Secrets & Environment
+# ------------------------------------------
+backend/.env
+backend/src/main/resources/application.properties
+backend/src/main/resources/application-*.properties
+
+
+# ------------------------------------------
+# Backend — Maven Build Output
+# ------------------------------------------
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+!backend/.mvn/wrapper/maven-wrapper.properties
+
+
+# ------------------------------------------
+# Backend — Java
+# ------------------------------------------
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+hs_err_pid*
+replay_pid*
+
+
+# ------------------------------------------
+# Backend — IDE & OS
+# ------------------------------------------
+.idea/
+*.iml
+*.ipr
+*.iws
+.classpath
+.project
+.settings/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+Thumbs.db
+
+
+# ------------------------------------------
+# Frontend — Dependencies
+# ------------------------------------------
+frontend/node_modules/
+
+
+# ------------------------------------------
+# Frontend — Build Output
+# ------------------------------------------
+frontend/dist/
+frontend/dist-ssr/
+
+
+# ------------------------------------------
+# Frontend — Environment
+# ------------------------------------------
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+
+# ------------------------------------------
+# Frontend — Vite & Tooling Cache
+# ------------------------------------------
+frontend/.vite/
+frontend/*.local
+
+
+# ------------------------------------------
+# Logs
+# ------------------------------------------
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs/
