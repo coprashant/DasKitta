@@ -1,91 +1,26 @@
-/* Public nav */
-.pub-nav {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
-}
-
-.pub-nav-inner {
-  max-width: 1160px;
-  margin: 0 auto;
-  padding: 0 16px;
-  height: 54px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-@media (min-width: 640px) { .pub-nav-inner { padding: 0 24px; } }
-@media (min-width: 1024px) { .pub-nav-inner { padding: 0 40px; } }
-
-.pub-nav-brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  text-decoration: none;
-}
-
-.pub-nav-icon {
-  width: 28px;
-  height: 28px;
-  background: var(--accent);
-  border-radius: 5px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  font-weight: 700;
-  color: #fff;
-  flex-shrink: 0;
-}
-
-.pub-brand-name {
-  font-family: var(--font-display);
-  font-size: 16px;
-  color: var(--text);
-  display: none;
-}
-@media (min-width: 480px) { .pub-brand-name { display: block; } }
-
-.pub-nav-actions { display: flex; gap: 8px; align-items: center; }
-
-.pub-nav-link {
-  font-size: 13px;
-  color: var(--text-2);
-  text-decoration: none;
-  padding: 5px 10px;
-  border-radius: var(--radius);
-  transition: background 0.12s, color 0.12s;
-}
-.pub-nav-link:hover { background: var(--surface-2); color: var(--text); }
-
-.pub-nav-btn {
-  font-size: 13px;
-  font-weight: 500;
-  color: #fff;
-  background: var(--accent);
-  text-decoration: none;
-  padding: 6px 13px;
-  border-radius: var(--radius);
-  transition: background 0.12s;
-}
-.pub-nav-btn:hover { background: var(--accent-hover); }
-
-/* Layout */
 .result-layout {
   display: grid;
   grid-template-columns: 1fr;
   gap: 20px;
   align-items: start;
 }
-@media (min-width: 900px) { .result-layout { grid-template-columns: 340px 1fr; } }
+
+@media (min-width: 900px) {
+  .result-layout {
+    grid-template-columns: 340px 1fr;
+  }
+}
 
 .result-form {
   position: static;
 }
-@media (min-width: 900px) { .result-form { position: sticky; top: 74px; } }
+
+@media (min-width: 900px) {
+  .result-form {
+    position: sticky;
+    top: 72px;
+  }
+}
 
 .card-title {
   font-size: 13px;
@@ -130,13 +65,25 @@
   text-align: center;
   line-height: 1.6;
 }
-.login-cta a { color: var(--accent); text-decoration: none; }
-.login-cta a:hover { text-decoration: underline; }
 
-/* Results */
-.results-out { display: flex; flex-direction: column; gap: 12px; }
+.login-cta a {
+  color: var(--accent);
+  text-decoration: none;
+}
 
-.res-card { padding: 18px 20px; }
+.login-cta a:hover {
+  text-decoration: underline;
+}
+
+.results-out {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.res-card {
+  padding: 18px 20px;
+}
 
 .res-head {
   display: flex;
@@ -146,8 +93,17 @@
   margin-bottom: 14px;
 }
 
-.res-name { font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 3px; }
-.res-share { font-size: 12px; color: var(--text-2); }
+.res-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+
+.res-share {
+  font-size: 12px;
+  color: var(--text-2);
+}
 
 .res-badge {
   font-size: 11px;
@@ -164,7 +120,7 @@
   align-items: center;
   justify-content: space-between;
   background: var(--success-dim);
-  border: 1px solid rgba(26,107,60,0.15);
+  border: 1px solid rgba(26, 107, 60, 0.15);
   border-radius: var(--radius);
   padding: 13px 16px;
   margin-bottom: 12px;
@@ -187,7 +143,7 @@
 
 .warn-box {
   background: var(--warning-dim);
-  border: 1px solid rgba(161,98,7,0.15);
+  border: 1px solid rgba(161, 98, 7, 0.15);
   border-radius: var(--radius);
   padding: 10px 12px;
   margin-bottom: 10px;
@@ -195,7 +151,18 @@
   color: var(--warning);
   line-height: 1.55;
 }
-.warn-box a { color: var(--accent); text-decoration: none; }
-.warn-box a:hover { text-decoration: underline; }
 
-.res-time { font-size: 11px; color: var(--text-3); margin-top: 4px; }
+.warn-box a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.warn-box a:hover {
+  text-decoration: underline;
+}
+
+.res-time {
+  font-size: 11px;
+  color: var(--text-3);
+  margin-top: 4px;
+}

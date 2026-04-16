@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { getAccountsApi } from "../../api/accounts";
 import { getHistoryApi } from "../../api/ipo";
-import Navbar from "../../components/Navbar";
+import Layout from "../../components/Layout";
 import { LineChart, Line, PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import "./Dashboard.css";
 
@@ -52,8 +52,7 @@ const Dashboard = () => {
   };
 
   return (
-    <div>
-      <Navbar />
+    <Layout>
       <div className="page">
 
         <div className="dash-header">
@@ -116,11 +115,11 @@ const Dashboard = () => {
           <div>
             <div className="section-head">
               <span className="section-title">Recent Activity</span>
-              <Link to="/history" className="section-link">View all →</Link>
+              <Link to="/history" className="section-link">View all</Link>
             </div>
             <div className="card">
               {data.loading ? (
-                <div className="inline-empty">Loading…</div>
+                <div className="inline-empty">Loading</div>
               ) : recent.length === 0 ? (
                 <div className="inline-empty">
                   No applications yet. <Link to="/ipo/apply" style={{ color: "var(--accent)" }}>Apply for an IPO</Link>
@@ -165,7 +164,7 @@ const Dashboard = () => {
           <div>
             <div className="section-head">
               <span className="section-title">Accounts ({data.accounts.length})</span>
-              <Link to="/accounts/add" className="section-link">Manage →</Link>
+              <Link to="/accounts/add" className="section-link">Manage</Link>
             </div>
             <div className="card">
               {data.accounts.length === 0 ? (
@@ -189,7 +188,7 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
-    </div>
+    </Layout>
   );
 };
 

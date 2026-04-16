@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { getHistoryApi } from "../../api/ipo";
-import Navbar from "../../components/Navbar";
+import Layout from "../../components/Layout";
 import "./History.css";
 
 const statusBadge = (s) =>
@@ -18,31 +18,51 @@ const History = () => {
 
   useEffect(() => {
     (async () => {
-      try { const res = await getHistoryApi(); setHistory(res.data); setFiltered(res.data); }
-      catch (err) { console.error(err); }
-      finally { setLoading(false); }
+      try {
+        const res = await getHistoryApi();
+        setHistory(res.data);
+        setFiltered(res.data);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 
   useEffect(() => {
     let d = history;
-    if (search.trim()) d = d.filter((h) => h.companyName.toLowerCase().includes(search.toLowerCase()) || h.accountUsername.toLowerCase().includes(search.toLowerCase()));
+    if (search.trim()) {
+      d = d.filter((h) =>
+        h.companyName.toLowerCase().includes(search.toLowerCase()) ||
+        h.accountUsername.toLowerCase().includes(search.toLowerCase())
+      );
+    }
     if (statusFilter !== "ALL") d = d.filter((h) => h.status === statusFilter);
     setFiltered(d);
   }, [search, statusFilter, history]);
 
   return (
-    <div>
-      <Navbar />
+    <Layout>
       <div className="page">
         <h1 className="page-title">Application History</h1>
         <p className="page-subtitle">All IPO applications across all your accounts.</p>
 
         <div className="history-controls">
-          <input type="text" className="input" placeholder="Search by company or account…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input
+            type="text"
+            className="input"
+            placeholder="Search by company or account"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
           <div className="filter-scroll">
             {["ALL", "SUCCESS", "FAILED", "ALREADY_APPLIED", "PENDING"].map((s) => (
-              <button key={s} className={`filter-btn${statusFilter === s ? " active" : ""}`} onClick={() => setStatusFilter(s)}>
+              <button
+                key={s}
+                className={`filter-btn${statusFilter === s ? " active" : ""}`}
+                onClick={() => setStatusFilter(s)}
+              >
                 {s === "ALL" ? "All" : s.replace("_", " ")}
               </button>
             ))}
@@ -50,7 +70,7 @@ const History = () => {
         </div>
 
         {loading ? (
-          <div className="card"><p className="loading-text">Loading history…</p></div>
+          <div className="card"><p className="loading-text">Loading history</p></div>
         ) : filtered.length === 0 ? (
           <div className="card empty-state"><p>No applications found.</p></div>
         ) : (
@@ -100,11 +120,13 @@ const History = () => {
                 </tbody>
               </table>
             </div>
-            <div className="table-footer">Showing {filtered.length} of {history.length} applications</div>
+            <div className="table-footer">
+              Showing {filtered.length} of {history.length} applications
+            </div>
           </div>
         )}
       </div>
-    </div>
+    </Layout>
   );
 };
 

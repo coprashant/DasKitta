@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { addAccountApi, getAccountsApi, deleteAccountApi, getDpListApi } from "../../api/accounts";
-import Navbar from "../../components/Navbar";
+import Layout from "../../components/Layout";
 import toast from "react-hot-toast";
 import "./AddAccount.css";
 
@@ -74,15 +74,14 @@ const AddAccount = () => {
   };
 
   return (
-    <div>
-      <Navbar />
+    <Layout>
       <div className="page">
         <h1 className="page-title">Meroshare Accounts</h1>
         <p className="page-subtitle">Add and manage your Meroshare credentials. Passwords are encrypted before storing.</p>
 
         <div className="add-account-layout">
           <div className="card">
-            <h2 className="form-section-title">Add New Account</h2>
+            <h2 className="card-title">Add New Account</h2>
             <form onSubmit={handleSubmit}>
               <div className="form-group">
                 <label className="form-label">Depository Participant (DP)</label>
@@ -95,7 +94,7 @@ const AddAccount = () => {
                   disabled={dpLoading}
                 >
                   <option value="">
-                    {dpLoading ? "Loading DPs…" : "Select your bank / DP"}
+                    {dpLoading ? "Loading DPs" : "Select your bank / DP"}
                   </option>
                   {dpList.map((dp) => (
                     <option key={dp.id} value={dp.id}>
@@ -130,13 +129,13 @@ const AddAccount = () => {
               </div>
 
               <button type="submit" className="btn btn-primary btn-full" disabled={loading || dpLoading}>
-                {loading ? "Verifying and Adding…" : "Add Account"}
+                {loading ? "Verifying and Adding" : "Add Account"}
               </button>
             </form>
           </div>
 
           <div>
-            <h2 className="form-section-title">Saved Accounts ({accounts.length})</h2>
+            <h2 className="saved-section-title">Saved Accounts ({accounts.length})</h2>
 
             {accounts.length === 0 ? (
               <div className="card empty-state">
@@ -159,7 +158,7 @@ const AddAccount = () => {
                       onClick={() => handleDelete(acc.id)}
                       disabled={deleting === acc.id}
                     >
-                      {deleting === acc.id ? "…" : "Remove"}
+                      {deleting === acc.id ? "..." : "Remove"}
                     </button>
                   </div>
                 ))}
@@ -168,7 +167,7 @@ const AddAccount = () => {
           </div>
         </div>
       </div>
-    </div>
+    </Layout>
   );
 };
 

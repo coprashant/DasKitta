@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { getAccountsApi } from "../../api/accounts";
 import { getOpenIposApi, applyIpoApi } from "../../api/ipo";
-import Navbar from "../../components/Navbar";
+import Layout from "../../components/Layout";
 import toast from "react-hot-toast";
 import "./IPOApply.css";
 
@@ -22,14 +22,21 @@ const IPOApply = () => {
   useEffect(() => { fetchData(); }, []);
 
   const fetchData = async () => {
-    setLoading(true); setIpoError(null);
+    setLoading(true);
+    setIpoError(null);
     try {
       const [ipoRes, accRes] = await Promise.allSettled([getOpenIposApi(), getAccountsApi()]);
       if (ipoRes.status === "fulfilled") setIpos(Array.isArray(ipoRes.value.data) ? ipoRes.value.data : []);
-      else { const m = ipoRes.reason?.response?.data?.message || "Failed to load open IPOs"; setIpoError(m); toast.error(m); }
+      else {
+        const m = ipoRes.reason?.response?.data?.message || "Failed to load open IPOs";
+        setIpoError(m);
+        toast.error(m);
+      }
       if (accRes.status === "fulfilled") setAccounts(Array.isArray(accRes.value.data) ? accRes.value.data : []);
       else toast.error("Failed to load accounts");
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const toggleAccount = (id) =>
@@ -42,12 +49,14 @@ const IPOApply = () => {
     if (!selectedIpo) { toast.error("Select an IPO first"); return; }
     if (!selectedAccounts.length) { toast.error("Select at least one account"); return; }
     if (kitta < 10 || kitta % 10 !== 0) { toast.error("Kitta must be a multiple of 10"); return; }
-    setApplying(true); setResults([]);
+    setApplying(true);
+    setResults([]);
     try {
       const res = await applyIpoApi({
         shareId: String(selectedIpo.companyShareId || selectedIpo.id),
         companyName: selectedIpo.companyName || selectedIpo.scrip || "Unknown",
-        kitta, accountIds: selectedAccounts,
+        kitta,
+        accountIds: selectedAccounts,
       });
       setResults(res.data);
       const ok = res.data.filter((r) => r.status === "SUCCESS").length;
@@ -55,19 +64,24 @@ const IPOApply = () => {
       if (ok > 0) toast.success(`Applied for ${ok} account(s)`);
       else if (already > 0) toast(`Already applied for ${already} account(s)`);
       else toast.error("All applications failed.");
-    } catch (err) { toast.error(err.response?.data?.message || "Apply failed"); }
-    finally { setApplying(false); }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Apply failed");
+    } finally {
+      setApplying(false);
+    }
   };
 
   if (loading) return (
-    <div><Navbar />
-      <div className="page"><h1 className="page-title">Apply IPO</h1><p className="loading-text">Loading…</p></div>
-    </div>
+    <Layout>
+      <div className="page">
+        <h1 className="page-title">Apply IPO</h1>
+        <p className="loading-text">Loading</p>
+      </div>
+    </Layout>
   );
 
   return (
-    <div>
-      <Navbar />
+    <Layout>
       <div className="page">
         <h1 className="page-title">Apply IPO</h1>
         <p className="page-subtitle">Select an IPO and accounts, then apply in one click.</p>
@@ -108,7 +122,17 @@ const IPOApply = () => {
               <p className="card-title">Kitta to Apply</p>
               <div className="kitta-row">
                 <button type="button" className="kitta-stepper" onClick={() => setKitta((k) => Math.max(10, k - 10))}>−</button>
-                <input type="number" className="kitta-val" value={kitta} min={10} step={10} onChange={(e) => { const v = parseInt(e.target.value, 10); if (!isNaN(v) && v >= 10) setKitta(v); }} />
+                <input
+                  type="number"
+                  className="kitta-val"
+                  value={kitta}
+                  min={10}
+                  step={10}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    if (!isNaN(v) && v >= 10) setKitta(v);
+                  }}
+                />
                 <button type="button" className="kitta-stepper" onClick={() => setKitta((k) => k + 10)}>+</button>
               </div>
             </div>
@@ -153,7 +177,9 @@ const IPOApply = () => {
               onClick={handleApply}
               disabled={applying || !selectedIpo || !selectedAccounts.length || !accounts.length}
             >
-              {applying ? `Applying to ${selectedAccounts.length} account(s)…` : `Apply to ${selectedAccounts.length} account(s)`}
+              {applying
+                ? `Applying to ${selectedAccounts.length} account(s)`
+                : `Apply to ${selectedAccounts.length} account(s)`}
             </button>
 
             {results.length > 0 && (
@@ -175,7 +201,7 @@ const IPOApply = () => {
           </div>
         </div>
       </div>
-    </div>
+    </Layout>
   );
 };
 

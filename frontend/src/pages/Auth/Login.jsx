@@ -22,8 +22,8 @@ const Login = () => {
       <div className="auth-card">
         <div className="auth-header">
           <div className="auth-brand">
-            <div className="auth-brand-icon">M</div>
-            <span className="auth-brand-name">Meroshare Bot</span>
+            <img className="auth-brand-icon" src="/favicon.png" alt="DasKitta" />
+            <span className="auth-brand-name">DasKitta</span>
           </div>
           <h1 className="auth-title">Sign in</h1>
           <p className="auth-sub">Enter your credentials to continue</p>
