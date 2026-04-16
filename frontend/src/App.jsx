@@ -3,7 +3,7 @@ import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 
-import Landing from "./pages/Home/Home";
+import Home from "./pages/Home/Home";
 import Login from "./pages/Auth/Login";
 import Register from "./pages/Auth/Register";
 import Dashboard from "./pages/Dashboard/Dashboard";
@@ -18,7 +18,7 @@ const App = () => {
       <AuthProvider>
         <Toaster position="top-right" />
         <Routes>
-          <Route path="/" element={<Landing />} />
+          <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/ipo/result" element={<ResultChecker />} />

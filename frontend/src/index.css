@@ -1,24 +1,24 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 :root {
-  --bg: #f5f4f1;
+  --bg: #f0f5fb;
   --bg-2: #ffffff;
   --surface: #ffffff;
-  --surface-2: #f0ede8;
-  --surface-3: #e6e2dc;
-  --border: #d8d3cb;
-  --border-strong: #b8b2a7;
-  --accent: #1a6b3c;
-  --accent-hover: #155730;
-  --accent-dim: rgba(26,107,60,0.07);
-  --accent-muted: rgba(26,107,60,0.14);
-  --text: #1c1a17;
-  --text-2: #5c5750;
-  --text-3: #9c9590;
-  --danger: #b91c1c;
-  --danger-dim: rgba(185,28,28,0.07);
-  --success: #1a6b3c;
-  --success-dim: rgba(26,107,60,0.08);
+  --surface-2: #e8f0f9;
+  --surface-3: #d8e6f5;
+  --border: #c8d9ee;
+  --border-strong: #a0bedd;
+  --accent: #1e6fb5;
+  --accent-hover: #165fa0;
+  --accent-dim: rgba(30,111,181,0.07);
+  --accent-muted: rgba(30,111,181,0.16);
+  --text: #141c28;
+  --text-2: #445570;
+  --text-3: #8099bb;
+  --danger: #c0392b;
+  --danger-dim: rgba(192,57,43,0.07);
+  --success: #1a7a4a;
+  --success-dim: rgba(26,122,74,0.08);
   --warning: #a16207;
   --warning-dim: rgba(161,98,7,0.09);
   --font: 'IBM Plex Sans', sans-serif;
@@ -26,37 +26,37 @@
   --mono: 'IBM Plex Mono', monospace;
   --radius: 6px;
   --radius-sm: 4px;
-  --radius-lg: 8px;
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
-  --shadow: 0 2px 8px rgba(0,0,0,0.07);
-  --shadow-lg: 0 6px 24px rgba(0,0,0,0.09);
+  --radius-lg: 10px;
+  --shadow-sm: 0 1px 3px rgba(30,80,160,0.07), 0 1px 2px rgba(30,80,160,0.05);
+  --shadow: 0 2px 10px rgba(30,80,160,0.09);
+  --shadow-lg: 0 6px 28px rgba(30,80,160,0.12);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #111210;
-    --bg-2: #1a1917;
-    --surface: #1a1917;
-    --surface-2: #222120;
-    --surface-3: #2c2b29;
-    --border: #2e2d2b;
-    --border-strong: #403e3b;
-    --accent: #4ade80;
-    --accent-hover: #22c55e;
-    --accent-dim: rgba(74,222,128,0.08);
-    --accent-muted: rgba(74,222,128,0.16);
-    --text: #f0ede8;
-    --text-2: #a09b94;
-    --text-3: #5c5850;
-    --danger: #f87171;
-    --danger-dim: rgba(248,113,113,0.1);
-    --success: #4ade80;
-    --success-dim: rgba(74,222,128,0.1);
+    --bg: #0d1117;
+    --bg-2: #141b26;
+    --surface: #141b26;
+    --surface-2: #1c2535;
+    --surface-3: #243044;
+    --border: #263347;
+    --border-strong: #354a66;
+    --accent: #4d9de0;
+    --accent-hover: #3a8fd4;
+    --accent-dim: rgba(77,157,224,0.09);
+    --accent-muted: rgba(77,157,224,0.18);
+    --text: #e4edf8;
+    --text-2: #7a9bbf;
+    --text-3: #3d5a7a;
+    --danger: #f07070;
+    --danger-dim: rgba(240,112,112,0.1);
+    --success: #50c878;
+    --success-dim: rgba(80,200,120,0.1);
     --warning: #fbbf24;
     --warning-dim: rgba(251,191,36,0.1);
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.3), 0 1px 3px rgba(0,0,0,0.2);
-    --shadow: 0 2px 8px rgba(0,0,0,0.3);
-    --shadow-lg: 0 6px 24px rgba(0,0,0,0.4);
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.25);
+    --shadow: 0 2px 10px rgba(0,0,0,0.35);
+    --shadow-lg: 0 6px 28px rgba(0,0,0,0.45);
   }
 }
 
@@ -154,7 +154,7 @@ body {
 .btn-danger {
   background: transparent;
   color: var(--danger);
-  border-color: rgba(185,28,28,0.25);
+  border-color: rgba(192,57,43,0.25);
 }
 .btn-danger:hover:not(:disabled) {
   background: var(--danger-dim);
@@ -207,14 +207,14 @@ body {
 }
 .input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-muted);
+  box-shadow: 0 0 0 3px var(--accent-dim);
 }
 .input::placeholder { color: var(--text-3); }
 .input:disabled { background: var(--surface-2); cursor: not-allowed; opacity: 0.6; }
 
 select.input {
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%239c9590' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%238099bb' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
   padding-right: 34px;
