@@ -22,6 +22,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.List;
 
 @Configuration
@@ -32,8 +33,15 @@ public class SecurityConfig {
     private final JwtAuthFilter jwtAuthFilter;
     private final UserDetailsServiceImpl userDetailsService;
 
+    /**
+     * Comma-separated list of allowed origins from application.properties.
+     * Example: app.cors.allowed-origins=https://yourfrontend.com,http://localhost:5173
+     *
+     * In production, this should ONLY contain your actual frontend domain.
+     * Dev origins (localhost:5173, etc.) should only appear in dev profiles.
+     */
     @Value("${app.cors.allowed-origins}")
-    private String allowedOrigins;
+    private String allowedOriginsProperty;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -43,14 +51,13 @@ public class SecurityConfig {
             .sessionManagement(session ->
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // Auth endpoints — public
+                // Public: registration and login
                 .requestMatchers("/api/auth/**").permitAll()
-                // DP list — needed on the add-account page (also hit before login)
+                // Public: DP list needed on the add-account page before login
                 .requestMatchers("/api/accounts/dp-list").permitAll()
-                // IPO public endpoints
+                // Public: IPO share list for result checker dropdown
                 .requestMatchers("/api/ipo/shares").permitAll()
-                // Result check is permitAll so both guest (?boid=) and logged-in users
-                // can hit it; the controller itself decides which path to take.
+                // Public: result check supports both guest (?boid=) and authenticated users
                 .requestMatchers("/api/ipo/result/**").permitAll()
                 // Everything else requires a valid JWT
                 .anyRequest().authenticated()
@@ -64,16 +71,19 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        // Support both localhost dev variants
-        config.setAllowedOrigins(List.of(
-            allowedOrigins,
-            "http://localhost:5173",
-            "http://localhost:5174",
-            "http://localhost:3000"
-        ));
+
+        // Parse comma-separated origins from config; trim each one
+        List<String> origins = Arrays.stream(allowedOriginsProperty.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isBlank())
+                .toList();
+
+        config.setAllowedOrigins(origins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
+        // Pre-flight cache: 1 hour
+        config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);

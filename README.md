@@ -126,7 +126,7 @@ DasKitta
 Connect to your PostgreSQL instance and create the database:
 
 ```sql
-CREATE DATABASE daskitta;
+CREATE DATABASE meroshare_db;
 ```
 
 ### 2. Backend Configuration
@@ -138,7 +138,7 @@ In `backend/src/main/resources/application.properties`, set the following:
 server.port=8080
 
 # Database
-spring.datasource.url=jdbc:postgresql://localhost:5432/daskitta
+spring.datasource.url=jdbc:postgresql://localhost:5432/meroshare_db
 spring.datasource.username=YOUR_DB_USERNAME
 spring.datasource.password=YOUR_DB_PASSWORD
 spring.jpa.hibernate.ddl-auto=update
