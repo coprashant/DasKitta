@@ -1,0 +1,28 @@
+# Maven build output — the Docker build handles this inside the container
+target/
+
+# IDE and editor files — not needed in the image
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.project
+.classpath
+.settings/
+
+# Git history — not needed in the image
+.git/
+.gitignore
+.gitattributes
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docs
+README.md
+HELP.md
