@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTheme } from "../../context/ThemeContext";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { getAccountsApi } from "../../api/accounts";
@@ -14,8 +15,9 @@ const Skeleton = ({ h = 16, w = "100%", style = {} }) => (
   <div className="skeleton" style={{ height: h, width: w, ...style }} />
 );
 
-const Dashboard = ({ theme, onThemeToggle }) => {
+const Dashboard = () => {
   const { user } = useAuth();
+  const { theme } = useTheme();
   const [data, setData] = useState({ accounts: [], history: [], loading: true });
 
   useEffect(() => {
@@ -57,7 +59,7 @@ const Dashboard = ({ theme, onThemeToggle }) => {
     { name: "Failed",   value: stats.failed   },
   ];
 
-  const tooltipStyle = {
+  const tooltipStyle = useMemo(() => ({
     contentStyle: {
       background: "var(--surface)",
       border: "1px solid var(--border)",
@@ -66,10 +68,10 @@ const Dashboard = ({ theme, onThemeToggle }) => {
       boxShadow: "var(--shadow)",
     },
     labelStyle: { color: "var(--text-2)" },
-  };
+  }), [theme]);  // re-compute on theme change
 
   return (
-    <Layout theme={theme} onThemeToggle={onThemeToggle}>
+    <Layout>
       <div className="page">
 
         <div className="dash-header">

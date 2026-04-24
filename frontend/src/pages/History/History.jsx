@@ -1,7 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { getHistoryApi } from "../../api/ipo";
 import Layout from "../../components/Layout";
 import "./History.css";
+
+const PAGE_SIZE = 20;
 
 const statusBadge = (s) =>
   ({ SUCCESS: "badge-success", FAILED: "badge-danger", ALREADY_APPLIED: "badge-warning", PENDING: "badge-muted" }[s] || "badge-muted");
@@ -13,19 +15,27 @@ const Skeleton = ({ h = 12, w = "100%" }) => (
   <div className="skeleton" style={{ height: h, width: w }} />
 );
 
-const History = ({ theme, onThemeToggle }) => {
-  const [history, setHistory]         = useState([]);
-  const [filtered, setFiltered]       = useState([]);
-  const [loading, setLoading]         = useState(true);
-  const [search, setSearch]           = useState("");
+const SearchIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+    className="history-search-icon">
+    <circle cx="11" cy="11" r="8"/>
+    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+  </svg>
+);
+
+const History = () => {
+  const [history, setHistory]           = useState([]);
+  const [loading, setLoading]           = useState(true);
+  const [search, setSearch]             = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [page, setPage]                 = useState(1);
 
   useEffect(() => {
     (async () => {
       try {
         const res = await getHistoryApi();
-        setHistory(res.data);
-        setFiltered(res.data);
+        setHistory(Array.isArray(res.data) ? res.data : []);
       } catch (err) {
         console.error(err);
       } finally {
@@ -34,20 +44,27 @@ const History = ({ theme, onThemeToggle }) => {
     })();
   }, []);
 
-  useEffect(() => {
+  /* reset to page 1 whenever filters change */
+  useEffect(() => { setPage(1); }, [search, statusFilter]);
+
+  const filtered = useMemo(() => {
     let d = history;
     if (search.trim()) {
+      const q = search.toLowerCase();
       d = d.filter((h) =>
-        h.companyName.toLowerCase().includes(search.toLowerCase()) ||
-        h.accountUsername.toLowerCase().includes(search.toLowerCase())
+        h.companyName?.toLowerCase().includes(q) ||
+        h.accountUsername?.toLowerCase().includes(q)
       );
     }
     if (statusFilter !== "ALL") d = d.filter((h) => h.status === statusFilter);
-    setFiltered(d);
+    return d;
   }, [search, statusFilter, history]);
 
+  const totalPages  = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated   = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   return (
-    <Layout theme={theme} onThemeToggle={onThemeToggle}>
+    <Layout>
       <div className="page">
         <h1 className="page-title">Application history</h1>
         <p className="page-subtitle">
@@ -63,14 +80,16 @@ const History = ({ theme, onThemeToggle }) => {
               placeholder="Search by company or account"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              aria-label="Search applications"
             />
           </div>
-          <div className="filter-scroll">
+          <div className="filter-scroll" role="group" aria-label="Filter by status">
             {["ALL", "SUCCESS", "FAILED", "ALREADY_APPLIED", "PENDING"].map((s) => (
               <button
                 key={s}
                 className={`filter-btn${statusFilter === s ? " active" : ""}`}
                 onClick={() => setStatusFilter(s)}
+                aria-pressed={statusFilter === s}
               >
                 {s === "ALL" ? "All" : s.replace("_", " ")}
               </button>
@@ -106,6 +125,7 @@ const History = ({ theme, onThemeToggle }) => {
           </div>
         ) : filtered.length === 0 ? (
           <div className="card empty-state">
+            <EmptyIllustration />
             <p>No applications found.</p>
           </div>
         ) : (
@@ -124,7 +144,7 @@ const History = ({ theme, onThemeToggle }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((item) => (
+                  {paginated.map((item) => (
                     <tr key={item.id}>
                       <td>
                         <span className="h-company">{item.companyName}</span>
@@ -163,8 +183,34 @@ const History = ({ theme, onThemeToggle }) => {
                 </tbody>
               </table>
             </div>
+
             <div className="table-footer">
-              Showing {filtered.length} of {history.length} applications
+              <span>
+                Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length} applications
+              </span>
+              {totalPages > 1 && (
+                <div className="pagination" role="navigation" aria-label="Pagination">
+                  <button
+                    className="page-btn"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    aria-label="Previous page"
+                  >
+                    <ChevronLeft />
+                  </button>
+                  <span className="page-info" aria-current="page">
+                    {page} / {totalPages}
+                  </span>
+                  <button
+                    className="page-btn"
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                    aria-label="Next page"
+                  >
+                    <ChevronRight />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -173,12 +219,27 @@ const History = ({ theme, onThemeToggle }) => {
   );
 };
 
-const SearchIcon = () => (
+const EmptyIllustration = () => (
+  <svg width="48" height="48" viewBox="0 0 48 48" fill="none"
+    style={{ margin: "0 auto 12px", display: "block" }}>
+    <rect x="6" y="10" width="36" height="30" rx="4" stroke="var(--border-strong)" strokeWidth="1.5"/>
+    <line x1="12" y1="18" x2="36" y2="18" stroke="var(--border-strong)" strokeWidth="1.5" strokeLinecap="round"/>
+    <line x1="12" y1="24" x2="28" y2="24" stroke="var(--border-strong)" strokeWidth="1.5" strokeLinecap="round"/>
+    <line x1="12" y1="30" x2="22" y2="30" stroke="var(--border-strong)" strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>
+);
+
+const ChevronLeft = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-    className="history-search-icon">
-    <circle cx="11" cy="11" r="8"/>
-    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="15 18 9 12 15 6"/>
+  </svg>
+);
+
+const ChevronRight = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="9 18 15 12 9 6"/>
   </svg>
 );
 

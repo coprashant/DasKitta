@@ -2,11 +2,11 @@ import Navbar from "./Navbar";
 import Footer from "./Footer";
 import "./Layout.css";
 
-const Layout = ({ children, theme, onThemeToggle }) => {
+const Layout = ({ children }) => {
   return (
     <div className="layout">
-      <Navbar theme={theme} onThemeToggle={onThemeToggle} />
-      <main className="layout-main">
+      <Navbar />
+      <main className="layout-main" id="main-content">
         {children}
       </main>
       <Footer />
