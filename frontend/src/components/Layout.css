@@ -8,4 +8,5 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+  animation: fade-up 0.32s var(--ease) both;
 }

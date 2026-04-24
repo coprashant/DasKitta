@@ -2,10 +2,10 @@ import Navbar from "./Navbar";
 import Footer from "./Footer";
 import "./Layout.css";
 
-const Layout = ({ children }) => {
+const Layout = ({ children, theme, onThemeToggle }) => {
   return (
     <div className="layout">
-      <Navbar />
+      <Navbar theme={theme} onThemeToggle={onThemeToggle} />
       <main className="layout-main">
         {children}
       </main>

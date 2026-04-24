@@ -21,11 +21,11 @@ const Footer = () => {
           {user ? (
             <>
               <Link to="/dashboard" className="footer-link">Dashboard</Link>
-              <Link to="/history" className="footer-link">History</Link>
+              <Link to="/history"   className="footer-link">History</Link>
             </>
           ) : (
             <>
-              <Link to="/login" className="footer-link">Sign In</Link>
+              <Link to="/login"    className="footer-link">Sign in</Link>
               <Link to="/register" className="footer-link">Register</Link>
             </>
           )}

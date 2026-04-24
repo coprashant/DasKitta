@@ -1,45 +1,109 @@
-.auth-bg {
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── PAGE SHELL ────────────────────────────────── */
+.auth-page {
+  position: relative;
   min-height: 100vh;
+  overflow: hidden;
+}
+
+/* Blurred background content */
+.auth-bg-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  filter: blur(4px);
+  pointer-events: none;
+  user-select: none;
+}
+
+.auth-bg-navbar {
+  height: var(--nav-h);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.auth-bg-content {
+  padding: 40px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.auth-bg-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+}
+.auth-bg-block--tall  { height: 180px; }
+.auth-bg-block--short { height: 80px;  }
+.auth-bg-block--wide  { height: 120px; }
+
+/* Nav sits above blur but below modal */
+.auth-nav-wrap {
+  position: relative;
+  z-index: 1;
+  /* pointer events still work */
+}
+
+/* ── MODAL OVERRIDES FOR AUTH ──────────────────── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px 16px;
-  background: var(--bg);
+  animation: fade-in 0.2s var(--ease) both;
 }
 
-.auth-card {
-  width: 100%;
-  max-width: 390px;
+.modal-blur {
+  position: absolute;
+  inset: 0;
+  background: rgba(14, 22, 38, 0.4);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  cursor: pointer;
+}
+
+.modal-box {
+  position: relative;
+  z-index: 1;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 32px 28px;
+  border-radius: var(--r-lg);
   box-shadow: var(--shadow-lg);
+  width: 100%;
+  max-width: 400px;
+  animation: fade-up 0.3s var(--ease) both;
+  padding: 32px 28px;
 }
+@media (min-width: 480px) { .modal-box { padding: 40px 36px; } }
 
-@media (min-width: 480px) { .auth-card { padding: 40px 36px; } }
+/* ── MODAL CONTENT ─────────────────────────────── */
+.auth-header { margin-bottom: 24px; }
 
-.auth-header { margin-bottom: 28px; }
-
-.auth-brand {
-  display: flex;
+.auth-brand-link {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 24px;
+  gap: 7px;
+  text-decoration: none;
+  margin-bottom: 20px;
 }
 
 .auth-brand-icon {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
 }
 
 .auth-brand-name {
   font-family: var(--font-display);
-  font-size: 25px;
+  font-size: 18px;
   color: var(--text);
 }
 
@@ -59,37 +123,21 @@
 
 .auth-form { display: flex; flex-direction: column; }
 
-.auth-submit {
-  width: 100%;
-  padding: 10px;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius);
-  font-size: 14px;
-  font-weight: 500;
-  font-family: var(--font);
-  cursor: pointer;
-  transition: background 0.14s;
-  margin-top: 4px;
-}
-.auth-submit:hover:not(:disabled) { background: var(--accent-hover); }
-.auth-submit:disabled { opacity: 0.5; cursor: not-allowed; }
-
 .auth-sep {
   height: 1px;
   background: var(--border);
-  margin: 24px 0;
+  margin: 20px 0;
 }
 
-.auth-footer {
+.auth-footer-text {
   text-align: center;
   font-size: 13px;
   color: var(--text-2);
 }
-.auth-footer a {
+
+.auth-link {
   color: var(--accent);
   text-decoration: none;
   font-weight: 500;
 }
-.auth-footer a:hover { text-decoration: underline; }
+.auth-link:hover { text-decoration: underline; }
