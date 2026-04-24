@@ -1,3 +1,5 @@
+@keyframes spin { to { transform: rotate(360deg); } }
+
 .apply-layout {
   display: grid;
   grid-template-columns: 1fr;
@@ -8,12 +10,12 @@
 
 .apply-col { display: flex; flex-direction: column; gap: 14px; }
 
-.card-title {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text);
+.card-section-title-sm {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   margin-bottom: 14px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--border);
@@ -22,30 +24,44 @@
 /* IPO list */
 .ipo-list { display: flex; flex-direction: column; gap: 6px; }
 
+.ipo-skeleton {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  margin-bottom: 6px;
+  background: var(--surface-2);
+}
+
 .ipo-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 11px 14px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--r);
   cursor: pointer;
-  transition: border-color 0.12s, background 0.12s;
+  transition:
+    border-color var(--t-fast) var(--ease),
+    background   var(--t-fast) var(--ease);
   background: var(--surface-2);
 }
-.ipo-item:hover { border-color: var(--border-strong); background: var(--surface-3); }
+.ipo-item:hover   { border-color: var(--border-strong); background: var(--surface-3); }
 .ipo-item.selected { border-color: var(--accent); background: var(--accent-dim); }
 
 .ipo-name { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 2px; }
 .ipo-meta { font-size: 12px; color: var(--text-2); }
 
 .ipo-check {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   border: 2px solid var(--border-strong);
   flex-shrink: 0;
-  transition: all 0.12s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  transition: all var(--t-fast) var(--ease);
 }
 .ipo-check.on { border-color: var(--accent); background: var(--accent); }
 
@@ -56,37 +72,40 @@
   width: 36px;
   height: 36px;
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
+  border-radius: var(--r);
   background: var(--surface-2);
   color: var(--text);
-  font-size: 18px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: border-color 0.12s, background 0.12s;
   flex-shrink: 0;
-  font-family: var(--font);
+  transition:
+    border-color var(--t-fast) var(--ease),
+    background   var(--t-fast) var(--ease);
 }
 .kitta-stepper:hover { border-color: var(--accent); background: var(--accent-dim); }
 
 .kitta-val {
-  width: 72px;
+  width: 80px;
   text-align: center;
   background: var(--surface);
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
+  border-radius: var(--r);
   padding: 7px 8px;
   font-size: 18px;
   font-weight: 500;
   color: var(--text);
   font-family: var(--font);
   outline: none;
-  transition: border-color 0.12s;
+  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
 }
-.kitta-val:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-muted); }
+.kitta-val:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
 
-/* Account checkboxes */
+/* Account selection */
 .accounts-head {
   display: flex;
   align-items: center;
@@ -94,14 +113,6 @@
   margin-bottom: 14px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--border);
-}
-
-.card-title-sm {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 .sel-all-btn {
@@ -123,9 +134,11 @@
   gap: 11px;
   padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--r);
   cursor: pointer;
-  transition: border-color 0.12s, background 0.12s;
+  transition:
+    border-color var(--t-fast) var(--ease),
+    background   var(--t-fast) var(--ease);
   background: var(--surface-2);
 }
 .acc-check-row:hover { background: var(--surface-3); }
@@ -134,15 +147,14 @@
 .check-box {
   width: 16px;
   height: 16px;
-  border-radius: 3px;
+  border-radius: var(--r-sm);
   border: 2px solid var(--border-strong);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: all 0.12s;
-  font-size: 10px;
   color: #fff;
+  transition: all var(--t-fast) var(--ease);
 }
 .check-box.on { border-color: var(--accent); background: var(--accent); }
 
@@ -159,7 +171,7 @@
   gap: 12px;
   padding: 10px 12px;
   background: var(--surface-2);
-  border-radius: var(--radius);
+  border-radius: var(--r);
 }
 .result-name { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 2px; }
 .result-msg  { font-size: 12px; color: var(--text-2); }
