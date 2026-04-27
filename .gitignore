@@ -84,3 +84,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 logs/
+
+
+repomix-output.xml
+MEROSHARE_API_REFERENCE.md

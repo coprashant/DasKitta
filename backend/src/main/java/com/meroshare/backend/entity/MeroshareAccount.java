@@ -21,6 +21,8 @@ public class MeroshareAccount {
     @Column(nullable = false)
     private String dpId;
 
+    private String dpCode;
+
     @Column(nullable = false)
     private String username;
 
@@ -38,8 +40,6 @@ public class MeroshareAccount {
     private String accountNumber;
 
     private String accountBranchId;
-
-    private String accountTypeId;
 
     private String customerId;
 

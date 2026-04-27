@@ -5,24 +5,20 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+
 import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface IpoApplicationRepository extends JpaRepository<IpoApplication, Long> {
 
-    List<IpoApplication> findByMeroshareAccountId(Long accountId);
+    boolean existsByMeroshareAccountIdAndShareId(Long meroshareAccountId, String shareId);
 
-    Optional<IpoApplication> findByMeroshareAccountIdAndShareId(Long accountId, String shareId);
+    Optional<IpoApplication> findByMeroshareAccountIdAndShareId(Long meroshareAccountId, String shareId);
 
-    @Query("""
-        SELECT i FROM IpoApplication i
-        JOIN FETCH i.meroshareAccount ma
-        JOIN FETCH ma.appUser au
-        WHERE au.id = :userId
-        ORDER BY i.appliedAt DESC
-        """)
-    List<IpoApplication> findAllByAppUserId(@Param("userId") Long userId);
-
-    boolean existsByMeroshareAccountIdAndShareId(Long accountId, String shareId);
+    @Query("SELECT ia FROM IpoApplication ia " +
+           "JOIN FETCH ia.meroshareAccount ma " +
+           "WHERE ma.appUser.id = :appUserId " +
+           "ORDER BY ia.appliedAt DESC")
+    List<IpoApplication> findAllByAppUserId(@Param("appUserId") Long appUserId);
 }

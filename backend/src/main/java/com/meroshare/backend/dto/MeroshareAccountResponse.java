@@ -10,6 +10,7 @@ public class MeroshareAccountResponse {
 
     private Long id;
     private String dpId;
+    private String dpCode;
     private String username;
     private String fullName;
     private String boid;
