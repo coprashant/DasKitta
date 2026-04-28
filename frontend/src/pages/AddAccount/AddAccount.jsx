@@ -7,15 +7,15 @@ import Layout from "../../components/Layout";
 import toast from "react-hot-toast";
 import "./AddAccount.css";
 
-const AddAccount = ({ theme, onThemeToggle }) => {
-  const [form, setForm] = useState({
-    dpId: "", username: "", password: "", crn: "", pin: "",
-  });
-  const [accounts, setAccounts]   = useState([]);
-  const [dpList, setDpList]       = useState([]);
-  const [loading, setLoading]     = useState(false);
-  const [deleting, setDeleting]   = useState(null);
-  const [dpLoading, setDpLoading] = useState(true);
+const EMPTY_FORM = { dpId: "", dpCode: "", username: "", password: "", bankId: "", crn: "", pin: "" };
+
+const AddAccount = () => {
+  const [form, setForm]               = useState(EMPTY_FORM);
+  const [accounts, setAccounts]       = useState([]);
+  const [dpList, setDpList]           = useState([]);
+  const [loading, setLoading]         = useState(false);
+  const [deleting, setDeleting]       = useState(null);
+  const [dpLoading, setDpLoading]     = useState(true);
   const [accsLoading, setAccsLoading] = useState(true);
 
   useEffect(() => {
@@ -27,7 +27,7 @@ const AddAccount = ({ theme, onThemeToggle }) => {
     setDpLoading(true);
     try {
       const res = await getDpListApi();
-      setDpList(res.data);
+      setDpList(Array.isArray(res.data) ? res.data : []);
     } catch {
       toast.error("Failed to load DP list. Please refresh.");
     } finally {
@@ -39,7 +39,7 @@ const AddAccount = ({ theme, onThemeToggle }) => {
     setAccsLoading(true);
     try {
       const res = await getAccountsApi();
-      setAccounts(res.data);
+      setAccounts(Array.isArray(res.data) ? res.data : []);
     } catch {
       toast.error("Failed to load saved accounts.");
     } finally {
@@ -47,7 +47,17 @@ const AddAccount = ({ theme, onThemeToggle }) => {
     }
   };
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+
+  const handleDpChange = (e) => {
+    const selectedId = e.target.value;
+    const dp = dpList.find((d) => String(d.id) === String(selectedId));
+    setForm((f) => ({
+      ...f,
+      dpId:   selectedId,
+      dpCode: dp ? dp.code : "",
+    }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -55,11 +65,19 @@ const AddAccount = ({ theme, onThemeToggle }) => {
       toast.error("DP, username and password are required");
       return;
     }
+    if (!form.bankId) {
+      toast.error("Bank ID is required");
+      return;
+    }
+    if (!form.crn.trim()) {
+      toast.error("CRN number is required for IPO applications");
+      return;
+    }
     setLoading(true);
     try {
       await addAccountApi(form);
       toast.success("Account added successfully");
-      setForm({ dpId: "", username: "", password: "", crn: "", pin: "" });
+      setForm(EMPTY_FORM);
       fetchAccounts();
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to add account");
@@ -74,7 +92,7 @@ const AddAccount = ({ theme, onThemeToggle }) => {
     try {
       await deleteAccountApi(id);
       toast.success("Account removed");
-      setAccounts(accounts.filter((a) => a.id !== id));
+      setAccounts((prev) => prev.filter((a) => a.id !== id));
     } catch {
       toast.error("Failed to remove account");
     } finally {
@@ -82,37 +100,43 @@ const AddAccount = ({ theme, onThemeToggle }) => {
     }
   };
 
+  const selectedDp = dpList.find((d) => String(d.id) === String(form.dpId));
+
   return (
-    <Layout theme={theme} onThemeToggle={onThemeToggle}>
+    <Layout>
       <div className="page">
         <h1 className="page-title">Meroshare Accounts</h1>
         <p className="page-subtitle">
-          Add and manage your Meroshare credentials. Passwords are encrypted before storing.
+          Add and manage your Meroshare credentials. Passwords are AES-encrypted before storing.
         </p>
 
         <div className="add-account-layout">
           <div className="card anim-fade-up">
             <h2 className="card-section-title">Add new account</h2>
             <form onSubmit={handleSubmit}>
+
               <div className="form-group">
                 <label className="form-label">Depository Participant (DP)</label>
                 <select
                   className="input"
                   name="dpId"
                   value={form.dpId}
-                  onChange={handleChange}
+                  onChange={handleDpChange}
                   required
                   disabled={dpLoading}
                 >
                   <option value="">
-                    {dpLoading ? "Loading DPs" : "Select your bank or DP"}
+                    {dpLoading ? "Loading DPs..." : "Select your bank or DP"}
                   </option>
                   {dpList.map((dp) => (
                     <option key={dp.id} value={dp.id}>
-                      {dp.name} ({dp.id})
+                      {dp.name}
                     </option>
                   ))}
                 </select>
+                {selectedDp && (
+                  <span className="form-hint">DP code: {selectedDp.code} &middot; ID: {selectedDp.id}</span>
+                )}
               </div>
 
               <div className="form-group">
@@ -120,7 +144,7 @@ const AddAccount = ({ theme, onThemeToggle }) => {
                 <input
                   className="input" type="text" name="username"
                   value={form.username} onChange={handleChange}
-                  placeholder="Your Meroshare username" required
+                  placeholder="Your phone number / Meroshare username" required
                 />
               </div>
 
@@ -134,11 +158,23 @@ const AddAccount = ({ theme, onThemeToggle }) => {
               </div>
 
               <div className="form-group">
+                <label className="form-label">Bank ID</label>
+                <input
+                  className="input" type="number" name="bankId"
+                  value={form.bankId} onChange={handleChange}
+                  placeholder="Your Meroshare bank ID (e.g. 12)" required
+                />
+                <span className="form-hint">
+                  Found under Meroshare &rarr; My Profile &rarr; Bank Details
+                </span>
+              </div>
+
+              <div className="form-group">
                 <label className="form-label">CRN number</label>
                 <input
                   className="input" type="text" name="crn"
                   value={form.crn} onChange={handleChange}
-                  placeholder="Bank CRN (required for IPO apply)"
+                  placeholder="Bank CRN (required for IPO apply)" required
                 />
               </div>
 
@@ -147,15 +183,15 @@ const AddAccount = ({ theme, onThemeToggle }) => {
                 <input
                   className="input" type="password" name="pin"
                   value={form.pin} onChange={handleChange}
-                  placeholder="Meroshare transaction PIN"
+                  placeholder="Meroshare transaction PIN (MPIN)"
                 />
               </div>
 
               <div className="form-note">
                 <InfoIcon />
                 <span>
-                  Your password and PIN are AES-encrypted before being saved.
-                  CRN and PIN are needed to apply for IPOs.
+                  Your password and PIN are AES-encrypted before saving.
+                  Bank ID and CRN are required to apply for IPOs.
                 </span>
               </div>
 
@@ -165,9 +201,7 @@ const AddAccount = ({ theme, onThemeToggle }) => {
                 disabled={loading || dpLoading}
                 style={{ marginTop: 4 }}
               >
-                {loading ? (
-                  <><SpinnerIcon /> Verifying and adding</>
-                ) : "Add account"}
+                {loading ? <><SpinnerIcon /> Verifying and adding</> : "Add account"}
               </button>
             </form>
           </div>
@@ -204,11 +238,14 @@ const AddAccount = ({ theme, onThemeToggle }) => {
                     style={{ animationDelay: `${i * 0.07}s` }}
                   >
                     <div className="saved-account-avatar">
-                      {acc.fullName?.charAt(0) || "?"}
+                      {acc.fullName?.charAt(0)?.toUpperCase() || "?"}
                     </div>
                     <div className="saved-account-info">
                       <p className="saved-account-name">{acc.fullName}</p>
-                      <p className="saved-account-meta">{acc.username} &middot; DP {acc.dpId}</p>
+                      <p className="saved-account-meta">
+                        {acc.username}
+                        {acc.dpCode ? ` \u00b7 DP ${acc.dpCode}` : acc.dpId ? ` \u00b7 DP ${acc.dpId}` : ""}
+                      </p>
                       {acc.boid && (
                         <p className="saved-account-boid">BOID: {acc.boid}</p>
                       )}

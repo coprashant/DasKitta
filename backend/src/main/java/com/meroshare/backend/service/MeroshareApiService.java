@@ -95,7 +95,9 @@ public class MeroshareApiService {
                 .defaultHeader("Sec-Fetch-Dest", "empty")
                 .defaultHeader("Sec-Fetch-Mode", "cors")
                 .defaultHeader("Sec-Fetch-Site", "same-origin")
-                .defaultHeader("User-Agent", USER_AGENT)
+                .defaultHeader("User-Agent",
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+                        "(KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
                 .codecs(c -> c.defaultCodecs().maxInMemorySize(8 * 1024 * 1024))
                 .build();
     }
@@ -482,16 +484,20 @@ public class MeroshareApiService {
         ResultInfo result = new ResultInfo();
         result.setStatus("UNKNOWN");
 
-        String url = PUBLIC_RESULT_URL + "/result/result/check";
+        String url = "https://iporesult.cdsc.com.np/api/ipo-result/public/view/getResults/";
         Map<String, String> payload = Map.of("boid", boid, "companyShareId", shareId);
 
+        log.info("[RESULT_PUBLIC] Checking boid={} shareId={}", boid, shareId);
+
         try {
-            String raw = buildResultClient().post()
-                    .uri("/result/result/check")
+            String raw = buildResultClient()
+                    .post()
+                    .uri(url)
                     .bodyValue(payload)
                     .retrieve()
                     .bodyToMono(String.class)
                     .block();
+            log.info("[RESULT_PUBLIC] WebClient raw: {}", snippet300(raw));
             if (!isHtml(raw) && raw != null) {
                 return parsePublicResult(objectMapper.readTree(raw));
             }
@@ -500,6 +506,7 @@ public class MeroshareApiService {
         }
 
         String curlRaw = curlClient.postJson(url, toJson(payload), null);
+        log.info("[RESULT_PUBLIC] Curl raw: {}", snippet300(curlRaw));
         if (!isHtml(curlRaw) && curlRaw != null) {
             try {
                 return parsePublicResult(objectMapper.readTree(curlRaw));
@@ -511,29 +518,50 @@ public class MeroshareApiService {
         return result;
     }
 
-    private ResultInfo parsePublicResult(JsonNode node) {
+    private ResultInfo parsePublicResult(JsonNode root) {
         ResultInfo result = new ResultInfo();
         result.setStatus("UNKNOWN");
 
+        JsonNode node = root;
+        if (root.has("body") && root.get("body").isObject()) {
+            node = root.get("body");
+        }
+
+        boolean success = root.has("success") && root.get("success").asBoolean();
         String statusCode = node.has("statusCode") ? node.get("statusCode").asText("") : "";
-        boolean success = node.has("success") && node.get("success").asBoolean();
+        if (statusCode.isBlank()) {
+            statusCode = root.has("statusCode") ? root.get("statusCode").asText("") : "";
+        }
+
+        log.info("[RESULT_PUBLIC_PARSE] success={} statusCode='{}' node={}",
+                success, statusCode, snippet300(node.toString()));
 
         if ("ALLOCATE".equalsIgnoreCase(statusCode)) {
             result.setStatus("ALLOTTED");
             result.setAllottedKitta(node.has("quantity") ? node.get("quantity").asInt(0) : 0);
-        } else if ("NOT_ALLOTED".equalsIgnoreCase(statusCode) || "NOT_ALLOTTED".equalsIgnoreCase(statusCode)
-                || (!success && !statusCode.isBlank())) {
+        } else if ("NOT_ALLOTED".equalsIgnoreCase(statusCode)
+                || "NOT_ALLOTTED".equalsIgnoreCase(statusCode)) {
             result.setStatus("NOT_ALLOTTED");
-        } else if (node.has("message")) {
-            String msg = node.get("message").asText("").toLowerCase();
-            if (msg.contains("not allot") || msg.contains("not allotted")) {
+        } else if (!success && !statusCode.isBlank()) {
+            result.setStatus("NOT_ALLOTTED");
+        } else {
+            String msg = "";
+            if (node.has("message")) msg = node.get("message").asText("").toLowerCase();
+            if (msg.isBlank() && root.has("message")) msg = root.get("message").asText("").toLowerCase();
+
+            if (msg.contains("not allot")) {
                 result.setStatus("NOT_ALLOTTED");
             } else if (msg.contains("allot")) {
                 result.setStatus("ALLOTTED");
-            } else if (msg.contains("not found") || msg.contains("no result")) {
+                if (node.has("quantity")) result.setAllottedKitta(node.get("quantity").asInt(0));
+            } else if (msg.contains("not found") || msg.contains("no result") || msg.contains("no record")) {
+                result.setStatus("NOT_PUBLISHED");
+            } else if (success) {
                 result.setStatus("NOT_PUBLISHED");
             }
         }
+
+        log.info("[RESULT_PUBLIC_PARSE] final status={} kitta={}", result.getStatus(), result.getAllottedKitta());
         return result;
     }
 
@@ -544,8 +572,9 @@ public class MeroshareApiService {
             String raw = buildResultClient().get()
                     .uri("/result/companyShares/fileUploaded")
                     .retrieve().bodyToMono(String.class).block();
-            if (!isHtml(raw)) {
-                List<Map> r = parseJsonArray(raw, "SHARE_LIST");
+            log.info("[SHARE_LIST] WebClient raw (first 300): {}", snippet300(raw));
+            if (!isHtml(raw) && raw != null) {
+                List<Map> r = parseShareList(raw, "SHARE_LIST");
                 if (!r.isEmpty()) return r;
             }
         } catch (Exception e) {
@@ -553,11 +582,53 @@ public class MeroshareApiService {
         }
 
         String curlRaw = curlClient.get(url, null);
+        log.info("[SHARE_LIST] Curl raw (first 300): {}", snippet300(curlRaw));
         if (!isHtml(curlRaw) && curlRaw != null) {
-            return parseJsonArray(curlRaw, "SHARE_LIST_CURL");
+            return parseShareList(curlRaw, "SHARE_LIST_CURL");
         }
 
         return List.of();
+    }
+
+    private List<Map> parseShareList(String raw, String context) {
+        if (isHtml(raw)) {
+            log.warn("[{}] HTML/WAF block", context);
+            return List.of();
+        }
+        try {
+            JsonNode root = objectMapper.readTree(raw);
+            if (root.isArray()) {
+                log.info("[{}] bare array, size={}", context, root.size());
+                return nodeArrayToList(root);
+            }
+            if (root.has("body") && root.get("body").isObject()) {
+                JsonNode body = root.get("body");
+                String[] innerKeys = {"companyShareList", "object", "data", "list", "shares"};
+                for (String key : innerKeys) {
+                    if (body.has(key) && body.get(key).isArray()) {
+                        log.info("[{}] found at body.{}, size={}", context, key, body.get(key).size());
+                        return nodeArrayToList(body.get(key));
+                    }
+                }
+            }
+            String[] wrappers = {"object", "data", "result", "list", "shares", "companyShares", "companyShareList"};
+            for (String key : wrappers) {
+                if (root.has(key) && root.get(key).isArray()) {
+                    log.info("[{}] wrapped under '{}', size={}", context, key, root.get(key).size());
+                    return nodeArrayToList(root.get(key));
+                }
+            }
+            log.warn("[{}] Could not find array in response. Shape: {}", context, snippet300(raw));
+            return List.of();
+        } catch (Exception e) {
+            log.warn("[{}] Parse error: {}", context, e.getMessage());
+            return List.of();
+        }
+    }
+
+    private String snippet300(String s) {
+        if (s == null) return "null";
+        return s.substring(0, Math.min(300, s.length())).replaceAll("\\s+", " ");
     }
 
     private boolean isHtml(String raw) {

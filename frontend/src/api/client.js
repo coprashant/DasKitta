@@ -4,7 +4,6 @@ const client = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api",
 });
 
-// Attach token to every request automatically
 client.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
   if (token) {
@@ -13,25 +12,15 @@ client.interceptors.request.use((config) => {
   return config;
 });
 
-// PUBLIC routes that should never trigger a logout redirect even if they
-// return 401/403 (e.g. unauthenticated access to a partially-public endpoint).
-const PUBLIC_PATHS = [
-  "/ipo/shares",
-  "/ipo/result/",
-  "/auth/login",
-  "/auth/register",
-];
+const PUBLIC_PATHS = ["/ipo/shares", "/ipo/result/", "/auth/login", "/auth/register"];
 
-const isPublicPath = (url = "") =>
-  PUBLIC_PATHS.some((p) => url.includes(p));
+const isPublicPath = (url = "") => PUBLIC_PATHS.some((p) => url.includes(p));
 
-// If token is expired or invalid on a PROTECTED route, log the user out.
 client.interceptors.response.use(
   (response) => response,
   (error) => {
     const status = error.response?.status;
     const url = error.config?.url ?? "";
-
     if ((status === 401 || status === 403) && !isPublicPath(url)) {
       localStorage.removeItem("token");
       localStorage.removeItem("user");

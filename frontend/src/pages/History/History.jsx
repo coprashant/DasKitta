@@ -5,24 +5,11 @@ import "./History.css";
 
 const PAGE_SIZE = 20;
 
-const statusBadge = (s) =>
-  ({ SUCCESS: "badge-success", FAILED: "badge-danger", ALREADY_APPLIED: "badge-warning", PENDING: "badge-muted" }[s] || "badge-muted");
+const statusBadge  = (s) => ({ SUCCESS: "badge-success", FAILED: "badge-danger",  ALREADY_APPLIED: "badge-warning", PENDING: "badge-muted" }[s]  || "badge-muted");
+const resultBadge  = (s) => ({ ALLOTTED: "badge-success", NOT_ALLOTTED: "badge-danger", NOT_PUBLISHED: "badge-warning", UNKNOWN: "badge-muted" }[s] || "badge-muted");
+const Skeleton     = ({ h = 12, w = "100%" }) => <div className="skeleton" style={{ height: h, width: w }} />;
 
-const resultBadge = (s) =>
-  ({ ALLOTTED: "badge-success", NOT_ALLOTTED: "badge-danger", NOT_PUBLISHED: "badge-warning", UNKNOWN: "badge-muted" }[s] || "badge-muted");
-
-const Skeleton = ({ h = 12, w = "100%" }) => (
-  <div className="skeleton" style={{ height: h, width: w }} />
-);
-
-const SearchIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-    className="history-search-icon">
-    <circle cx="11" cy="11" r="8"/>
-    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-  </svg>
-);
+const STATUS_FILTERS = ["ALL", "SUCCESS", "FAILED", "ALREADY_APPLIED", "PENDING"];
 
 const History = () => {
   const [history, setHistory]           = useState([]);
@@ -32,19 +19,20 @@ const History = () => {
   const [page, setPage]                 = useState(1);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         const res = await getHistoryApi();
-        setHistory(Array.isArray(res.data) ? res.data : []);
-      } catch (err) {
-        console.error(err);
+        if (!cancelled) setHistory(Array.isArray(res.data) ? res.data : []);
+      } catch {
+        if (!cancelled) setHistory([]);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
+    return () => { cancelled = true; };
   }, []);
 
-  /* reset to page 1 whenever filters change */
   useEffect(() => { setPage(1); }, [search, statusFilter]);
 
   const filtered = useMemo(() => {
@@ -53,23 +41,29 @@ const History = () => {
       const q = search.toLowerCase();
       d = d.filter((h) =>
         h.companyName?.toLowerCase().includes(q) ||
-        h.accountUsername?.toLowerCase().includes(q)
+        h.accountUsername?.toLowerCase().includes(q) ||
+        h.accountFullName?.toLowerCase().includes(q)
       );
     }
-    if (statusFilter !== "ALL") d = d.filter((h) => h.status === statusFilter);
+    if (statusFilter !== "ALL") {
+      d = d.filter((h) => h.status === statusFilter);
+    }
     return d;
   }, [search, statusFilter, history]);
 
-  const totalPages  = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated   = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const fmtDate = (iso) => {
+    if (!iso) return "—";
+    try { return new Date(iso).toLocaleDateString(); } catch { return "—"; }
+  };
 
   return (
     <Layout>
       <div className="page">
         <h1 className="page-title">Application history</h1>
-        <p className="page-subtitle">
-          All IPO applications across all your accounts.
-        </p>
+        <p className="page-subtitle">All IPO applications across all your accounts.</p>
 
         <div className="history-controls">
           <div className="history-search-wrap">
@@ -84,14 +78,14 @@ const History = () => {
             />
           </div>
           <div className="filter-scroll" role="group" aria-label="Filter by status">
-            {["ALL", "SUCCESS", "FAILED", "ALREADY_APPLIED", "PENDING"].map((s) => (
+            {STATUS_FILTERS.map((s) => (
               <button
                 key={s}
                 className={`filter-btn${statusFilter === s ? " active" : ""}`}
                 onClick={() => setStatusFilter(s)}
                 aria-pressed={statusFilter === s}
               >
-                {s === "ALL" ? "All" : s.replace("_", " ")}
+                {s === "ALL" ? "All" : s.replace(/_/g, " ")}
               </button>
             ))}
           </div>
@@ -126,7 +120,7 @@ const History = () => {
         ) : filtered.length === 0 ? (
           <div className="card empty-state">
             <EmptyIllustration />
-            <p>No applications found.</p>
+            <p>{history.length === 0 ? "No applications yet." : "No applications match your filters."}</p>
           </div>
         ) : (
           <div className="card anim-fade-up">
@@ -147,26 +141,30 @@ const History = () => {
                   {paginated.map((item) => (
                     <tr key={item.id}>
                       <td>
-                        <span className="h-company">{item.companyName}</span>
-                        <span className="h-share-id">ID: {item.shareId}</span>
+                        <span className="h-company">{item.companyName || "—"}</span>
+                        {item.shareId && (
+                          <span className="h-share-id">ID: {item.shareId}</span>
+                        )}
                       </td>
                       <td>
-                        <span className="h-acc-name">{item.accountFullName}</span>
+                        <span className="h-acc-name">{item.accountFullName || "—"}</span>
                         <span className="h-acc-user">{item.accountUsername}</span>
                       </td>
-                      <td>{item.appliedKitta}</td>
+                      <td>{item.appliedKitta ?? "—"}</td>
                       <td>
                         <span className={`badge ${statusBadge(item.status)}`}>
-                          {item.status}
+                          {item.status?.replace(/_/g, " ") || "—"}
                         </span>
                         {item.statusMessage && (
-                          <p className="h-msg">{item.statusMessage}</p>
+                          <p className="h-msg" title={item.statusMessage}>
+                            {item.statusMessage}
+                          </p>
                         )}
                       </td>
                       <td>
                         {item.resultStatus
                           ? <span className={`badge ${resultBadge(item.resultStatus)}`}>
-                              {item.resultStatus.replace("_", " ")}
+                              {item.resultStatus.replace(/_/g, " ")}
                             </span>
                           : <span className="td-muted">—</span>}
                       </td>
@@ -175,9 +173,7 @@ const History = () => {
                           ? <span className="h-allotted">{item.allottedKitta}</span>
                           : <span className="td-muted">—</span>}
                       </td>
-                      <td className="td-muted">
-                        {new Date(item.appliedAt).toLocaleDateString()}
-                      </td>
+                      <td className="td-muted">{fmtDate(item.appliedAt)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -186,7 +182,7 @@ const History = () => {
 
             <div className="table-footer">
               <span>
-                Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length} applications
+                Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
               </span>
               {totalPages > 1 && (
                 <div className="pagination" role="navigation" aria-label="Pagination">
@@ -198,9 +194,7 @@ const History = () => {
                   >
                     <ChevronLeft />
                   </button>
-                  <span className="page-info" aria-current="page">
-                    {page} / {totalPages}
-                  </span>
+                  <span className="page-info" aria-current="page">{page} / {totalPages}</span>
                   <button
                     className="page-btn"
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
@@ -218,6 +212,15 @@ const History = () => {
     </Layout>
   );
 };
+
+const SearchIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+    className="history-search-icon">
+    <circle cx="11" cy="11" r="8"/>
+    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+  </svg>
+);
 
 const EmptyIllustration = () => (
   <svg width="48" height="48" viewBox="0 0 48 48" fill="none"

@@ -27,29 +27,24 @@ public class AccountController {
         return ResponseEntity.ok(meroshareApiService.getDpList());
     }
 
+    @GetMapping
+    public ResponseEntity<List<MeroshareAccountResponse>> getAccounts(
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(accountService.getAccounts(userDetails.getUsername()));
+    }
+
     @PostMapping
     public ResponseEntity<MeroshareAccountResponse> addAccount(
             @Valid @RequestBody MeroshareAccountRequest request,
             @AuthenticationPrincipal UserDetails userDetails) {
-
-        return ResponseEntity.ok(
-                accountService.addAccount(request, userDetails.getUsername()));
+        return ResponseEntity.ok(accountService.addAccount(request, userDetails.getUsername()));
     }
 
-    @GetMapping
-    public ResponseEntity<List<MeroshareAccountResponse>> getAccounts(
-            @AuthenticationPrincipal UserDetails userDetails) {
-
-        return ResponseEntity.ok(
-                accountService.getAccounts(userDetails.getUsername()));
-    }
-
-    @DeleteMapping("/{accountId}")
+    @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteAccount(
-            @PathVariable Long accountId,
+            @PathVariable Long id,
             @AuthenticationPrincipal UserDetails userDetails) {
-
-        accountService.deleteAccount(accountId, userDetails.getUsername());
+        accountService.deleteAccount(id, userDetails.getUsername());
         return ResponseEntity.noContent().build();
     }
 }

@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { useTheme } from "../../context/ThemeContext";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { getAccountsApi } from "../../api/accounts";
@@ -15,26 +14,44 @@ const Skeleton = ({ h = 16, w = "100%", style = {} }) => (
   <div className="skeleton" style={{ height: h, width: w, ...style }} />
 );
 
+const statusBadgeClass = (s) =>
+  s === "FAILED"          ? "badge-danger"  :
+  s === "ALREADY_APPLIED" ? "badge-warning" : "badge-success";
+
+const resultBadgeClass = (s) =>
+  s === "ALLOTTED"     ? "badge-success" :
+  s === "NOT_ALLOTTED" ? "badge-danger"  : "badge-muted";
+
+const TOOLTIP_CONTENT_STYLE = {
+  background: "var(--surface)",
+  border: "1px solid var(--border)",
+  borderRadius: 6,
+  fontSize: 12,
+  boxShadow: "var(--shadow)",
+};
+
 const Dashboard = () => {
   const { user } = useAuth();
-  const { theme } = useTheme();
   const [data, setData] = useState({ accounts: [], history: [], loading: true });
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         const [accRes, histRes] = await Promise.all([getAccountsApi(), getHistoryApi()]);
+        if (cancelled) return;
         const sorted = (Array.isArray(histRes?.data) ? histRes.data : [])
           .sort((a, b) => new Date(b.appliedAt) - new Date(a.appliedAt));
         setData({
           accounts: Array.isArray(accRes?.data) ? accRes.data : [],
-          history: sorted,
-          loading: false,
+          history:  sorted,
+          loading:  false,
         });
       } catch {
-        setData({ accounts: [], history: [], loading: false });
+        if (!cancelled) setData({ accounts: [], history: [], loading: false });
       }
     })();
+    return () => { cancelled = true; };
   }, []);
 
   const stats = useMemo(() => ({
@@ -48,6 +65,7 @@ const Dashboard = () => {
   const lineData = useMemo(() => {
     const map = {};
     data.history.forEach((h) => {
+      if (!h.appliedAt) return;
       const d = new Date(h.appliedAt).toLocaleDateString();
       map[d] = (map[d] || 0) + 1;
     });
@@ -59,16 +77,10 @@ const Dashboard = () => {
     { name: "Failed",   value: stats.failed   },
   ];
 
-  const tooltipStyle = useMemo(() => ({
-    contentStyle: {
-      background: "var(--surface)",
-      border: "1px solid var(--border)",
-      borderRadius: 6,
-      fontSize: 12,
-      boxShadow: "var(--shadow)",
-    },
+  const tooltipProps = {
+    contentStyle: TOOLTIP_CONTENT_STYLE,
     labelStyle: { color: "var(--text-2)" },
-  }), [theme]);  // re-compute on theme change
+  };
 
   return (
     <Layout>
@@ -85,7 +97,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Stats */}
         <div className="dash-stats">
           {data.loading ? (
             [1, 2, 3].map((k) => (
@@ -112,7 +123,6 @@ const Dashboard = () => {
           )}
         </div>
 
-        {/* Charts */}
         {!data.loading && data.history.length > 0 && (
           <div className="dash-charts">
             <div className="card anim-fade-up" style={{ animationDelay: "0.18s" }}>
@@ -123,7 +133,7 @@ const Dashboard = () => {
                     type="monotone" dataKey="count"
                     stroke="var(--accent)" strokeWidth={2} dot={false}
                   />
-                  <Tooltip {...tooltipStyle} />
+                  <Tooltip {...tooltipProps} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -138,7 +148,7 @@ const Dashboard = () => {
                       <Cell fill="var(--success)" />
                       <Cell fill="var(--danger)"  />
                     </Pie>
-                    <Tooltip {...tooltipStyle} />
+                    <Tooltip {...tooltipProps} />
                   </PieChart>
                 </ResponsiveContainer>
               )}
@@ -146,7 +156,6 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* Main grid */}
         <div className="dash-main">
           <div>
             <div className="section-head">
@@ -187,21 +196,13 @@ const Dashboard = () => {
                           <td><span className="cell-primary">{item.companyName}</span></td>
                           <td><span className="cell-dim">{item.accountUsername}</span></td>
                           <td>
-                            <span className={`badge ${
-                              item.status === "FAILED"          ? "badge-danger"  :
-                              item.status === "ALREADY_APPLIED" ? "badge-warning" :
-                              "badge-success"
-                            }`}>
-                              {item.status}
+                            <span className={`badge ${statusBadgeClass(item.status)}`}>
+                              {item.status?.replace(/_/g, " ")}
                             </span>
                           </td>
                           <td>
                             {item.resultStatus ? (
-                              <span className={`badge ${
-                                item.resultStatus === "ALLOTTED"     ? "badge-success" :
-                                item.resultStatus === "NOT_ALLOTTED" ? "badge-danger"  :
-                                "badge-muted"
-                              }`}>
+                              <span className={`badge ${resultBadgeClass(item.resultStatus)}`}>
                                 {item.resultStatus.replace(/_/g, " ")}
                               </span>
                             ) : <span className="cell-dim">—</span>}
@@ -241,10 +242,15 @@ const Dashboard = () => {
                 <div className="account-list">
                   {data.accounts.map((acc) => (
                     <div key={acc.id} className="account-row">
-                      <div className="account-initial">{acc.fullName?.[0] || "?"}</div>
+                      <div className="account-initial">
+                        {acc.fullName?.[0]?.toUpperCase() || "?"}
+                      </div>
                       <div>
                         <p className="account-name">{acc.fullName}</p>
-                        <p className="account-meta">{acc.username}</p>
+                        <p className="account-meta">
+                          {acc.username}
+                          {acc.dpCode ? ` · DP ${acc.dpCode}` : ""}
+                        </p>
                       </div>
                     </div>
                   ))}
@@ -253,6 +259,7 @@ const Dashboard = () => {
             </div>
           </div>
         </div>
+
       </div>
     </Layout>
   );

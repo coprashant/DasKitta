@@ -7,41 +7,31 @@ import Layout from "../../components/Layout";
 import toast from "react-hot-toast";
 import "./ResultChecker.css";
 
-const SpinnerIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
-    style={{ animation: "spin 0.7s linear infinite" }}>
-    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-  </svg>
-);
-
-const ResultChecker = ({ theme, onThemeToggle }) => {
+const ResultChecker = () => {
   const { user } = useAuth();
-  const [shareId, setShareId]             = useState("");
-  const [boid, setBoid]                   = useState("");
-  const [results, setResults]             = useState([]);
-  const [loading, setLoading]             = useState(false);
-  const [checked, setChecked]             = useState(false);
-  const [ipoList, setIpoList]             = useState([]);
+  const [shareId, setShareId]               = useState("");
+  const [boid, setBoid]                     = useState("");
+  const [results, setResults]               = useState([]);
+  const [loading, setLoading]               = useState(false);
+  const [checked, setChecked]               = useState(false);
+  const [ipoList, setIpoList]               = useState([]);
   const [ipoListLoading, setIpoListLoading] = useState(true);
-  const [ipoListError, setIpoListError]   = useState(false);
+  const [ipoListError, setIpoListError]     = useState(false);
 
   useEffect(() => { fetchIpoList(); }, []);
 
   const fetchIpoList = async () => {
     setIpoListLoading(true);
     setIpoListError(false);
-    setIpoList([]);
     setShareId("");
     try {
       const res = await getPublicShareListApi();
       const shares = Array.isArray(res.data) ? res.data : [];
       setIpoList(shares);
       if (shares.length > 0) {
-        setShareId(String(shares[0].id ?? shares[0].shareId ?? ""));
+        setShareId(resolveShareId(shares[0]));
       }
-    } catch (err) {
-      console.error(err);
+    } catch {
       setIpoListError(true);
       toast.error("Failed to load IPO list. Try refreshing.");
     } finally {
@@ -49,11 +39,19 @@ const ResultChecker = ({ theme, onThemeToggle }) => {
     }
   };
 
+  const resolveShareId = (ipo) =>
+    String(ipo.id ?? ipo.companyShareId ?? ipo.shareId ?? "");
+
+  const getIpoName = (ipo) =>
+    ipo.name || ipo.companyName || `Share #${resolveShareId(ipo)}`;
+
   const handleCheck = async (e) => {
     e.preventDefault();
     if (!shareId.trim()) { toast.error("Select an IPO"); return; }
     if (!user && !boid.trim()) { toast.error("Enter your BOID"); return; }
-    if (!user && boid.trim().length !== 16) { toast.error("BOID must be exactly 16 digits"); return; }
+    if (!user && boid.trim().length !== 16) {
+      toast.error("BOID must be exactly 16 digits"); return;
+    }
     setLoading(true);
     setResults([]);
     setChecked(false);
@@ -61,9 +59,11 @@ const ResultChecker = ({ theme, onThemeToggle }) => {
       const res = user
         ? await checkResultApi(shareId)
         : await checkResultGuestApi(shareId, boid.trim());
+
       const data = Array.isArray(res.data) ? res.data : [];
       setResults(data);
       setChecked(true);
+
       if (!data.length) {
         toast("No results found. The result may not be published yet.");
       } else if (data.every((r) => r.resultStatus === "UNKNOWN")) {
@@ -77,12 +77,11 @@ const ResultChecker = ({ theme, onThemeToggle }) => {
     }
   };
 
-  const getIpoName = (ipo) => ipo.companyName || ipo.name || `Share #${ipo.id ?? ipo.shareId}`;
-  const selectedIpo = ipoList.find((ipo) => String(ipo.id ?? ipo.shareId) === shareId);
+  const selectedIpo = ipoList.find((ipo) => resolveShareId(ipo) === shareId);
   const formDisabled = ipoListLoading || ipoListError || !ipoList.length;
 
   return (
-    <Layout theme={theme} onThemeToggle={onThemeToggle}>
+    <Layout>
       <div className="page">
         <h1 className="page-title">IPO result checker</h1>
         <p className="page-subtitle">
@@ -121,10 +120,14 @@ const ResultChecker = ({ theme, onThemeToggle }) => {
                     disabled={ipoListLoading}
                   >
                     <option value="">
-                      {ipoListLoading ? "Loading IPOs" : !ipoList.length ? "No IPOs available" : "Select an IPO"}
+                      {ipoListLoading
+                        ? "Loading IPOs..."
+                        : !ipoList.length
+                          ? "No results published yet"
+                          : "Select an IPO"}
                     </option>
                     {ipoList.map((ipo) => {
-                      const id = String(ipo.id ?? ipo.shareId ?? "");
+                      const id = resolveShareId(ipo);
                       return (
                         <option key={id} value={id}>
                           {getIpoName(ipo)}{ipo.scrip ? ` (${ipo.scrip})` : ""}
@@ -135,7 +138,7 @@ const ResultChecker = ({ theme, onThemeToggle }) => {
                 )}
                 {selectedIpo && (
                   <span className="form-hint">
-                    Share ID: {selectedIpo.id ?? selectedIpo.shareId}
+                    Share ID: {resolveShareId(selectedIpo)}
                     {selectedIpo.scrip ? ` — ${selectedIpo.scrip}` : ""}
                   </span>
                 )}
@@ -147,6 +150,7 @@ const ResultChecker = ({ theme, onThemeToggle }) => {
                   <input
                     className="input"
                     type="text"
+                    inputMode="numeric"
                     value={boid}
                     onChange={(e) => setBoid(e.target.value.replace(/\D/g, "").slice(0, 16))}
                     placeholder="16-digit BOID number"
@@ -245,16 +249,15 @@ const ResultCard = ({ result: r, style }) => {
         <div className="warn-box">
           <WarnIcon />
           <span>
-            {r.statusMessage
-              ? r.statusMessage
-              : <>
-                  Result could not be determined. The IPO result may not be published yet,
-                  or CDSC may be blocking automated checks. Try{" "}
-                  <a href="https://iporesult.cdsc.com.np" target="_blank" rel="noopener noreferrer">
-                    iporesult.cdsc.com.np
-                  </a>
-                </>
-            }
+            {r.statusMessage || (
+              <>
+                Result could not be determined. The IPO result may not be published yet,
+                or CDSC may be blocking automated checks. Try{" "}
+                <a href="https://iporesult.cdsc.com.np" target="_blank" rel="noopener noreferrer">
+                  iporesult.cdsc.com.np
+                </a>
+              </>
+            )}
           </span>
         </div>
       )}
@@ -267,6 +270,14 @@ const ResultCard = ({ result: r, style }) => {
     </div>
   );
 };
+
+const SpinnerIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+    style={{ animation: "spin 0.7s linear infinite" }}>
+    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+  </svg>
+);
 
 const InfoIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none"

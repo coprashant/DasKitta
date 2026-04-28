@@ -8,24 +8,16 @@ import "./IPOApply.css";
 const statusBadge = (s) =>
   ({ SUCCESS: "badge-success", FAILED: "badge-danger", ALREADY_APPLIED: "badge-warning", PENDING: "badge-muted" }[s] || "badge-muted");
 
-const SpinnerIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
-    style={{ animation: "spin 0.7s linear infinite" }}>
-    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-  </svg>
-);
-
-const IPOApply = ({ theme, onThemeToggle }) => {
-  const [ipos, setIpos]                     = useState([]);
-  const [accounts, setAccounts]             = useState([]);
-  const [selectedIpo, setSelectedIpo]       = useState(null);
+const IPOApply = () => {
+  const [ipos, setIpos]                         = useState([]);
+  const [accounts, setAccounts]                 = useState([]);
+  const [selectedIpo, setSelectedIpo]           = useState(null);
   const [selectedAccounts, setSelectedAccounts] = useState([]);
-  const [kitta, setKitta]                   = useState(10);
-  const [loading, setLoading]               = useState(true);
-  const [ipoError, setIpoError]             = useState(null);
-  const [applying, setApplying]             = useState(false);
-  const [results, setResults]               = useState([]);
+  const [kitta, setKitta]                       = useState(10);
+  const [loading, setLoading]                   = useState(true);
+  const [ipoError, setIpoError]                 = useState(null);
+  const [applying, setApplying]                 = useState(false);
+  const [results, setResults]                   = useState([]);
 
   useEffect(() => { fetchData(); }, []);
 
@@ -63,11 +55,12 @@ const IPOApply = ({ theme, onThemeToggle }) => {
     if (!selectedIpo)             { toast.error("Select an IPO first"); return; }
     if (!selectedAccounts.length) { toast.error("Select at least one account"); return; }
     if (kitta < 10 || kitta % 10 !== 0) { toast.error("Kitta must be a multiple of 10"); return; }
+
     setApplying(true);
     setResults([]);
     try {
       const res = await applyIpoApi({
-        shareId:     String(selectedIpo.companyShareId || selectedIpo.id),
+        shareId:     String(selectedIpo.companyShareId),
         companyName: selectedIpo.companyName || selectedIpo.scrip || "Unknown",
         kitta,
         accountIds:  selectedAccounts,
@@ -75,9 +68,9 @@ const IPOApply = ({ theme, onThemeToggle }) => {
       setResults(res.data);
       const ok      = res.data.filter((r) => r.status === "SUCCESS").length;
       const already = res.data.filter((r) => r.status === "ALREADY_APPLIED").length;
-      if (ok > 0)      toast.success(`Applied for ${ok} account(s)`);
+      if (ok > 0)           toast.success(`Applied for ${ok} account(s)`);
       else if (already > 0) toast(`Already applied for ${already} account(s)`);
-      else             toast.error("All applications failed.");
+      else                  toast.error("All applications failed.");
     } catch (err) {
       toast.error(err.response?.data?.message || "Apply failed");
     } finally {
@@ -86,12 +79,10 @@ const IPOApply = ({ theme, onThemeToggle }) => {
   };
 
   return (
-    <Layout theme={theme} onThemeToggle={onThemeToggle}>
+    <Layout>
       <div className="page">
         <h1 className="page-title">Apply IPO</h1>
-        <p className="page-subtitle">
-          Select an IPO and accounts, then apply in one click.
-        </p>
+        <p className="page-subtitle">Select an IPO and accounts, then apply in one click.</p>
 
         {loading ? (
           <div className="apply-layout">
@@ -135,20 +126,18 @@ const IPOApply = ({ theme, onThemeToggle }) => {
                 ) : (
                   <div className="ipo-list">
                     {ipos.map((ipo) => {
-                      const id   = ipo.companyShareId || ipo.id;
-                      const name = ipo.companyName || ipo.scrip || "Unknown";
-                      const sub  = ipo.shareTypeName || ipo.subGroup || "IPO";
-                      const sel  = selectedIpo?.companyShareId === ipo.companyShareId
-                                   && selectedIpo?.companyShareId != null;
+                      const sel = selectedIpo?.companyShareId === ipo.companyShareId;
                       return (
                         <div
-                          key={id}
+                          key={ipo.companyShareId}
                           className={`ipo-item${sel ? " selected" : ""}`}
                           onClick={() => setSelectedIpo(ipo)}
                         >
                           <div>
-                            <p className="ipo-name">{name}</p>
-                            <p className="ipo-meta">ID: {id} &middot; {sub}</p>
+                            <p className="ipo-name">{ipo.companyName}</p>
+                            <p className="ipo-meta">
+                              {ipo.scrip} &middot; {ipo.shareTypeName || "IPO"} &middot; ID {ipo.companyShareId}
+                            </p>
                           </div>
                           <div className={`ipo-check${sel ? " on" : ""}`}>
                             {sel && <CheckIcon />}
@@ -224,7 +213,9 @@ const IPOApply = ({ theme, onThemeToggle }) => {
                           </div>
                           <div>
                             <p className="acc-name">{acc.fullName}</p>
-                            <p className="acc-meta">{acc.username} &middot; DP {acc.dpId}</p>
+                            <p className="acc-meta">
+                              {acc.username}{acc.dpCode ? ` \u00b7 DP ${acc.dpCode}` : ""}
+                            </p>
                           </div>
                         </div>
                       );
@@ -289,6 +280,13 @@ const PlusIcon = () => (
     stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
     <line x1="12" y1="5" x2="12" y2="19"/>
     <line x1="5" y1="12" x2="19" y2="12"/>
+  </svg>
+);
+const SpinnerIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+    style={{ animation: "spin 0.7s linear infinite" }}>
+    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
   </svg>
 );
 
