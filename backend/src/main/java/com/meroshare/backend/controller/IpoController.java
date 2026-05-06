@@ -21,6 +21,12 @@ public class IpoController {
 
     private final IpoService ipoService;
 
+    @GetMapping("/applied-companies")
+    public ResponseEntity<List<Map<String, String>>> getAppliedCompanies(
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(ipoService.getAppliedCompanies(userDetails.getUsername()));
+    }
+
     @GetMapping("/shares")
     public ResponseEntity<List<Map>> getPublicShares() {
         return ResponseEntity.ok(ipoService.getPublicShareList());

@@ -21,17 +21,42 @@
   border-bottom: 1px solid var(--border);
 }
 
-/* IPO list */
-.ipo-list { display: flex; flex-direction: column; gap: 6px; }
-
-.ipo-skeleton {
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  margin-bottom: 6px;
-  background: var(--surface-2);
+/* Grouping & Categories */
+.ipo-category-group { margin-bottom: 12px; }
+.category-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-2);
+  font-weight: 700;
+  padding: 6px 12px;
+  background: var(--surface-3);
+  border-radius: 6px;
+  margin-bottom: 8px;
 }
 
+/* Toggle Button */
+.btn-toggle-others {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px dashed var(--border);
+  padding: 10px;
+  border-radius: var(--r);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s;
+  margin: 10px 0;
+}
+.btn-toggle-others:hover { background: var(--surface-3); color: var(--accent); border-color: var(--accent); }
+
+/* IPO Items */
+.ipo-list { display: flex; flex-direction: column; gap: 6px; }
 .ipo-item {
   display: flex;
   align-items: center;
@@ -40,12 +65,10 @@
   border: 1px solid var(--border);
   border-radius: var(--r);
   cursor: pointer;
-  transition:
-    border-color var(--t-fast) var(--ease),
-    background   var(--t-fast) var(--ease);
+  transition: all var(--t-fast) var(--ease);
   background: var(--surface-2);
 }
-.ipo-item:hover   { border-color: var(--border-strong); background: var(--surface-3); }
+.ipo-item:hover { border-color: var(--border-strong); background: var(--surface-3); }
 .ipo-item.selected { border-color: var(--accent); background: var(--accent-dim); }
 
 .ipo-name { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 2px; }
@@ -61,13 +84,11 @@
   align-items: center;
   justify-content: center;
   color: #fff;
-  transition: all var(--t-fast) var(--ease);
 }
 .ipo-check.on { border-color: var(--accent); background: var(--accent); }
 
-/* Kitta */
+/* Kitta Section */
 .kitta-row { display: flex; align-items: center; gap: 10px; }
-
 .kitta-stepper {
   width: 36px;
   height: 36px;
@@ -79,13 +100,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  transition:
-    border-color var(--t-fast) var(--ease),
-    background   var(--t-fast) var(--ease);
 }
-.kitta-stepper:hover { border-color: var(--accent); background: var(--accent-dim); }
-
 .kitta-val {
   width: 80px;
   text-align: center;
@@ -96,38 +111,13 @@
   font-size: 18px;
   font-weight: 500;
   color: var(--text);
-  font-family: var(--font);
   outline: none;
-  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
-}
-.kitta-val:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-dim);
 }
 
 /* Account selection */
-.accounts-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 14px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--border);
-}
-
-.sel-all-btn {
-  font-size: 12px;
-  color: var(--accent);
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: var(--font);
-  padding: 0;
-}
-.sel-all-btn:hover { text-decoration: underline; }
-
+.accounts-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.sel-all-btn { font-size: 12px; color: var(--accent); background: none; border: none; cursor: pointer; }
 .acc-checks { display: flex; flex-direction: column; gap: 6px; }
-
 .acc-check-row {
   display: flex;
   align-items: center;
@@ -136,14 +126,9 @@
   border: 1px solid var(--border);
   border-radius: var(--r);
   cursor: pointer;
-  transition:
-    border-color var(--t-fast) var(--ease),
-    background   var(--t-fast) var(--ease);
   background: var(--surface-2);
 }
-.acc-check-row:hover { background: var(--surface-3); }
 .acc-check-row.on { border-color: var(--accent); background: var(--accent-dim); }
-
 .check-box {
   width: 16px;
   height: 16px;
@@ -152,26 +137,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
   color: #fff;
-  transition: all var(--t-fast) var(--ease);
 }
 .check-box.on { border-color: var(--accent); background: var(--accent); }
 
-.acc-name { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 1px; }
-.acc-meta { font-size: 12px; color: var(--text-2); }
-
-/* Results */
-.results-list { display: flex; flex-direction: column; gap: 8px; }
-
-.result-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  background: var(--surface-2);
-  border-radius: var(--r);
+/* Animation */
+.anim-fade-down { animation: fadeDown 0.3s ease-out; }
+@keyframes fadeDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-.result-name { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 2px; }
-.result-msg  { font-size: 12px; color: var(--text-2); }

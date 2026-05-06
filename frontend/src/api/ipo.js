@@ -1,5 +1,7 @@
 import client from "./client";
 
+export const getAppliedCompaniesApi = () => client.get("/ipo/applied-companies");
+
 export const getPublicShareListApi = () => client.get("/ipo/shares");
 
 export const getOpenIposApi = () => client.get("/ipo/open");

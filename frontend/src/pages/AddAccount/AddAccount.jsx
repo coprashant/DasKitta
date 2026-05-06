@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   addAccountApi, getAccountsApi,
-  deleteAccountApi, getDpListApi,
+  deleteAccountApi, getDpListApi, getBankByDpApi,
 } from "../../api/accounts";
 import Layout from "../../components/Layout";
 import toast from "react-hot-toast";
@@ -10,13 +10,14 @@ import "./AddAccount.css";
 const EMPTY_FORM = { dpId: "", dpCode: "", username: "", password: "", bankId: "", crn: "", pin: "" };
 
 const AddAccount = () => {
-  const [form, setForm]               = useState(EMPTY_FORM);
-  const [accounts, setAccounts]       = useState([]);
-  const [dpList, setDpList]           = useState([]);
-  const [loading, setLoading]         = useState(false);
-  const [deleting, setDeleting]       = useState(null);
-  const [dpLoading, setDpLoading]     = useState(true);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [accounts, setAccounts] = useState([]);
+  const [dpList, setDpList] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(null);
+  const [dpLoading, setDpLoading] = useState(true);
   const [accsLoading, setAccsLoading] = useState(true);
+  const [bankLookupLoading, setBankLookupLoading] = useState(false);
 
   useEffect(() => {
     fetchAccounts();
@@ -49,24 +50,37 @@ const AddAccount = () => {
 
   const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
 
-  const handleDpChange = (e) => {
+  const handleDpChange = async (e) => {
     const selectedId = e.target.value;
     const dp = dpList.find((d) => String(d.id) === String(selectedId));
+
     setForm((f) => ({
       ...f,
-      dpId:   selectedId,
+      dpId: selectedId,
       dpCode: dp ? dp.code : "",
+      bankId: "",
     }));
+
+    if (!selectedId) return;
+
+    setBankLookupLoading(true);
+    try {
+      const res = await getBankByDpApi(selectedId);
+      const bankId = res.data?.bankId ?? "";
+      if (bankId) {
+        setForm((f) => ({ ...f, bankId: String(bankId) }));
+      }
+    } catch {
+      // Silent fail; backend will resolve it if frontend fails
+    } finally {
+      setBankLookupLoading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.dpId || !form.username || !form.password) {
       toast.error("DP, username and password are required");
-      return;
-    }
-    if (!form.bankId) {
-      toast.error("Bank ID is required");
       return;
     }
     if (!form.crn.trim()) {
@@ -130,12 +144,16 @@ const AddAccount = () => {
                   </option>
                   {dpList.map((dp) => (
                     <option key={dp.id} value={dp.id}>
-                      {dp.name}
+                      {dp.name} ({dp.code})
                     </option>
                   ))}
                 </select>
                 {selectedDp && (
-                  <span className="form-hint">DP code: {selectedDp.code} &middot; ID: {selectedDp.id}</span>
+                  <span className="form-hint">
+                    DP code: {selectedDp.code} &middot; ID: {selectedDp.id}
+                    {bankLookupLoading && " \u00b7 Looking up bank\u2026"}
+                    {!bankLookupLoading && form.bankId && ` \u00b7 Bank ID: ${form.bankId}`}
+                  </span>
                 )}
               </div>
 
@@ -155,18 +173,6 @@ const AddAccount = () => {
                   value={form.password} onChange={handleChange}
                   placeholder="Your Meroshare password" required
                 />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Bank ID</label>
-                <input
-                  className="input" type="number" name="bankId"
-                  value={form.bankId} onChange={handleChange}
-                  placeholder="Your Meroshare bank ID (e.g. 12)" required
-                />
-                <span className="form-hint">
-                  Found under Meroshare &rarr; My Profile &rarr; Bank Details
-                </span>
               </div>
 
               <div className="form-group">
@@ -191,14 +197,14 @@ const AddAccount = () => {
                 <InfoIcon />
                 <span>
                   Your password and PIN are AES-encrypted before saving.
-                  Bank ID and CRN are required to apply for IPOs.
+                  Bank details are resolved automatically from your selected DP.
                 </span>
               </div>
 
               <button
                 type="submit"
                 className="btn btn-primary btn-full"
-                disabled={loading || dpLoading}
+                disabled={loading || dpLoading || bankLookupLoading}
                 style={{ marginTop: 4 }}
               >
                 {loading ? <><SpinnerIcon /> Verifying and adding</> : "Add account"}
@@ -272,9 +278,9 @@ const InfoIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
     stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
     style={{ flexShrink: 0, marginTop: 1 }}>
-    <circle cx="12" cy="12" r="10"/>
-    <line x1="12" y1="8" x2="12" y2="12"/>
-    <line x1="12" y1="16" x2="12.01" y2="16"/>
+    <circle cx="12" cy="12" r="10" />
+    <line x1="12" y1="8" x2="12" y2="12" />
+    <line x1="12" y1="16" x2="12.01" y2="16" />
   </svg>
 );
 
@@ -282,7 +288,7 @@ const SpinnerIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
     stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
     style={{ animation: "spin 0.7s linear infinite" }}>
-    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
   </svg>
 );
 

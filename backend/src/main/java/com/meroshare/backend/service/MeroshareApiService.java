@@ -27,8 +27,8 @@ public class MeroshareApiService {
     private static final String PUBLIC_RESULT_URL = "https://iporesult.cdsc.com.np";
 
     private static final String USER_AGENT =
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_6) AppleWebKit/537.36 " +
-            "(KHTML, like Gecko) Chrome/85.0.4183.83 Safari/537.36";
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+            "(KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
 
     private static final long TOKEN_TTL_MS = 25 * 60 * 1000;
 
@@ -115,6 +115,26 @@ public class MeroshareApiService {
 
         String curlRaw = curlClient.get(url, null);
         return parseJsonArray(curlRaw, "DP_LIST_CURL");
+    }
+
+    public Map<String, Object> getBankByDp(Integer dpId) {
+        List<Map> dpList = getDpList();
+        Map<String, Object> match = dpList.stream()
+                .filter(dp -> dpId.equals(dp.get("id")))
+                .findFirst()
+                .map(dp -> (Map<String, Object>) dp)
+                .orElse(null);
+
+        if (match == null) {
+            log.warn("[BANK_BY_DP] No DP found for dpId={}", dpId);
+            return Map.of();
+        }
+
+        Object bankId = match.get("bankId");
+        if (bankId == null) bankId = match.get("id");
+
+        log.info("[BANK_BY_DP] dpId={} bankId={}", dpId, bankId);
+        return Map.of("bankId", bankId, "dpId", dpId);
     }
 
     public String login(String dpId, String username, String password) {
@@ -449,21 +469,24 @@ public class MeroshareApiService {
 
     public ResultInfo checkResultDetail(String token, String applicantFormId) {
         String url = MERO_SHARE_BASE + "/applicantForm/report/detail/" + applicantFormId;
-        ResultInfo result = new ResultInfo();
-        result.setStatus("UNKNOWN");
+        log.info("[RESULT_DETAIL] applicantFormId={}", applicantFormId);
+
+        String curlRaw = curlClient.get(url, token);
+        log.info("[RESULT_DETAIL] Curl raw: {}", snippet300(curlRaw));
+        if (!isHtml(curlRaw) && curlRaw != null) return parseDetailResult(curlRaw);
 
         try {
             String raw = buildClient(token).get()
                     .uri("/applicantForm/report/detail/" + applicantFormId)
                     .retrieve().bodyToMono(String.class).block();
+            log.info("[RESULT_DETAIL] WebClient raw: {}", snippet300(raw));
             if (!isHtml(raw) && raw != null) return parseDetailResult(raw);
         } catch (Exception e) {
             log.warn("[RESULT_DETAIL] WebClient failed: {}", e.getMessage());
         }
 
-        String curlRaw = curlClient.get(url, token);
-        if (!isHtml(curlRaw) && curlRaw != null) return parseDetailResult(curlRaw);
-
+        ResultInfo result = new ResultInfo();
+        result.setStatus("UNKNOWN");
         return result;
     }
 
@@ -471,97 +494,16 @@ public class MeroshareApiService {
         ResultInfo result = new ResultInfo();
         result.setStatus("UNKNOWN");
         try {
-            JsonNode node = objectMapper.readTree(raw);
+            JsonNode root = objectMapper.readTree(raw);
+            JsonNode node = root.has("body") && root.get("body").isObject()
+                    ? root.get("body") : root;
             result.setStatus(node.has("statusName") ? node.get("statusName").asText("UNKNOWN") : "UNKNOWN");
             result.setAllottedKitta(node.has("receivedKitta") ? node.get("receivedKitta").asInt(0) : 0);
+            log.info("[RESULT_DETAIL_PARSE] statusName={} receivedKitta={}",
+                    result.getStatus(), result.getAllottedKitta());
         } catch (Exception e) {
             log.warn("[RESULT_DETAIL_PARSE] {}", e.getMessage());
         }
-        return result;
-    }
-
-    public ResultInfo checkResultPublic(String boid, String shareId) {
-        ResultInfo result = new ResultInfo();
-        result.setStatus("UNKNOWN");
-
-        String url = "https://iporesult.cdsc.com.np/api/ipo-result/public/view/getResults/";
-        Map<String, String> payload = Map.of("boid", boid, "companyShareId", shareId);
-
-        log.info("[RESULT_PUBLIC] Checking boid={} shareId={}", boid, shareId);
-
-        try {
-            String raw = buildResultClient()
-                    .post()
-                    .uri(url)
-                    .bodyValue(payload)
-                    .retrieve()
-                    .bodyToMono(String.class)
-                    .block();
-            log.info("[RESULT_PUBLIC] WebClient raw: {}", snippet300(raw));
-            if (!isHtml(raw) && raw != null) {
-                return parsePublicResult(objectMapper.readTree(raw));
-            }
-        } catch (Exception e) {
-            log.warn("[RESULT_PUBLIC] WebClient: {}", e.getMessage());
-        }
-
-        String curlRaw = curlClient.postJson(url, toJson(payload), null);
-        log.info("[RESULT_PUBLIC] Curl raw: {}", snippet300(curlRaw));
-        if (!isHtml(curlRaw) && curlRaw != null) {
-            try {
-                return parsePublicResult(objectMapper.readTree(curlRaw));
-            } catch (Exception e) {
-                log.warn("[RESULT_PUBLIC_CURL] Parse error: {}", e.getMessage());
-            }
-        }
-
-        return result;
-    }
-
-    private ResultInfo parsePublicResult(JsonNode root) {
-        ResultInfo result = new ResultInfo();
-        result.setStatus("UNKNOWN");
-
-        JsonNode node = root;
-        if (root.has("body") && root.get("body").isObject()) {
-            node = root.get("body");
-        }
-
-        boolean success = root.has("success") && root.get("success").asBoolean();
-        String statusCode = node.has("statusCode") ? node.get("statusCode").asText("") : "";
-        if (statusCode.isBlank()) {
-            statusCode = root.has("statusCode") ? root.get("statusCode").asText("") : "";
-        }
-
-        log.info("[RESULT_PUBLIC_PARSE] success={} statusCode='{}' node={}",
-                success, statusCode, snippet300(node.toString()));
-
-        if ("ALLOCATE".equalsIgnoreCase(statusCode)) {
-            result.setStatus("ALLOTTED");
-            result.setAllottedKitta(node.has("quantity") ? node.get("quantity").asInt(0) : 0);
-        } else if ("NOT_ALLOTED".equalsIgnoreCase(statusCode)
-                || "NOT_ALLOTTED".equalsIgnoreCase(statusCode)) {
-            result.setStatus("NOT_ALLOTTED");
-        } else if (!success && !statusCode.isBlank()) {
-            result.setStatus("NOT_ALLOTTED");
-        } else {
-            String msg = "";
-            if (node.has("message")) msg = node.get("message").asText("").toLowerCase();
-            if (msg.isBlank() && root.has("message")) msg = root.get("message").asText("").toLowerCase();
-
-            if (msg.contains("not allot")) {
-                result.setStatus("NOT_ALLOTTED");
-            } else if (msg.contains("allot")) {
-                result.setStatus("ALLOTTED");
-                if (node.has("quantity")) result.setAllottedKitta(node.get("quantity").asInt(0));
-            } else if (msg.contains("not found") || msg.contains("no result") || msg.contains("no record")) {
-                result.setStatus("NOT_PUBLISHED");
-            } else if (success) {
-                result.setStatus("NOT_PUBLISHED");
-            }
-        }
-
-        log.info("[RESULT_PUBLIC_PARSE] final status={} kitta={}", result.getStatus(), result.getAllottedKitta());
         return result;
     }
 

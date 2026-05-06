@@ -39,6 +39,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/ipo/shares").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/ipo/result/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/accounts/dp-list").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/accounts/bank-by-dp/**").permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);

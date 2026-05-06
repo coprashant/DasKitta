@@ -233,8 +233,11 @@ public class IpoService {
         if (accounts.isEmpty()) throw new RuntimeException("Add at least one Meroshare account first");
 
         List<IpoApplicationResponse> responses = new ArrayList<>();
-        for (MeroshareAccount account : accounts) {
-            responses.add(checkResultForAccount(account, shareId));
+        for (int i = 0; i < accounts.size(); i++) {
+            responses.add(checkResultForAccount(accounts.get(i), shareId));
+            if (i < accounts.size() - 1) {
+                try { Thread.sleep(1500); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+            }
         }
         return responses;
     }
@@ -242,53 +245,37 @@ public class IpoService {
     private IpoApplicationResponse checkResultForAccount(MeroshareAccount account, String shareId) {
         try {
             String token = loginAccount(account);
+
             List<Map> history = meroshareApiService.getApplicationHistory(token);
+            log.info("[CHECK_RESULT] account={} historySize={} shareId={}", account.getUsername(), history.size(), shareId);
 
-            log.info("[CHECK_RESULT] account={} historySize={}", account.getUsername(), history.size());
+            Map<String, Object> entry = findInHistory(history, shareId);
 
-            Map<String, Object> matchingEntry = findInHistory(history, shareId);
+            if (entry == null) {
+                return IpoApplicationResponse.builder()
+                        .shareId(shareId)
+                        .resultStatus(IpoApplication.ResultStatus.NOT_PUBLISHED.name())
+                        .statusMessage("No application found for this IPO in this account")
+                        .accountUsername(account.getUsername())
+                        .accountFullName(account.getFullName())
+                        .build();
+            }
+
+            String companyName = safeStr(entry.get("companyName"), safeStr(entry.get("scrip"), ""));
+            String applicantFormId = safeStr(entry.get("applicantFormId"), null);
 
             IpoApplication.ResultStatus mappedStatus;
             int allottedKitta = 0;
-            String companyName = "";
 
-            if (matchingEntry != null) {
-                companyName = safeStr(matchingEntry.get("companyName"),
-                        safeStr(matchingEntry.get("scrip"), ""));
-                String statusName = safeStr(matchingEntry.get("statusName"), "UNKNOWN");
-                log.info("[CHECK_RESULT] account={} statusName={}", account.getUsername(), statusName);
-
-                if (isTerminalStatus(statusName)) {
-                    Object formIdObj = matchingEntry.get("applicantFormId");
-                    if (formIdObj != null) {
-                        MeroshareApiService.ResultInfo detail =
-                                meroshareApiService.checkResultDetail(token, String.valueOf(formIdObj));
-                        mappedStatus = mapResultStatus(detail.getStatus());
-                        allottedKitta = detail.getAllottedKitta();
-                    } else {
-                        mappedStatus = mapResultStatus(statusName);
-                    }
-                } else {
-                    mappedStatus = mapResultStatus(statusName);
-                }
+            if (applicantFormId != null) {
+                MeroshareApiService.ResultInfo detail =
+                        meroshareApiService.checkResultDetail(token, applicantFormId);
+                log.info("[CHECK_RESULT] account={} detailStatus={} kitta={}",
+                        account.getUsername(), detail.getStatus(), detail.getAllottedKitta());
+                mappedStatus = mapResultStatus(detail.getStatus());
+                allottedKitta = detail.getAllottedKitta();
             } else {
-                boolean appliedViaSystem = ipoApplicationRepository
-                        .existsByMeroshareAccountIdAndShareId(account.getId(), shareId);
-
-                if (appliedViaSystem && account.getBoid() != null && !account.getBoid().isBlank()) {
-                    MeroshareApiService.ResultInfo result =
-                            meroshareApiService.checkResultPublic(account.getBoid(), shareId);
-                    mappedStatus = mapResultStatus(result.getStatus());
-                    allottedKitta = result.getAllottedKitta();
-                } else {
-                    return IpoApplicationResponse.builder()
-                            .shareId(shareId)
-                            .resultStatus(IpoApplication.ResultStatus.NOT_PUBLISHED.name())
-                            .statusMessage("No application found for this IPO in this account")
-                            .accountUsername(account.getUsername())
-                            .accountFullName(account.getFullName())
-                            .build();
-                }
+                mappedStatus = mapResultStatus(safeStr(entry.get("statusName"), "UNKNOWN"));
             }
 
             IpoApplication application = ipoApplicationRepository
@@ -298,7 +285,8 @@ public class IpoService {
             if (application != null) {
                 application.setResultStatus(mappedStatus);
                 application.setAllottedKitta(allottedKitta);
-                if (!companyName.isBlank() && (application.getCompanyName() == null || application.getCompanyName().isBlank())) {
+                if (!companyName.isBlank() &&
+                        (application.getCompanyName() == null || application.getCompanyName().isBlank())) {
                     application.setCompanyName(companyName);
                 }
                 application.setResultCheckedAt(LocalDateTime.now());
@@ -320,7 +308,7 @@ public class IpoService {
             return IpoApplicationResponse.builder()
                     .shareId(shareId)
                     .resultStatus(IpoApplication.ResultStatus.UNKNOWN.name())
-                    .statusMessage("Error checking result: " + e.getMessage())
+                    .statusMessage(e.getMessage())
                     .accountUsername(account.getUsername())
                     .accountFullName(account.getFullName())
                     .build();
@@ -328,36 +316,14 @@ public class IpoService {
     }
 
     public List<IpoApplicationResponse> checkResultByBoid(String shareId, String boid) {
-        try {
-            MeroshareApiService.ResultInfo result = meroshareApiService.checkResultPublic(boid, shareId);
-            IpoApplication.ResultStatus status = mapResultStatus(result.getStatus());
-
-            String message = null;
-            if (status == IpoApplication.ResultStatus.UNKNOWN) {
-                message = "Result check is currently unavailable. Please check directly at iporesult.cdsc.com.np";
-            }
-
-            return List.of(IpoApplicationResponse.builder()
-                    .shareId(shareId)
-                    .companyName("")
-                    .resultStatus(status.name())
-                    .statusMessage(message)
-                    .allottedKitta(result.getAllottedKitta())
-                    .accountUsername(boid)
-                    .accountFullName("Guest")
-                    .build());
-
-        } catch (Exception e) {
-            log.error("[GUEST_RESULT] Failed for boid={}: {}", boid, e.getMessage());
-            return List.of(IpoApplicationResponse.builder()
-                    .shareId(shareId)
-                    .resultStatus(IpoApplication.ResultStatus.UNKNOWN.name())
-                    .statusMessage("Result check failed: " + e.getMessage())
-                    .allottedKitta(0)
-                    .accountUsername(boid)
-                    .accountFullName("Guest")
-                    .build());
-        }
+        return List.of(IpoApplicationResponse.builder()
+                .shareId(shareId)
+                .resultStatus(IpoApplication.ResultStatus.UNKNOWN.name())
+                .statusMessage("Guest result checking is disabled. Please sign in to check results.")
+                .allottedKitta(0)
+                .accountUsername(boid)
+                .accountFullName("Guest")
+                .build());
     }
 
     @Transactional(readOnly = true)
@@ -365,17 +331,6 @@ public class IpoService {
         AppUser appUser = getAppUser(username);
         return ipoApplicationRepository.findAllByAppUserId(appUser.getId())
                 .stream().map(this::toResponse).collect(Collectors.toList());
-    }
-
-    private boolean isTerminalStatus(String status) {
-        if (status == null) return false;
-        String n = status.toUpperCase().trim().replace(" ", "_").replace("-", "_");
-        return switch (n) {
-            case "TRANSACTION_SUCCESS", "APPROVED", "SUCCESS", "COMPLETE",
-                 "ALLOTED", "ALLOTTED", "NOT_ALLOTED", "NOT_ALLOTTED",
-                 "SHARE_ALLOTED", "SHARE_ALLOTTED", "SHARE_NOT_ALLOTED", "SHARE_NOT_ALLOTTED" -> true;
-            default -> false;
-        };
     }
 
     private IpoApplication.ResultStatus mapResultStatus(String status) {
@@ -399,6 +354,33 @@ public class IpoService {
                 yield IpoApplication.ResultStatus.UNKNOWN;
             }
         };
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, String>> getAppliedCompanies(String username) {
+        AppUser appUser = getAppUser(username);
+        List<MeroshareAccount> accounts = accountRepository.findByAppUserId(appUser.getId());
+        if (accounts.isEmpty()) return List.of();
+
+        MeroshareAccount account = accounts.get(0);
+        try {
+            String token = loginAccount(account);
+            List<Map> history = meroshareApiService.getApplicationHistory(token);
+            return history.stream()
+                    .map(item -> {
+                        Map<String, String> entry = new java.util.LinkedHashMap<>();
+                        entry.put("companyShareId", safeStr(item.get("companyShareId"), ""));
+                        entry.put("companyName",    safeStr(item.get("companyName"), safeStr(item.get("scrip"), "")));
+                        entry.put("scrip",          safeStr(item.get("scrip"), ""));
+                        return entry;
+                    })
+                    .filter(e -> !e.get("companyShareId").isBlank())
+                    .distinct()
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.warn("[APPLIED_COMPANIES] Failed: {}", e.getMessage());
+            return List.of();
+        }
     }
 
     @SuppressWarnings("unchecked")

@@ -22,6 +22,11 @@ public class AccountController {
     private final MeroshareAccountService accountService;
     private final MeroshareApiService meroshareApiService;
 
+    @GetMapping("/bank-by-dp/{dpId}")
+    public ResponseEntity<Map<String, Object>> getBankByDp(@PathVariable Integer dpId) {
+        return ResponseEntity.ok(meroshareApiService.getBankByDp(dpId));
+    }
+
     @GetMapping("/dp-list")
     public ResponseEntity<List<Map>> getDpList() {
         return ResponseEntity.ok(meroshareApiService.getDpList());

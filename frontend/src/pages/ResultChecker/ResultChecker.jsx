@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import {
-  checkResultApi, checkResultGuestApi, getPublicShareListApi,
+  checkResultApi, checkResultGuestApi,
+  getPublicShareListApi, getAppliedCompaniesApi,
 } from "../../api/ipo";
 import { useAuth } from "../../context/AuthContext";
 import Layout from "../../components/Layout";
@@ -18,14 +19,17 @@ const ResultChecker = () => {
   const [ipoListLoading, setIpoListLoading] = useState(true);
   const [ipoListError, setIpoListError]     = useState(false);
 
-  useEffect(() => { fetchIpoList(); }, []);
+  useEffect(() => { fetchIpoList(); }, [user]);
 
   const fetchIpoList = async () => {
     setIpoListLoading(true);
     setIpoListError(false);
     setShareId("");
     try {
-      const res = await getPublicShareListApi();
+      const res = user
+        ? await getAppliedCompaniesApi()
+        : await getPublicShareListApi();
+
       const shares = Array.isArray(res.data) ? res.data : [];
       setIpoList(shares);
       if (shares.length > 0) {
@@ -40,10 +44,10 @@ const ResultChecker = () => {
   };
 
   const resolveShareId = (ipo) =>
-    String(ipo.id ?? ipo.companyShareId ?? ipo.shareId ?? "");
+    String(ipo.companyShareId ?? ipo.id ?? ipo.shareId ?? "");
 
   const getIpoName = (ipo) =>
-    ipo.name || ipo.companyName || `Share #${resolveShareId(ipo)}`;
+    ipo.companyName || ipo.name || `Share #${resolveShareId(ipo)}`;
 
   const handleCheck = async (e) => {
     e.preventDefault();

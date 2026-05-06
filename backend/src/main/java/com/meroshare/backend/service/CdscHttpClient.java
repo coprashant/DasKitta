@@ -1,14 +1,15 @@
 package com.meroshare.backend.service;
 
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
-
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+
+import org.springframework.stereotype.Component;
+
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Component
@@ -51,60 +52,6 @@ public class CdscHttpClient {
             return lastAuthHeader.get();
         }
         return null;
-    }
-
-    public String postJsonWithSession(String seedUrl, String postUrl, String jsonBody) {
-        if (!curlAvailable) return null;
-
-        java.io.File cookieFile = null;
-        try {
-            cookieFile = java.io.File.createTempFile("cdsc_cookie_", ".txt");
-            cookieFile.deleteOnExit();
-
-            List<String> seedCmd = new ArrayList<>();
-            seedCmd.add("curl"); seedCmd.add("-s");
-            seedCmd.add("--max-time"); seedCmd.add("10");
-            seedCmd.add("--compressed"); seedCmd.add("-L");
-            seedCmd.add("-c"); seedCmd.add(cookieFile.getAbsolutePath());
-            seedCmd.add("-H"); seedCmd.add("User-Agent: " + USER_AGENT);
-            seedCmd.add("-H"); seedCmd.add("Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
-            seedCmd.add("-H"); seedCmd.add("Accept-Language: en-US,en;q=0.9");
-            seedCmd.add("-H"); seedCmd.add("Accept-Encoding: gzip, deflate, br");
-            seedCmd.add("-H"); seedCmd.add("Connection: keep-alive");
-            seedCmd.add("-H"); seedCmd.add("Referer: https://iporesult.cdsc.com.np/");
-            seedCmd.add(seedUrl);
-            execute(seedCmd, seedUrl);
-
-            List<String> postCmd = new ArrayList<>();
-            postCmd.add("curl"); postCmd.add("-s");
-            postCmd.add("--max-time"); postCmd.add(String.valueOf(TIMEOUT_SECONDS));
-            postCmd.add("--compressed"); postCmd.add("-L");
-            if (http2Supported) postCmd.add("--http2");
-            postCmd.add("-b"); postCmd.add(cookieFile.getAbsolutePath());
-            postCmd.add("-c"); postCmd.add(cookieFile.getAbsolutePath());
-            postCmd.add("-X"); postCmd.add("POST");
-            postCmd.add("-d"); postCmd.add(jsonBody);
-            postCmd.add("-H"); postCmd.add("Content-Type: application/json");
-            postCmd.add("-H"); postCmd.add("Accept: application/json, text/plain, */*");
-            postCmd.add("-H"); postCmd.add("Accept-Language: en-US,en;q=0.9");
-            postCmd.add("-H"); postCmd.add("Accept-Encoding: gzip, deflate, br");
-            postCmd.add("-H"); postCmd.add("Cache-Control: no-cache");
-            postCmd.add("-H"); postCmd.add("Connection: keep-alive");
-            postCmd.add("-H"); postCmd.add("User-Agent: " + USER_AGENT);
-            postCmd.add("-H"); postCmd.add("Origin: https://iporesult.cdsc.com.np");
-            postCmd.add("-H"); postCmd.add("Referer: https://iporesult.cdsc.com.np/");
-            postCmd.add("-H"); postCmd.add("Sec-Fetch-Dest: empty");
-            postCmd.add("-H"); postCmd.add("Sec-Fetch-Mode: cors");
-            postCmd.add("-H"); postCmd.add("Sec-Fetch-Site: same-origin");
-            postCmd.add(postUrl);
-            return execute(postCmd, postUrl);
-
-        } catch (Exception e) {
-            log.warn("[CURL_SESSION_POST] Failed for {}: {}", postUrl, e.getMessage());
-            return null;
-        } finally {
-            if (cookieFile != null) cookieFile.delete();
-        }
     }
 
     public String postJsonWithHeaders(String url, String jsonBody, String authToken) {

@@ -21,7 +21,6 @@ public class MeroshareAccountRequest {
     @NotBlank(message = "Password is required")
     private String password;
 
-    @NotNull(message = "Bank ID is required")
     private Integer bankId;
 
     @NotBlank(message = "CRN is required")
