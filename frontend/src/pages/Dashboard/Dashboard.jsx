@@ -10,10 +10,12 @@ import {
 } from "recharts";
 import "./Dashboard.css";
 
+/* skeleton placeholder */
 const Skeleton = ({ h = 16, w = "100%", style = {} }) => (
   <div className="skeleton" style={{ height: h, width: w, ...style }} />
 );
 
+/* badge class helpers */
 const statusBadgeClass = (s) =>
   s === "FAILED"          ? "badge-danger"  :
   s === "ALREADY_APPLIED" ? "badge-warning" : "badge-success";
@@ -22,13 +24,55 @@ const resultBadgeClass = (s) =>
   s === "ALLOTTED"     ? "badge-success" :
   s === "NOT_ALLOTTED" ? "badge-danger"  : "badge-muted";
 
-const TOOLTIP_CONTENT_STYLE = {
+/* status dot color helper */
+const statusDotClass = (s) =>
+  s === "FAILED" ? "badge-dot badge-dot-danger" : "badge-dot badge-dot-success";
+
+const TOOLTIP_STYLE = {
   background: "var(--surface)",
   border: "1px solid var(--border)",
   borderRadius: 6,
   fontSize: 12,
   boxShadow: "var(--shadow)",
 };
+
+/* inline svg icons */
+const IconStack = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <polygon points="12 2 2 7 12 12 22 7 12 2" />
+    <polyline points="2 17 12 22 22 17" />
+    <polyline points="2 12 12 17 22 12" />
+  </svg>
+);
+
+const IconCheck = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+    <polyline points="22 4 12 14.01 9 11.01" />
+  </svg>
+);
+
+const IconX = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="var(--danger)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="10" />
+    <line x1="15" y1="9" x2="9" y2="15" />
+    <line x1="9" y1="9" x2="15" y2="15" />
+  </svg>
+);
+
+const IconPlus = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+);
+
+const IconFile = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+  </svg>
+);
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -74,11 +118,11 @@ const Dashboard = () => {
 
   const pieData = [
     { name: "Allotted", value: stats.allotted },
-    { name: "Failed",   value: stats.failed   },
+    { name: "Failed",   value: stats.failed },
   ];
 
   const tooltipProps = {
-    contentStyle: TOOLTIP_CONTENT_STYLE,
+    contentStyle: TOOLTIP_STYLE,
     labelStyle: { color: "var(--text-2)" },
   };
 
@@ -92,8 +136,12 @@ const Dashboard = () => {
             <p className="page-subtitle">Welcome back, {user?.username}</p>
           </div>
           <div className="dash-header-actions">
-            <Link to="/accounts/add" className="btn btn-secondary btn-sm">Add account</Link>
-            <Link to="/ipo/apply"    className="btn btn-primary  btn-sm">Apply IPO</Link>
+            <Link to="/accounts/add" className="btn btn-secondary btn-sm">
+              <IconPlus /> Add account
+            </Link>
+            <Link to="/ipo/apply" className="btn btn-primary btn-sm">
+              <IconFile /> Apply IPO
+            </Link>
           </div>
         </div>
 
@@ -108,15 +156,15 @@ const Dashboard = () => {
           ) : (
             <>
               <div className="stat-card anim-fade-up" style={{ animationDelay: "0s" }}>
-                <p className="stat-label">Total applied</p>
+                <p className="stat-label"><IconStack /> Total applied</p>
                 <p className="stat-value">{stats.total}</p>
               </div>
               <div className="stat-card anim-fade-up" style={{ animationDelay: "0.06s" }}>
-                <p className="stat-label">Allotted</p>
+                <p className="stat-label"><IconCheck /> Allotted</p>
                 <p className="stat-value green">{stats.allotted}</p>
               </div>
               <div className="stat-card anim-fade-up" style={{ animationDelay: "0.12s" }}>
-                <p className="stat-label">Failed</p>
+                <p className="stat-label"><IconX /> Failed</p>
                 <p className="stat-value red">{stats.failed}</p>
               </div>
             </>
@@ -130,8 +178,11 @@ const Dashboard = () => {
               <ResponsiveContainer width="100%" height={140}>
                 <LineChart data={lineData}>
                   <Line
-                    type="monotone" dataKey="count"
-                    stroke="var(--accent)" strokeWidth={2} dot={false}
+                    type="monotone"
+                    dataKey="count"
+                    stroke="var(--accent)"
+                    strokeWidth={2}
+                    dot={false}
                   />
                   <Tooltip {...tooltipProps} />
                 </LineChart>
@@ -146,7 +197,7 @@ const Dashboard = () => {
                   <PieChart>
                     <Pie data={pieData} dataKey="value" outerRadius={52} innerRadius={26}>
                       <Cell fill="var(--success)" />
-                      <Cell fill="var(--danger)"  />
+                      <Cell fill="var(--danger)" />
                     </Pie>
                     <Tooltip {...tooltipProps} />
                   </PieChart>
@@ -197,6 +248,9 @@ const Dashboard = () => {
                           <td><span className="cell-dim">{item.accountUsername}</span></td>
                           <td>
                             <span className={`badge ${statusBadgeClass(item.status)}`}>
+                              {item.status !== "ALREADY_APPLIED" && (
+                                <span className={statusDotClass(item.status)} />
+                              )}
                               {item.status?.replace(/_/g, " ")}
                             </span>
                           </td>
@@ -205,7 +259,9 @@ const Dashboard = () => {
                               <span className={`badge ${resultBadgeClass(item.resultStatus)}`}>
                                 {item.resultStatus.replace(/_/g, " ")}
                               </span>
-                            ) : <span className="cell-dim">—</span>}
+                            ) : (
+                              <span className="cell-dim">—</span>
+                            )}
                           </td>
                         </tr>
                       ))}

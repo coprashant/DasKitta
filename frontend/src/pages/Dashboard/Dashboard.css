@@ -1,3 +1,4 @@
+/* dash header */
 .dash-header {
   display: flex;
   align-items: flex-start;
@@ -6,7 +7,6 @@
   margin-bottom: 24px;
   flex-wrap: wrap;
 }
-
 .dash-header-actions {
   display: flex;
   gap: 8px;
@@ -14,14 +14,16 @@
   align-items: center;
 }
 
-/* Stats */
+/* stats */
 .dash-stats {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
   margin-bottom: 16px;
 }
-@media (min-width: 640px) { .dash-stats { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 640px) {
+  .dash-stats { grid-template-columns: repeat(3, 1fr); }
+}
 
 .stat-card {
   background: var(--surface);
@@ -38,8 +40,16 @@
   font-weight: 600;
   color: var(--text-3);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
   margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.stat-label svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 
 .stat-value {
@@ -49,16 +59,18 @@
   color: var(--text);
 }
 .stat-value.green { color: var(--success); }
-.stat-value.red   { color: var(--danger);  }
+.stat-value.red   { color: var(--danger); }
 
-/* Charts */
+/* charts */
 .dash-charts {
   display: grid;
   grid-template-columns: 1fr;
   gap: 10px;
   margin-bottom: 16px;
 }
-@media (min-width: 768px) { .dash-charts { grid-template-columns: 3fr 2fr; } }
+@media (min-width: 768px) {
+  .dash-charts { grid-template-columns: 3fr 2fr; }
+}
 
 .chart-label {
   font-size: 11px;
@@ -69,13 +81,15 @@
   margin-bottom: 14px;
 }
 
-/* Main grid */
+/* main grid */
 .dash-main {
   display: grid;
   grid-template-columns: 1fr;
   gap: 10px;
 }
-@media (min-width: 900px) { .dash-main { grid-template-columns: 1fr 260px; } }
+@media (min-width: 900px) {
+  .dash-main { grid-template-columns: 1fr 260px; }
+}
 
 .section-head {
   display: flex;
@@ -83,15 +97,13 @@
   justify-content: space-between;
   margin-bottom: 10px;
 }
-
 .section-title-sm {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--text-2);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
-
 .section-link {
   font-size: 12px;
   color: var(--accent);
@@ -99,7 +111,7 @@
 }
 .section-link:hover { text-decoration: underline; }
 
-/* Table */
+/* table */
 .table-scroll { overflow-x: auto; }
 
 .dash-table {
@@ -108,7 +120,6 @@
   font-size: 13px;
   min-width: 440px;
 }
-
 .dash-table th {
   text-align: left;
   padding: 0 14px 10px;
@@ -120,7 +131,6 @@
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
-
 .dash-table td {
   padding: 11px 14px;
   border-bottom: 1px solid var(--border);
@@ -128,25 +138,46 @@
   vertical-align: middle;
 }
 .dash-table tr:last-child td { border-bottom: none; }
-.dash-table tr:hover td { background: var(--surface-2); transition: background var(--t-fast) var(--ease); }
+.dash-table tr:hover td {
+  background: var(--surface-2);
+  transition: background var(--t-fast) var(--ease);
+}
 
 .cell-primary { font-weight: 500; color: var(--text); }
 .cell-dim     { color: var(--text-2); }
 
-/* Table skeleton */
-.table-skeleton { display: flex; flex-direction: column; gap: 0; }
+/* status dot inside badge */
+.badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.badge-dot-success { background: var(--success); }
+.badge-dot-danger  { background: var(--danger); }
+
+/* pill badge override for rounded look */
+.badge {
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* table skeleton */
+.table-skeleton { display: flex; flex-direction: column; }
 .table-skeleton-row {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 14px 14px;
+  padding: 14px;
   border-bottom: 1px solid var(--border);
 }
 .table-skeleton-row:last-child { border-bottom: none; }
 
-/* Accounts */
+/* accounts */
 .account-list { display: flex; flex-direction: column; }
-
 .account-row {
   display: flex;
   align-items: center;
@@ -170,7 +201,6 @@
   color: var(--accent);
   flex-shrink: 0;
 }
-
 .account-name { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 1px; }
 .account-meta { font-size: 12px; color: var(--text-2); }
 

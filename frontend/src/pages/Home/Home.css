@@ -30,9 +30,9 @@
 }
 
 .hero-inner {
-  max-width: 1120px;
+  max-width: none;
   margin: 0 auto;
-  padding: 80px 20px 88px;
+  padding: 40px 20px 88px;
   display: grid;
   grid-template-columns: 1fr;
   gap: 48px;
@@ -41,7 +41,7 @@
 @media (min-width: 768px) {
   .hero-inner {
     grid-template-columns: 1fr 360px;
-    padding: 96px 40px 104px;
+    padding: 80px 70px 110px;
     gap: 64px;
   }
 }
@@ -216,11 +216,11 @@
 }
 
 .features-inner {
-  max-width: 1120px;
+  max-width: none;
   margin: 0 auto;
   padding: 72px 20px;
 }
-@media (min-width: 768px) { .features-inner { padding: 88px 40px; } }
+@media (min-width: 768px) { .features-inner { padding: 88px 70px; } }
 
 .features-header { margin-bottom: 40px; }
 

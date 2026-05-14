@@ -91,7 +91,6 @@ const Navbar = () => {
             <span className="navbar-name">DasKitta</span>
           </Link>
 
-          {/* FIX: removed invalid role="list" on div and role="listitem" on Link */}
           <div className="navbar-links">
             {links.map((l) => (
               <Link
