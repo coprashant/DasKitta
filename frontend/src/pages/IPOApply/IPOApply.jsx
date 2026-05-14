@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { getAccountsApi } from "../../api/accounts";
 import { getOpenIposApi, applyIpoApi } from "../../api/ipo";
 import Layout from "../../components/Layout";
@@ -19,6 +19,7 @@ const IPOApply = () => {
   const [applying, setApplying] = useState(false);
   const [results, setResults] = useState([]);
   const [showOthers, setShowOthers] = useState(false);
+  const [accountSearch, setAccountSearch] = useState("");
 
   useEffect(() => { fetchData(); }, []);
 
@@ -44,20 +45,44 @@ const IPOApply = () => {
     }
   };
 
-  const groupIpos = (ipoList) => {
-    return ipoList.reduce((acc, ipo) => {
-      const category = ipo.shareTypeName || "Other";
-      if (!acc[category]) acc[category] = [];
-      acc[category].push(ipo);
+  const filteredAccounts = useMemo(() => {
+    const q = accountSearch.trim().toLowerCase();
+    if (!q) return accounts;
+    return accounts.filter(
+      (a) => a.fullName?.toLowerCase().includes(q) || a.username?.toLowerCase().includes(q)
+    );
+  }, [accounts, accountSearch]);
+
+  const groupIpos = (ipoList) =>
+    ipoList.reduce((acc, ipo) => {
+      const cat = ipo.shareTypeName || "Other";
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push(ipo);
       return acc;
     }, {});
-  };
 
   const toggleAccount = (id) =>
     setSelectedAccounts((p) => p.includes(id) ? p.filter((a) => a !== id) : [...p, id]);
 
-  const selectAll = () =>
-    setSelectedAccounts(selectedAccounts.length === accounts.length ? [] : accounts.map((a) => a.id));
+  const selectAll = () => {
+    const visibleIds = filteredAccounts.map((a) => a.id);
+    // FIX: check only visible ids for the toggle so label matches visible state
+    const allVisible = visibleIds.length > 0 && visibleIds.every((id) => selectedAccounts.includes(id));
+    if (allVisible) {
+      setSelectedAccounts((p) => p.filter((id) => !visibleIds.includes(id)));
+    } else {
+      setSelectedAccounts((p) => [...new Set([...p, ...visibleIds])]);
+    }
+  };
+
+  const allVisibleSelected =
+    filteredAccounts.length > 0 && filteredAccounts.every((a) => selectedAccounts.includes(a.id));
+
+  // FIX: clear stale results when a different IPO is selected
+  const handleSelectIpo = useCallback((ipo) => {
+    setSelectedIpo(ipo);
+    setResults([]);
+  }, []);
 
   const handleApply = async () => {
     if (!selectedIpo) { toast.error("Select an IPO first"); return; }
@@ -83,20 +108,33 @@ const IPOApply = () => {
     }
   };
 
+  const canApply = !!selectedIpo && selectedAccounts.length > 0 && !applying;
+
+  // FIX: extracted ApplyButton outside render cycle via useCallback to avoid re-creating on every render
+  const ApplyButton = useCallback(({ className = "" }) => (
+    <button
+      className={`ipo-apply-btn${canApply ? "" : " disabled"} ${className}`.trim()}
+      onClick={handleApply}
+      disabled={!canApply}
+    >
+      {applying
+        ? <><SpinnerIcon /> Applying…</>
+        : `Apply to ${selectedAccounts.length} account${selectedAccounts.length !== 1 ? "s" : ""}`}
+    </button>
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [canApply, applying, selectedAccounts.length]);
+
   const renderIpoItem = (ipo) => {
     const sel = selectedIpo?.companyShareId === ipo.companyShareId;
     return (
-      <div
-        key={ipo.companyShareId}
-        className={`ipo-item${sel ? " selected" : ""}`}
-        onClick={() => setSelectedIpo(ipo)}
-      >
-        <div>
+      // FIX: use handleSelectIpo to clear results on selection change
+      <div key={ipo.companyShareId} className={`ipo-item${sel ? " selected" : ""}`} onClick={() => handleSelectIpo(ipo)}>
+        <div className="ipo-item-body">
           <p className="ipo-name">{ipo.companyName}</p>
-          <p className="ipo-meta">{ipo.scrip} &middot; ID {ipo.companyShareId}</p>
+          <p className="ipo-meta">{ipo.scrip} · ID {ipo.companyShareId}</p>
         </div>
-        <div className={`ipo-check${sel ? " on" : ""}`}>
-          {sel && <CheckIcon />}
+        <div className={`ipo-radio${sel ? " on" : ""}`}>
+          {sel && <span className="ipo-radio-dot" />}
         </div>
       </div>
     );
@@ -104,155 +142,207 @@ const IPOApply = () => {
 
   return (
     <Layout>
-      <div className="page">
-        <h1 className="page-title">Apply IPO</h1>
-        <p className="page-subtitle">Select an IPO and accounts, then apply in one click.</p>
+      <div className="page ipo-page">
+        <h1 className="page-title">IPO Application</h1>
+        <p className="page-subtitle">Select an offering and accounts to apply in one step.</p>
 
         {loading ? (
-          <div className="apply-layout">
-            <div className="apply-col">
+          <div className="ipo-layout">
+            <div className="ipo-col">
               <div className="card">
-                <div className="card-section-title-sm">Open IPOs</div>
+                <div className="ipo-section-label">Open IPOs</div>
                 {[1, 2, 3].map((k) => (
-                  <div key={k} className="ipo-skeleton">
-                    <div className="skeleton" style={{ height: 13, width: "60%", marginBottom: 6 }} />
-                    <div className="skeleton" style={{ height: 10, width: "35%" }} />
+                  <div key={k} className="ipo-skel-row">
+                    <div className="skeleton" style={{ height: 13, width: "58%", marginBottom: 6 }} />
+                    <div className="skeleton" style={{ height: 10, width: "32%" }} />
                   </div>
                 ))}
               </div>
             </div>
-            <div className="apply-col">
-              <div className="card"><div className="card-section-title-sm">Select Accounts</div></div>
+            <div className="ipo-col">
+              <div className="card">
+                <div className="ipo-section-label">Select Accounts</div>
+              </div>
             </div>
           </div>
         ) : (
-          <div className="apply-layout">
-            <div className="apply-col">
-              <div className="card anim-fade-up">
-                <p className="card-section-title-sm">Open IPOs</p>
-                {ipoError ? (
-                  <div className="empty-state">
-                    <p style={{ color: "var(--danger)" }}>{ipoError}</p>
-                    <button className="btn btn-secondary" onClick={fetchData} style={{ marginTop: 12 }}>Retry</button>
+          <>
+            <div className="ipo-layout">
+              <div className="ipo-col">
+                <div className="card anim-fade-up">
+                  <div className="ipo-section-label">Open IPOs</div>
+                  {ipoError ? (
+                    <div className="empty-state">
+                      <p style={{ color: "var(--danger)" }}>{ipoError}</p>
+                      <button className="btn btn-secondary" onClick={fetchData}>Retry</button>
+                    </div>
+                  ) : ipos.length === 0 ? (
+                    <div className="empty-state"><p>No IPOs are currently open.</p></div>
+                  ) : (
+                    <div className="ipo-list">
+                      {(() => {
+                        const groups = groupIpos(ipos);
+                        const mainKeys = ["Ordinary Shares", "IPO"];
+                        const ordinary = [];
+                        const others = [];
+                        let othersCount = 0;
+                        Object.entries(groups).forEach(([key, val]) => {
+                          if (mainKeys.includes(key)) ordinary.push(...val);
+                          else { others.push([key, val]); othersCount += val.length; }
+                        });
+                        return (
+                          <>
+                            {ordinary.length > 0 ? (
+                              <div className="ipo-group">
+                                <div className="ipo-group-label">Ordinary Shares</div>
+                                {ordinary.map(renderIpoItem)}
+                              </div>
+                            ) : (
+                              <div className="empty-state"><p>No Ordinary Shares available.</p></div>
+                            )}
+                            {others.length > 0 && (
+                              <div className="ipo-others-wrap">
+                                <button className="ipo-toggle-others" onClick={() => setShowOthers(!showOthers)}>
+                                  {showOthers ? "Hide Reserved Categories" : `Reserved Categories (${othersCount})`}
+                                  <ChevronIcon rotated={showOthers} />
+                                </button>
+                                {showOthers && (
+                                  <div className="ipo-others-content anim-fade-up">
+                                    {others.map(([cat, catIpos]) => (
+                                      <div key={cat} className="ipo-group">
+                                        <div className="ipo-group-label">{cat}</div>
+                                        {catIpos.map(renderIpoItem)}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+
+                <div className="card anim-fade-up" style={{ animationDelay: "0.07s" }}>
+                  <div className="ipo-section-label">Kitta to apply</div>
+                  <div className="kitta-row">
+                    <button type="button" className="kitta-btn" onClick={() => setKitta((k) => Math.max(10, k - 1))}>
+                      <MinusIcon />
+                    </button>
+                    <div className="kitta-display">
+                      <input
+                        type="number"
+                        className="kitta-input"
+                        value={kitta}
+                        min={10}
+                        onChange={(e) => {
+                          // FIX: parseInt can return NaN on empty string; default to 10 before Math.max
+                          const parsed = parseInt(e.target.value, 10);
+                          setKitta(Math.max(10, isNaN(parsed) ? 10 : parsed));
+                        }}
+                      />
+                      <span className="kitta-unit">kitta</span>
+                    </div>
+                    <button type="button" className="kitta-btn" onClick={() => setKitta((k) => k + 1)}>
+                      <PlusIcon />
+                    </button>
                   </div>
-                ) : ipos.length === 0 ? (
-                  <div className="empty-state"><p>No IPOs are currently open.</p></div>
-                ) : (
-                  <div className="ipo-list">
-                    {(() => {
-                      const groups = groupIpos(ipos);
-                      const mainKeys = ["Ordinary Shares", "IPO"];
-                      const ordinary = [];
-                      const others = [];
-                      let othersCount = 0;
+                </div>
+              </div>
 
-                      Object.entries(groups).forEach(([key, val]) => {
-                        if (mainKeys.includes(key)) {
-                          ordinary.push(...val);
-                        } else {
-                          others.push([key, val]);
-                          othersCount += val.length;
-                        }
-                      });
+              <div className="ipo-col">
+                <div className="card anim-fade-up" style={{ animationDelay: "0.12s" }}>
+                  <div className="ipo-accounts-head">
+                    <span className="ipo-section-label ipo-section-label--inline">Accounts</span>
+                    {filteredAccounts.length > 0 && (
+                      <button className="ipo-sel-all" onClick={selectAll}>
+                        {allVisibleSelected ? "Deselect all" : "Select all"}
+                      </button>
+                    )}
+                  </div>
 
-                      return (
-                        <>
-                          {ordinary.length > 0 ? (
-                            <div className="ipo-category-group">
-                              <div className="category-label">Ordinary Shares</div>
-                              {ordinary.map(renderIpoItem)}
+                  {accounts.length > 3 && (
+                    <div className="ipo-search-wrap">
+                      <span className="ipo-search-icon"><SearchIcon /></span>
+                      <input
+                        type="text"
+                        className="input ipo-search-input"
+                        placeholder="Search accounts…"
+                        value={accountSearch}
+                        onChange={(e) => setAccountSearch(e.target.value)}
+                      />
+                      {accountSearch && (
+                        <button className="ipo-search-clear" onClick={() => setAccountSearch("")}>
+                          <ClearIcon />
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="ipo-acc-list">
+                    {filteredAccounts.length === 0 ? (
+                      <div className="empty-state"><p>No accounts match your search.</p></div>
+                    ) : (
+                      filteredAccounts.map((acc) => {
+                        const on = selectedAccounts.includes(acc.id);
+                        return (
+                          // FIX: use acc.id as key instead of array index for stable reconciliation
+                          <div key={acc.id} className={`ipo-acc-row${on ? " on" : ""}`} onClick={() => toggleAccount(acc.id)}>
+                            <div className={`ipo-checkbox${on ? " on" : ""}`}>{on && <CheckIcon />}</div>
+                            <div className="ipo-acc-info">
+                              <p className="ipo-acc-name">{acc.fullName}</p>
+                              <p className="ipo-acc-meta">{acc.username}{acc.dpCode ? ` · DP ${acc.dpCode}` : ""}</p>
                             </div>
-                          ) : (
-                            <div className="empty-state"><p>No Ordinary Shares available.</p></div>
-                          )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
 
-                          {others.length > 0 && (
-                            <div className="others-container">
-                              <button 
-                                className="btn-toggle-others"
-                                onClick={() => setShowOthers(!showOthers)}
-                              >
-                                {showOthers ? "Hide Reserved Categories" : `View Reserved Categories (${othersCount})`}
-                                <ChevronIcon rotated={showOthers} />
-                              </button>
+                <div className="ipo-desktop-apply">
+                  <ApplyButton />
+                </div>
 
-                              {showOthers && (
-                                <div className="others-content anim-fade-down">
-                                  {others.map(([category, categoryIpos]) => (
-                                    <div key={category} className="ipo-category-group">
-                                      <div className="category-label">{category}</div>
-                                      {categoryIpos.map(renderIpoItem)}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
+                {results.length > 0 && (
+                  <div className="card anim-fade-up">
+                    <div className="ipo-section-label">Results</div>
+                    <div className="ipo-results-list">
+                      {results.map((r, i) => (
+                        // FIX: use stable key combining username and index to avoid collisions
+                        <div className="ipo-result-row" key={`${r.username ?? ""}_${i}`}>
+                          <div>
+                            <p className="ipo-result-name">{r.fullName || r.username}</p>
+                            <p className="ipo-result-msg">{r.message}</p>
+                          </div>
+                          <span className={`badge ${statusBadge(r.status)}`}>{r.status?.replace(/_/g, " ")}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
-
-              <div className="card anim-fade-up" style={{ animationDelay: "0.06s" }}>
-                <p className="card-section-title-sm">Kitta to apply</p>
-                <div className="kitta-row">
-                  <button type="button" className="kitta-stepper" onClick={() => setKitta((k) => Math.max(10, k - 1))}><MinusIcon /></button>
-                  <input type="number" className="kitta-val" value={kitta} min={10} onChange={(e) => setKitta(parseInt(e.target.value) || 10)} />
-                  <button type="button" className="kitta-stepper" onClick={() => setKitta((k) => k + 1)}><PlusIcon /></button>
-                </div>
-              </div>
             </div>
 
-            <div className="apply-col">
-              <div className="card anim-fade-up" style={{ animationDelay: "0.1s" }}>
-                <div className="accounts-head">
-                  <span className="card-section-title-sm">Select accounts</span>
-                  {accounts.length > 0 && (
-                    <button className="sel-all-btn" onClick={selectAll}>
-                      {selectedAccounts.length === accounts.length ? "Deselect all" : "Select all"}
-                    </button>
-                  )}
-                </div>
-                <div className="acc-checks">
-                  {accounts.map((acc) => {
-                    const on = selectedAccounts.includes(acc.id);
-                    return (
-                      <div key={acc.id} className={`acc-check-row${on ? " on" : ""}`} onClick={() => toggleAccount(acc.id)}>
-                        <div className={`check-box${on ? " on" : ""}`}>{on && <CheckIcon />}</div>
-                        <div>
-                          <p className="acc-name">{acc.fullName}</p>
-                          <p className="acc-meta">{acc.username}{acc.dpCode ? ` \u00b7 DP ${acc.dpCode}` : ""}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+            <div className="ipo-sticky-bar">
+              <div className="ipo-sticky-summary">
+                {/* FIX: only show total kitta line when accounts are selected to avoid showing 0 */}
+                <span>{selectedAccounts.length} account{selectedAccounts.length !== 1 ? "s" : ""}</span>
+                {selectedAccounts.length > 0 && (
+                  <>
+                    <span className="ipo-sticky-dot">·</span>
+                    <span>{kitta * selectedAccounts.length} total kitta</span>
+                  </>
+                )}
+                {selectedIpo && (
+                  <><span className="ipo-sticky-dot">·</span><span className="ipo-sticky-scrip">{selectedIpo.scrip}</span></>
+                )}
               </div>
-
-              <button className="btn btn-primary btn-full" onClick={handleApply} disabled={applying || !selectedIpo || !selectedAccounts.length}>
-                {applying ? <><SpinnerIcon /> Applying...</> : `Apply to ${selectedAccounts.length} account(s)`}
-              </button>
-
-              {results.length > 0 && (
-                <div className="card anim-fade-up">
-                  <p className="card-section-title-sm">Results</p>
-                  <div className="results-list">
-                    {results.map((r, i) => (
-                      <div className="result-row" key={i}>
-                        <div>
-                          <p className="result-name">{r.fullName || r.username}</p>
-                          <p className="result-msg">{r.message}</p>
-                        </div>
-                        <span className={`badge ${statusBadge(r.status)}`}>{r.status?.replace(/_/g, " ")}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <ApplyButton className="ipo-sticky-apply" />
             </div>
-          </div>
+          </>
         )}
       </div>
     </Layout>
@@ -263,16 +353,22 @@ const CheckIcon = () => (
   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
 );
 const MinusIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
 );
 const PlusIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 );
 const SpinnerIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ animation: "spin 0.7s linear infinite" }}><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
 );
 const ChevronIcon = ({ rotated }) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: rotated ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}><polyline points="6 9 12 15 18 9"/></svg>
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: rotated ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}><polyline points="6 9 12 15 18 9"/></svg>
+);
+const SearchIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+);
+const ClearIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
 );
 
 export default IPOApply;

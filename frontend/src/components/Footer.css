@@ -2,7 +2,7 @@
   border-top: 1px solid var(--border);
   background: var(--surface);
   padding: 24px 20px;
-  margin-top: auto;
+  /* FIX: removed margin-top auto which conflicts with flex layout pushing footer down via layout-main flex 1 */
   transition: background var(--t) var(--ease), border-color var(--t) var(--ease);
 }
 @media (min-width: 768px) { .site-footer { padding: 24px 40px; } }

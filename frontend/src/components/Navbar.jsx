@@ -58,30 +58,26 @@ const Navbar = () => {
 
   useEffect(() => { setOpen(false); }, [pathname]);
 
-  /* keyboard close */
   useEffect(() => {
     const handler = (e) => { if (e.key === "Escape") setOpen(false); };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, []);
 
-  /* body scroll lock + focus trap */
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
     if (open && firstFocusRef.current) firstFocusRef.current.focus();
     return () => { document.body.style.overflow = ""; };
   }, [open]);
 
-  /* inert on main content when drawer open */
   useEffect(() => {
     const main = document.getElementById("main-content");
     if (!main) return;
     if (open) {
       main.setAttribute("inert", "");
-      main.setAttribute("aria-hidden", "true");
+      // FIX: removed redundant aria-hidden which double hides for screen readers when inert is set
     } else {
       main.removeAttribute("inert");
-      main.removeAttribute("aria-hidden");
     }
   }, [open]);
 
@@ -95,12 +91,12 @@ const Navbar = () => {
             <span className="navbar-name">DasKitta</span>
           </Link>
 
-          <div className="navbar-links" role="list">
+          {/* FIX: removed invalid role="list" on div and role="listitem" on Link */}
+          <div className="navbar-links">
             {links.map((l) => (
               <Link
                 key={l.path}
                 to={l.path}
-                role="listitem"
                 className={`navbar-link${pathname === l.path ? " active" : ""}`}
                 aria-current={pathname === l.path ? "page" : undefined}
               >
@@ -154,7 +150,6 @@ const Navbar = () => {
         </div>
       </nav>
 
-      {/* Mobile drawer */}
       <div
         id="mobile-drawer"
         className={`mobile-drawer${open ? " open" : ""}`}
