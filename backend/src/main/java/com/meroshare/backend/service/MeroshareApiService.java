@@ -2,6 +2,7 @@ package com.meroshare.backend.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.meroshare.backend.dto.PortfolioResponse;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -566,6 +567,101 @@ public class MeroshareApiService {
             log.warn("[{}] Parse error: {}", context, e.getMessage());
             return List.of();
         }
+    }
+
+    public PortfolioResponse getPortfolio(String token, String dpCode, String demat) {
+        String url = "https://webbackend.cdsc.com.np/api/meroShareView/myPortfolio";
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("clientCode", dpCode);
+        payload.put("demat", List.of(demat));
+        payload.put("page", 1);
+        payload.put("size", 500);
+        payload.put("sortAsc", true);
+        payload.put("sortBy", "script");
+
+        String raw = null;
+
+        try {
+            raw = WebClient.builder()
+                    .baseUrl("https://webbackend.cdsc.com.np/api/meroShareView")
+                    .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                    .defaultHeader(HttpHeaders.ACCEPT, "application/json, text/plain, */*")
+                    .defaultHeader("Accept-Language", "en-US,en;q=0.9")
+                    .defaultHeader("Cache-Control", "no-cache")
+                    .defaultHeader("Connection", "keep-alive")
+                    .defaultHeader("Host", "webbackend.cdsc.com.np")
+                    .defaultHeader("Origin", "https://meroshare.cdsc.com.np")
+                    .defaultHeader("Pragma", "no-cache")
+                    .defaultHeader("Referer", "https://meroshare.cdsc.com.np/")
+                    .defaultHeader("Sec-Fetch-Dest", "empty")
+                    .defaultHeader("Sec-Fetch-Mode", "cors")
+                    .defaultHeader("Sec-Fetch-Site", "same-site")
+                    .defaultHeader("User-Agent", USER_AGENT)
+                    .defaultHeader("Authorization", token)
+                    .codecs(c -> c.defaultCodecs().maxInMemorySize(8 * 1024 * 1024))
+                    .build()
+                    .post().uri("/myPortfolio")
+                    .bodyValue(payload)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+        } catch (Exception e) {
+            log.warn("[PORTFOLIO] WebClient failed: {}", e.getMessage());
+        }
+
+        if (isHtml(raw)) {
+            raw = curlClient.postJson(url, toJson(payload), token);
+        }
+
+        if (isHtml(raw) || raw == null) {
+            throw new RuntimeException("Could not fetch portfolio. Please try again later.");
+        }
+
+        return parsePortfolioResponse(raw);
+    }
+
+    private PortfolioResponse parsePortfolioResponse(String raw) {
+        try {
+            JsonNode root = objectMapper.readTree(raw);
+
+            double totalLTP      = root.has("totalValueOfLastTransPrice")  ? root.get("totalValueOfLastTransPrice").asDouble(0)  : 0;
+            double totalPrevClose = root.has("totalValueOfPrevClosingPrice") ? root.get("totalValueOfPrevClosingPrice").asDouble(0) : 0;
+
+            JsonNode itemsNode = root.has("meroShareMyPortfolio") ? root.get("meroShareMyPortfolio") : objectMapper.createArrayNode();
+            int totalItems = root.has("totalItems") ? (int) root.get("totalItems").asDouble(0) : 0;
+
+            List<PortfolioResponse.PortfolioItem> items = new ArrayList<>();
+            for (JsonNode n : itemsNode) {
+                items.add(PortfolioResponse.PortfolioItem.builder()
+                        .script(getText(n, "script"))
+                        .scriptDesc(getText(n, "scriptDesc"))
+                        .currentBalance(n.has("currentBalance") ? n.get("currentBalance").asDouble(0) : 0)
+                        .lastTransactionPrice(parseDoubleFromText(n, "lastTransactionPrice"))
+                        .previousClosingPrice(parseDoubleFromText(n, "previousClosingPrice"))
+                        .valueAsOfLTP(n.has("valueOfLastTransPrice")   ? n.get("valueOfLastTransPrice").asDouble(0)  : 0)
+                        .valueAsOfPrevClose(n.has("valueOfPrevClosingPrice") ? n.get("valueOfPrevClosingPrice").asDouble(0) : 0)
+                        .build());
+            }
+
+            return PortfolioResponse.builder()
+                    .totalValueLTP(totalLTP)
+                    .totalValuePrevClose(totalPrevClose)
+                    .totalItems(totalItems)
+                    .items(items)
+                    .build();
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to parse portfolio response: " + e.getMessage(), e);
+        }
+    }
+
+    private double parseDoubleFromText(JsonNode node, String field) {
+        if (!node.has(field)) return 0;
+        JsonNode f = node.get(field);
+        if (f.isNumber()) return f.asDouble(0);
+        try { return Double.parseDouble(f.asText("0").replace(",", "")); }
+        catch (NumberFormatException e) { return 0; }
     }
 
     private String snippet300(String s) {

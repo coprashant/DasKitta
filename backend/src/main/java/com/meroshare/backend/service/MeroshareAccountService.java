@@ -2,6 +2,7 @@ package com.meroshare.backend.service;
 
 import com.meroshare.backend.dto.MeroshareAccountRequest;
 import com.meroshare.backend.dto.MeroshareAccountResponse;
+import com.meroshare.backend.dto.PortfolioResponse;
 import com.meroshare.backend.entity.AppUser;
 import com.meroshare.backend.entity.MeroshareAccount;
 import com.meroshare.backend.repository.AppUserRepository;
@@ -110,5 +111,23 @@ public class MeroshareAccountService {
                 .bankId(account.getBankId())
                 .createdAt(account.getCreatedAt())
                 .build();
+    }
+
+      @Transactional(readOnly = true)
+    public PortfolioResponse getPortfolio(Long accountId, String appUsername) {
+        AppUser appUser = appUserRepository.findByUsername(appUsername)
+                .orElseThrow(() -> new RuntimeException("User not found: " + appUsername));
+ 
+        MeroshareAccount account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new RuntimeException("Account not found"));
+ 
+        if (!account.getAppUser().getId().equals(appUser.getId())) {
+            throw new RuntimeException("Unauthorized");
+        }
+ 
+        String plainPassword = encryptionUtil.decrypt(account.getPassword());
+        String token = meroshareApiService.login(account.getDpId(), account.getUsername(), plainPassword);
+ 
+        return meroshareApiService.getPortfolio(token, account.getDpCode(), account.getDemat());
     }
 }

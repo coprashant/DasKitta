@@ -17,3 +17,5 @@ export const addAccountApi = (data) => client.post("/accounts", {
 });
 
 export const deleteAccountApi = (id) => client.delete(`/accounts/${id}`);
+
+export const getPortfolioApi = (accountId) => client.get(`/accounts/${accountId}/portfolio`);

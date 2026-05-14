@@ -2,6 +2,10 @@ package com.meroshare.backend.controller;
 
 import com.meroshare.backend.dto.MeroshareAccountRequest;
 import com.meroshare.backend.dto.MeroshareAccountResponse;
+import com.meroshare.backend.entity.MeroshareAccount;
+import com.meroshare.backend.repository.MeroshareAccountRepository;
+import com.meroshare.backend.security.EncryptionUtil;
+import com.meroshare.backend.dto.PortfolioResponse;
 import com.meroshare.backend.service.MeroshareAccountService;
 import com.meroshare.backend.service.MeroshareApiService;
 import jakarta.validation.Valid;
@@ -21,6 +25,8 @@ public class AccountController {
 
     private final MeroshareAccountService accountService;
     private final MeroshareApiService meroshareApiService;
+    private final MeroshareAccountRepository accountRepository;
+    private final EncryptionUtil encryptionUtil;
 
     @GetMapping("/bank-by-dp/{dpId}")
     public ResponseEntity<Map<String, Object>> getBankByDp(@PathVariable Integer dpId) {
@@ -52,4 +58,12 @@ public class AccountController {
         accountService.deleteAccount(id, userDetails.getUsername());
         return ResponseEntity.noContent().build();
     }
+    
+    @GetMapping("/{id}/portfolio")
+    public ResponseEntity<PortfolioResponse> getPortfolio(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(accountService.getPortfolio(id, userDetails.getUsername()));
+    }
+ 
 }

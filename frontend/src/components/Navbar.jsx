@@ -8,6 +8,7 @@ const authLinks = [
   { path: "/dashboard",    label: "Dashboard" },
   { path: "/ipo/apply",    label: "Apply IPO"  },
   { path: "/ipo/result",   label: "Results"    },
+  { path: "/portfolio",      label: "Portfolio"        },
   { path: "/history",      label: "History"    },
   { path: "/accounts/add", label: "Accounts"   },
 ];
@@ -75,7 +76,6 @@ const Navbar = () => {
     if (!main) return;
     if (open) {
       main.setAttribute("inert", "");
-      // FIX: removed redundant aria-hidden which double hides for screen readers when inert is set
     } else {
       main.removeAttribute("inert");
     }

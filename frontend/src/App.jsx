@@ -13,6 +13,7 @@ import IPOApply      from "./pages/IPOApply/IPOApply";
 import ResultChecker from "./pages/ResultChecker/ResultChecker";
 import History       from "./pages/History/History";
 import NotFound      from "./pages/NotFound/NotFound";
+import Portfolio from "./pages/Portfolio/Portfolio";
 
 const App = () => {
   return (
@@ -53,6 +54,9 @@ const App = () => {
             } />
             <Route path="/history" element={
               <ProtectedRoute><History /></ProtectedRoute>
+            } />
+            <Route path="/portfolio" element={
+              <ProtectedRoute><Portfolio /></ProtectedRoute>
             } />
 
             <Route path="*" element={<NotFound />} />
