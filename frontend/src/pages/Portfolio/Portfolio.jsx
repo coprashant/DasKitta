@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { getAccountsApi, getPortfolioApi } from "../../api/accounts";
+import { getPortfolioApi } from "../../api/accounts";
+import { useAccount } from "../../context/AccountContext";
 import Layout from "../../components/Layout";
 import "./Portfolio.css";
 
@@ -55,13 +56,6 @@ const IconRefresh = () => (
   </svg>
 );
 
-const IconChevronRight = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <polyline points="9 18 15 12 9 6" />
-  </svg>
-);
-
 const IconPlus = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
     strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -86,32 +80,21 @@ const IconArrowDown = () => (
   </svg>
 );
 
-const Portfolio = () => {
-  const [accounts, setAccounts]           = useState([]);
-  const [accountsLoading, setAccountsLoading] = useState(true);
-  const [selectedId, setSelectedId]       = useState(null);
-  const [portfolio, setPortfolio]         = useState(null);
-  const [portfolioLoading, setPortfolioLoading] = useState(false);
-  const [error, setError]                 = useState(null);
-  const [sortKey, setSortKey]             = useState("script");
-  const [sortAsc, setSortAsc]             = useState(true);
-  const [sidebarOpen, setSidebarOpen]     = useState(false);
-  const [debouncedId, setDebouncedId]     = useState(null);
+const IconUser = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+    <circle cx="12" cy="7" r="4"/>
+  </svg>
+);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await getAccountsApi();
-        const list = Array.isArray(res?.data) ? res.data : [];
-        setAccounts(list);
-        if (list.length > 0) setSelectedId(list[0].id);
-      } catch {
-        setAccounts([]);
-      } finally {
-        setAccountsLoading(false);
-      }
-    })();
-  }, []);
+const Portfolio = () => {
+  const { activeAccount, loading: accountLoading } = useAccount();
+  const [portfolio, setPortfolio]                 = useState(null);
+  const [portfolioLoading, setPortfolioLoading]   = useState(false);
+  const [error, setError]                         = useState(null);
+  const [sortKey, setSortKey]                     = useState("script");
+  const [sortAsc, setSortAsc]                     = useState(true);
 
   const loadPortfolio = useCallback(async (id) => {
     if (!id) return;
@@ -128,18 +111,14 @@ const Portfolio = () => {
     }
   }, []);
 
-   useEffect(() => {
-    if (!selectedId) return;
-    const t = setTimeout(() => setDebouncedId(selectedId), 400);
-    return () => clearTimeout(t);
-  }, [selectedId]);
- 
   useEffect(() => {
-    if (debouncedId) loadPortfolio(debouncedId);
-  }, [debouncedId, loadPortfolio]);
- 
-
-  const selectedAccount = accounts.find((a) => a.id === selectedId) ?? null;
+    if (activeAccount?.id) {
+      loadPortfolio(activeAccount.id);
+    } else {
+      setPortfolio(null);
+      setError(null);
+    }
+  }, [activeAccount?.id, loadPortfolio]);
 
   const handleSort = (key) => {
     if (sortKey === key) {
@@ -162,10 +141,9 @@ const Portfolio = () => {
       })
     : [];
 
-  const totalPnL =
-    portfolio
-      ? portfolio.totalValueLTP - portfolio.totalValuePrevClose
-      : 0;
+  const totalPnL = portfolio
+    ? portfolio.totalValueLTP - portfolio.totalValuePrevClose
+    : 0;
 
   const SortIcon = ({ col }) => {
     if (sortKey !== col) return <span className="sort-icon sort-icon-idle" />;
@@ -185,6 +163,8 @@ const Portfolio = () => {
     { key: "valueAsOfPrevClose",   label: "Prev Value", align: "right" },
   ];
 
+  const showEmpty = !accountLoading && !activeAccount;
+
   return (
     <Layout>
       <div className="portfolio-page">
@@ -192,253 +172,191 @@ const Portfolio = () => {
         <div className="portfolio-header">
           <div>
             <h1 className="page-title">Portfolio</h1>
-            <p className="page-subtitle">Demat holdings across your accounts</p>
+            <p className="page-subtitle" style={{ marginBottom: 0 }}>
+              {activeAccount
+                ? `Demat holdings for ${activeAccount.fullName}`
+                : "Select an account to view holdings"}
+            </p>
           </div>
-          <button
-            className="btn btn-secondary btn-sm portfolio-sidebar-toggle"
-            onClick={() => setSidebarOpen((p) => !p)}
-            aria-label="Toggle accounts"
-          >
-            <IconLayers />
-            Accounts
-          </button>
+          {activeAccount && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => loadPortfolio(activeAccount.id)}
+              disabled={portfolioLoading}
+              aria-label="Refresh portfolio"
+            >
+              <span className={portfolioLoading ? "spin" : ""}><IconRefresh /></span>
+              Refresh
+            </button>
+          )}
         </div>
 
-        <div className="portfolio-layout">
-
-          {/* sidebar */}
-          <aside className={`portfolio-sidebar ${sidebarOpen ? "sidebar-open" : ""}`}>
-            <div className="sidebar-label">Accounts</div>
-
-            {accountsLoading ? (
-              <div className="sidebar-skeleton">
-                {[1, 2, 3].map((k) => (
-                  <div key={k} className="sidebar-skeleton-row">
-                    <Skeleton h={34} w={34} style={{ borderRadius: 6, flexShrink: 0 }} />
-                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
-                      <Skeleton h={11} w="65%" />
-                      <Skeleton h={10} w="45%" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : accounts.length === 0 ? (
-              <div className="sidebar-empty">
-                <p>No accounts added yet</p>
-                <Link to="/accounts/add" className="btn btn-primary btn-sm" style={{ marginTop: 10 }}>
-                  <IconPlus /> Add account
-                </Link>
-              </div>
-            ) : (
-              <ul className="sidebar-list" role="listbox" aria-label="Select account">
-                {accounts.map((acc) => (
-                  <li
-                    key={acc.id}
-                    role="option"
-                    aria-selected={acc.id === selectedId}
-                    className={`sidebar-item ${acc.id === selectedId ? "sidebar-item-active" : ""}`}
-                    onClick={() => { setSelectedId(acc.id); setSidebarOpen(false); }}
-                  >
-                    <div className="sidebar-avatar">
-                      {acc.fullName?.[0]?.toUpperCase() ?? "?"}
-                    </div>
-                    <div className="sidebar-info">
-                      <span className="sidebar-name">{acc.fullName}</span>
-                      <span className="sidebar-meta">{acc.username}{acc.dpCode ? ` · DP ${acc.dpCode}` : ""}</span>
-                    </div>
-                    <span className="sidebar-chevron"><IconChevronRight /></span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </aside>
-
-          {/* main panel */}
-          <section className="portfolio-panel">
-            {!selectedId && !accountsLoading ? (
-              <div className="portfolio-empty">
-                <div className="portfolio-empty-icon"><IconBriefcase /></div>
-                <p>Select an account to view holdings</p>
-              </div>
-            ) : (
-              <>
-                {/* panel header */}
-                <div className="panel-top">
-                  <div className="panel-account-info">
-                    {selectedAccount && (
-                      <>
-                        <div className="panel-avatar">
-                          {selectedAccount.fullName?.[0]?.toUpperCase() ?? "?"}
-                        </div>
-                        <div>
-                          <p className="panel-name">{selectedAccount.fullName}</p>
-                          <p className="panel-meta">
-                            {selectedAccount.username}
-                            {selectedAccount.boid ? ` · BOID ${selectedAccount.boid}` : ""}
-                          </p>
-                        </div>
-                      </>
-                    )}
-                    {portfolioLoading && <span className="panel-loading-text">Loading portfolio...</span>}
-                  </div>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => loadPortfolio(selectedId)}
-                    disabled={portfolioLoading}
-                    aria-label="Refresh portfolio"
-                  >
-                    <span className={portfolioLoading ? "spin" : ""}><IconRefresh /></span>
-                    Refresh
-                  </button>
+        {showEmpty ? (
+          <div className="portfolio-empty">
+            <div className="portfolio-empty-icon"><IconUser /></div>
+            <p>No account selected. Add an account to get started.</p>
+            <Link to="/accounts/add" className="btn btn-primary btn-sm" style={{ marginTop: 4 }}>
+              <IconPlus /> Add account
+            </Link>
+          </div>
+        ) : (
+          <>
+            {activeAccount && (
+              <div className="portfolio-account-pill">
+                <div className="portfolio-account-avatar">
+                  {activeAccount.fullName?.[0]?.toUpperCase() ?? "?"}
                 </div>
-
-                {/* summary cards */}
-                {portfolioLoading ? (
-                  <div className="summary-grid">
-                    {[1, 2, 3].map((k) => (
-                      <div key={k} className="summary-card">
-                        <Skeleton h={10} w={80} style={{ marginBottom: 10 }} />
-                        <Skeleton h={28} w="60%" />
-                      </div>
-                    ))}
-                  </div>
-                ) : portfolio && (
-                  <div className="summary-grid anim-fade-up">
-                    <div className="summary-card">
-                      <p className="summary-label">
-                        <IconLayers /> Total scrips
-                      </p>
-                      <p className="summary-value">{portfolio.totalItems}</p>
-                    </div>
-                    <div className="summary-card">
-                      <p className="summary-label">
-                        <IconTrendUp /> Value at LTP
-                      </p>
-                      <p className="summary-value">Rs {fmt(portfolio.totalValueLTP)}</p>
-                    </div>
-                    <div className={`summary-card ${totalPnL >= 0 ? "summary-card-up" : "summary-card-down"}`}>
-                      <p className="summary-label">
-                        {totalPnL >= 0 ? <IconArrowUp /> : <IconArrowDown />}
-                        Day change
-                      </p>
-                      <p className={`summary-value ${totalPnL >= 0 ? "positive" : "negative"}`}>
-                        {totalPnL >= 0 ? "+" : ""}Rs {fmt(Math.abs(totalPnL))}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* error state */}
-                {error && !portfolioLoading && (
-                  <div className="portfolio-error">
-                    <p>{error}</p>
-                    <button className="btn btn-secondary btn-sm" onClick={() => loadPortfolio(selectedId)}>
-                      Try again
-                    </button>
-                  </div>
-                )}
-
-                {/* table */}
-                {!error && !portfolioLoading && portfolio && (
-                  <div className="portfolio-table-wrap anim-fade-up" style={{ animationDelay: "0.08s" }}>
-                    {sortedItems.length === 0 ? (
-                      <div className="portfolio-empty">
-                        <div className="portfolio-empty-icon"><IconBriefcase /></div>
-                        <p>No holdings found in this demat account</p>
-                      </div>
-                    ) : (
-                      <div className="table-scroll">
-                        <table className="portfolio-table">
-                          <thead>
-                            <tr>
-                              <th className="col-num">#</th>
-                              {cols.map((col) => (
-                                <th
-                                  key={col.key}
-                                  className={`col-${col.align} sortable`}
-                                  onClick={() => handleSort(col.key)}
-                                  aria-sort={sortKey === col.key ? (sortAsc ? "ascending" : "descending") : "none"}
-                                >
-                                  <span className="th-inner">
-                                    {col.label}
-                                    <SortIcon col={col.key} />
-                                  </span>
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {sortedItems.map((item, i) => {
-                              const gc = gainClass(item.lastTransactionPrice, item.previousClosingPrice);
-                              return (
-                                <tr key={item.script ?? i}>
-                                  <td className="col-num col-dim">{i + 1}</td>
-                                  <td>
-                                    <span className="scrip-code">{item.script}</span>
-                                    {item.scriptDesc && (
-                                      <span className="scrip-desc">{item.scriptDesc}</span>
-                                    )}
-                                  </td>
-                                  <td className="col-right">
-                                    <span className="cell-mono">{fmtUnits(item.currentBalance)}</span>
-                                  </td>
-                                  <td className="col-right">
-                                    <span className={`cell-mono ltp-val ${gc}`}>
-                                      {fmt(item.lastTransactionPrice)}
-                                    </span>
-                                  </td>
-                                  <td className="col-right">
-                                    <span className="cell-mono col-dim">{fmt(item.previousClosingPrice)}</span>
-                                  </td>
-                                  <td className="col-right">
-                                    <span className="cell-mono">{fmt(item.valueAsOfLTP)}</span>
-                                  </td>
-                                  <td className="col-right">
-                                    <span className="cell-mono col-dim">{fmt(item.valueAsOfPrevClose)}</span>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                          <tfoot>
-                            <tr className="tfoot-row">
-                              <td colSpan={5} className="tfoot-label">Total</td>
-                              <td className="col-right tfoot-val">
-                                Rs {fmt(portfolio.totalValueLTP)}
-                              </td>
-                              <td className="col-right tfoot-val col-dim">
-                                Rs {fmt(portfolio.totalValuePrevClose)}
-                              </td>
-                            </tr>
-                          </tfoot>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* table skeleton */}
-                {portfolioLoading && (
-                  <div className="portfolio-table-wrap">
-                    <div className="table-skeleton">
-                      {[1, 2, 3, 4, 5].map((k) => (
-                        <div key={k} className="table-skeleton-row">
-                          <Skeleton h={12} w={28} />
-                          <Skeleton h={12} w="22%" />
-                          <Skeleton h={12} w="10%" />
-                          <Skeleton h={12} w="10%" />
-                          <Skeleton h={12} w="10%" />
-                          <Skeleton h={12} w="14%" />
-                          <Skeleton h={12} w="14%" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
+                <div className="portfolio-account-info">
+                  <span className="portfolio-account-name">{activeAccount.fullName}</span>
+                  <span className="portfolio-account-meta">
+                    {activeAccount.username}
+                    {activeAccount.boid ? ` · BOID ${activeAccount.boid}` : ""}
+                  </span>
+                </div>
+              </div>
             )}
-          </section>
-        </div>
+
+            {portfolioLoading ? (
+              <div className="summary-grid">
+                {[1, 2, 3].map((k) => (
+                  <div key={k} className="summary-card">
+                    <Skeleton h={10} w={80} style={{ marginBottom: 10 }} />
+                    <Skeleton h={28} w="60%" />
+                  </div>
+                ))}
+              </div>
+            ) : portfolio && (
+              <div className="summary-grid anim-fade-up">
+                <div className="summary-card">
+                  <p className="summary-label">
+                    <IconLayers /> Total scrips
+                  </p>
+                  <p className="summary-value">{portfolio.totalItems}</p>
+                </div>
+                <div className="summary-card">
+                  <p className="summary-label">
+                    <IconTrendUp /> Value at LTP
+                  </p>
+                  <p className="summary-value">Rs {fmt(portfolio.totalValueLTP)}</p>
+                </div>
+                <div className={`summary-card ${totalPnL >= 0 ? "summary-card-up" : "summary-card-down"}`}>
+                  <p className="summary-label">
+                    {totalPnL >= 0 ? <IconArrowUp /> : <IconArrowDown />}
+                    Day change
+                  </p>
+                  <p className={`summary-value ${totalPnL >= 0 ? "positive" : "negative"}`}>
+                    {totalPnL >= 0 ? "+" : ""}Rs {fmt(Math.abs(totalPnL))}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {error && !portfolioLoading && (
+              <div className="portfolio-error">
+                <p>{error}</p>
+                <button className="btn btn-secondary btn-sm" onClick={() => loadPortfolio(activeAccount.id)}>
+                  Try again
+                </button>
+              </div>
+            )}
+
+            {!error && !portfolioLoading && portfolio && (
+              <div className="portfolio-table-wrap anim-fade-up" style={{ animationDelay: "0.08s" }}>
+                {sortedItems.length === 0 ? (
+                  <div className="portfolio-empty">
+                    <div className="portfolio-empty-icon"><IconBriefcase /></div>
+                    <p>No holdings found in this demat account</p>
+                  </div>
+                ) : (
+                  <div className="table-scroll">
+                    <table className="portfolio-table">
+                      <thead>
+                        <tr>
+                          <th className="col-num">#</th>
+                          {cols.map((col) => (
+                            <th
+                              key={col.key}
+                              className={`col-${col.align} sortable`}
+                              onClick={() => handleSort(col.key)}
+                              aria-sort={sortKey === col.key ? (sortAsc ? "ascending" : "descending") : "none"}
+                            >
+                              <span className="th-inner">
+                                {col.label}
+                                <SortIcon col={col.key} />
+                              </span>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedItems.map((item, i) => {
+                          const gc = gainClass(item.lastTransactionPrice, item.previousClosingPrice);
+                          return (
+                            <tr key={item.script ?? i}>
+                              <td className="col-num col-dim">{i + 1}</td>
+                              <td>
+                                <span className="scrip-code">{item.script}</span>
+                                {item.scriptDesc && (
+                                  <span className="scrip-desc">{item.scriptDesc}</span>
+                                )}
+                              </td>
+                              <td className="col-right">
+                                <span className="cell-mono">{fmtUnits(item.currentBalance)}</span>
+                              </td>
+                              <td className="col-right">
+                                <span className={`cell-mono ltp-val ${gc}`}>
+                                  {fmt(item.lastTransactionPrice)}
+                                </span>
+                              </td>
+                              <td className="col-right">
+                                <span className="cell-mono col-dim">{fmt(item.previousClosingPrice)}</span>
+                              </td>
+                              <td className="col-right">
+                                <span className="cell-mono">{fmt(item.valueAsOfLTP)}</span>
+                              </td>
+                              <td className="col-right">
+                                <span className="cell-mono col-dim">{fmt(item.valueAsOfPrevClose)}</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr className="tfoot-row">
+                          <td colSpan={5} className="tfoot-label">Total</td>
+                          <td className="col-right tfoot-val">
+                            Rs {fmt(portfolio.totalValueLTP)}
+                          </td>
+                          <td className="col-right tfoot-val col-dim">
+                            Rs {fmt(portfolio.totalValuePrevClose)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {portfolioLoading && (
+              <div className="portfolio-table-wrap">
+                <div className="table-skeleton">
+                  {[1, 2, 3, 4, 5].map((k) => (
+                    <div key={k} className="table-skeleton-row">
+                      <Skeleton h={12} w={28} />
+                      <Skeleton h={12} w="22%" />
+                      <Skeleton h={12} w="10%" />
+                      <Skeleton h={12} w="10%" />
+                      <Skeleton h={12} w="10%" />
+                      <Skeleton h={12} w="14%" />
+                      <Skeleton h={12} w="14%" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </Layout>
   );

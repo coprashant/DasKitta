@@ -1,31 +1,49 @@
 import { useState, useEffect, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { getHistoryApi } from "../../api/ipo";
+import { useAccount } from "../../context/AccountContext";
 import Layout from "../../components/Layout";
 import "./History.css";
 
 const PAGE_SIZE = 20;
 
-const statusBadge  = (s) => ({ SUCCESS: "badge-success", FAILED: "badge-danger",  ALREADY_APPLIED: "badge-warning", PENDING: "badge-muted" }[s]  || "badge-muted");
+const statusBadge  = (s) => ({ SUCCESS: "badge-success", FAILED: "badge-danger", ALREADY_APPLIED: "badge-warning", PENDING: "badge-muted" }[s] || "badge-muted");
 const resultBadge  = (s) => ({ ALLOTTED: "badge-success", NOT_ALLOTTED: "badge-danger", NOT_PUBLISHED: "badge-warning", UNKNOWN: "badge-muted" }[s] || "badge-muted");
 const Skeleton     = ({ h = 12, w = "100%" }) => <div className="skeleton" style={{ height: h, width: w }} />;
 
 const STATUS_FILTERS = ["ALL", "SUCCESS", "FAILED", "ALREADY_APPLIED", "PENDING"];
 
+const IconUser = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+    <circle cx="12" cy="7" r="4"/>
+  </svg>
+);
+
+const IconPlus = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <line x1="12" y1="5" x2="12" y2="19"/>
+    <line x1="5" y1="12" x2="19" y2="12"/>
+  </svg>
+);
+
 const History = () => {
-  const [history, setHistory]           = useState([]);
-  const [loading, setLoading]           = useState(true);
-  const [search, setSearch]             = useState("");
-  const [statusFilter, setStatusFilter] = useState("ALL");
-  const [page, setPage]                 = useState(1);
+  const { activeAccount } = useAccount();
+  const [allHistory, setAllHistory]         = useState([]);
+  const [loading, setLoading]               = useState(true);
+  const [search, setSearch]                 = useState("");
+  const [statusFilter, setStatusFilter]     = useState("ALL");
+  const [page, setPage]                     = useState(1);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
     (async () => {
       try {
         const res = await getHistoryApi();
-        if (!cancelled) setHistory(Array.isArray(res.data) ? res.data : []);
+        if (!cancelled) setAllHistory(Array.isArray(res.data) ? res.data : []);
       } catch {
-        if (!cancelled) setHistory([]);
+        if (!cancelled) setAllHistory([]);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -33,7 +51,12 @@ const History = () => {
     return () => { cancelled = true; };
   }, []);
 
-  useEffect(() => { setPage(1); }, [search, statusFilter]);
+  useEffect(() => { setPage(1); }, [search, statusFilter, activeAccount]);
+
+  const history = useMemo(() => {
+    if (!activeAccount) return [];
+    return allHistory.filter((h) => h.accountUsername === activeAccount.username);
+  }, [allHistory, activeAccount]);
 
   const filtered = useMemo(() => {
     let d = history;
@@ -59,154 +82,185 @@ const History = () => {
     try { return new Date(iso).toLocaleDateString(); } catch { return "—"; }
   };
 
+  const noAccountState = !activeAccount && !loading;
+
   return (
     <Layout>
       <div className="page">
-        <h1 className="page-title">Application history</h1>
-        <p className="page-subtitle">All IPO applications across all your accounts.</p>
-
-        <div className="history-controls">
-          <div className="history-search-wrap">
-            <SearchIcon />
-            <input
-              type="text"
-              className="input history-search"
-              placeholder="Search by company or account"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              aria-label="Search applications"
-            />
-          </div>
-          <div className="filter-scroll" role="group" aria-label="Filter by status">
-            {STATUS_FILTERS.map((s) => (
-              <button
-                key={s}
-                className={`filter-btn${statusFilter === s ? " active" : ""}`}
-                onClick={() => setStatusFilter(s)}
-                aria-pressed={statusFilter === s}
-              >
-                {s === "ALL" ? "All" : s.replace(/_/g, " ")}
-              </button>
-            ))}
+        <div className="history-page-header">
+          <div>
+            <h1 className="page-title">Application history</h1>
+            <p className="page-subtitle" style={{ marginBottom: 0 }}>
+              {activeAccount
+                ? `IPO applications for ${activeAccount.fullName}`
+                : "Select an account to view history"}
+            </p>
           </div>
         </div>
 
-        {loading ? (
-          <div className="card">
-            <div className="history-scroll">
-              <table className="history-table">
-                <thead>
-                  <tr>
-                    <th>Company</th><th>Account</th><th>Kitta</th>
-                    <th>Status</th><th>Result</th><th>Allotted</th><th>Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[1, 2, 3, 4, 5].map((k) => (
-                    <tr key={k}>
-                      <td><Skeleton h={12} w="80%" /></td>
-                      <td><Skeleton h={12} w="60%" /></td>
-                      <td><Skeleton h={12} w={30} /></td>
-                      <td><Skeleton h={20} w={70} /></td>
-                      <td><Skeleton h={20} w={80} /></td>
-                      <td><Skeleton h={12} w={30} /></td>
-                      <td><Skeleton h={12} w={70} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        {activeAccount && (
+          <div className="history-account-pill">
+            <div className="history-account-avatar">
+              {activeAccount.fullName?.[0]?.toUpperCase() ?? "?"}
+            </div>
+            <div className="history-account-info">
+              <span className="history-account-name">{activeAccount.fullName}</span>
+              <span className="history-account-meta">
+                {activeAccount.username}
+                {activeAccount.dpCode ? ` · DP ${activeAccount.dpCode}` : ""}
+              </span>
             </div>
           </div>
-        ) : filtered.length === 0 ? (
+        )}
+
+        {noAccountState ? (
           <div className="card empty-state">
-            <EmptyIllustration />
-            <p>{history.length === 0 ? "No applications yet." : "No applications match your filters."}</p>
+            <div className="history-empty-icon"><IconUser /></div>
+            <p>No account selected. Add an account to get started.</p>
+            <Link to="/accounts/add" className="btn btn-primary btn-sm" style={{ marginTop: 8 }}>
+              <IconPlus /> Add account
+            </Link>
           </div>
         ) : (
-          <div className="card anim-fade-up">
-            <div className="history-scroll">
-              <table className="history-table">
-                <thead>
-                  <tr>
-                    <th>Company</th>
-                    <th>Account</th>
-                    <th>Kitta</th>
-                    <th>Status</th>
-                    <th>Result</th>
-                    <th>Allotted</th>
-                    <th>Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginated.map((item) => (
-                    <tr key={item.id}>
-                      <td>
-                        <span className="h-company">{item.companyName || "—"}</span>
-                        {item.shareId && (
-                          <span className="h-share-id">ID: {item.shareId}</span>
-                        )}
-                      </td>
-                      <td>
-                        <span className="h-acc-name">{item.accountFullName || "—"}</span>
-                        <span className="h-acc-user">{item.accountUsername}</span>
-                      </td>
-                      <td>{item.appliedKitta ?? "—"}</td>
-                      <td>
-                        <span className={`badge ${statusBadge(item.status)}`}>
-                          {item.status?.replace(/_/g, " ") || "—"}
-                        </span>
-                        {item.statusMessage && (
-                          <p className="h-msg" title={item.statusMessage}>
-                            {item.statusMessage}
-                          </p>
-                        )}
-                      </td>
-                      <td>
-                        {item.resultStatus
-                          ? <span className={`badge ${resultBadge(item.resultStatus)}`}>
-                              {item.resultStatus.replace(/_/g, " ")}
-                            </span>
-                          : <span className="td-muted">—</span>}
-                      </td>
-                      <td>
-                        {item.allottedKitta > 0
-                          ? <span className="h-allotted">{item.allottedKitta}</span>
-                          : <span className="td-muted">—</span>}
-                      </td>
-                      <td className="td-muted">{fmtDate(item.appliedAt)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          <>
+            <div className="history-controls">
+              <div className="history-search-wrap">
+                <SearchIcon />
+                <input
+                  type="text"
+                  className="input history-search"
+                  placeholder="Search by company"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  aria-label="Search applications"
+                />
+              </div>
+              <div className="filter-scroll" role="group" aria-label="Filter by status">
+                {STATUS_FILTERS.map((s) => (
+                  <button
+                    key={s}
+                    className={`filter-btn${statusFilter === s ? " active" : ""}`}
+                    onClick={() => setStatusFilter(s)}
+                    aria-pressed={statusFilter === s}
+                  >
+                    {s === "ALL" ? "All" : s.replace(/_/g, " ")}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="table-footer">
-              <span>
-                Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
-              </span>
-              {totalPages > 1 && (
-                <div className="pagination" role="navigation" aria-label="Pagination">
-                  <button
-                    className="page-btn"
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    aria-label="Previous page"
-                  >
-                    <ChevronLeft />
-                  </button>
-                  <span className="page-info" aria-current="page">{page} / {totalPages}</span>
-                  <button
-                    className="page-btn"
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={page === totalPages}
-                    aria-label="Next page"
-                  >
-                    <ChevronRight />
-                  </button>
+            {loading ? (
+              <div className="card">
+                <div className="history-scroll">
+                  <table className="history-table">
+                    <thead>
+                      <tr>
+                        <th>Company</th><th>Kitta</th>
+                        <th>Status</th><th>Result</th><th>Allotted</th><th>Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[1, 2, 3, 4, 5].map((k) => (
+                        <tr key={k}>
+                          <td><Skeleton h={12} w="80%" /></td>
+                          <td><Skeleton h={12} w={30} /></td>
+                          <td><Skeleton h={20} w={70} /></td>
+                          <td><Skeleton h={20} w={80} /></td>
+                          <td><Skeleton h={12} w={30} /></td>
+                          <td><Skeleton h={12} w={70} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              )}
-            </div>
-          </div>
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="card empty-state">
+                <EmptyIllustration />
+                <p>{history.length === 0 ? "No applications yet." : "No applications match your filters."}</p>
+              </div>
+            ) : (
+              <div className="card anim-fade-up">
+                <div className="history-scroll">
+                  <table className="history-table">
+                    <thead>
+                      <tr>
+                        <th>Company</th>
+                        <th>Kitta</th>
+                        <th>Status</th>
+                        <th>Result</th>
+                        <th>Allotted</th>
+                        <th>Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginated.map((item) => (
+                        <tr key={item.id}>
+                          <td>
+                            <span className="h-company">{item.companyName || "—"}</span>
+                            {item.shareId && (
+                              <span className="h-share-id">ID: {item.shareId}</span>
+                            )}
+                          </td>
+                          <td>{item.appliedKitta ?? "—"}</td>
+                          <td>
+                            <span className={`badge ${statusBadge(item.status)}`}>
+                              {item.status?.replace(/_/g, " ") || "—"}
+                            </span>
+                            {item.statusMessage && (
+                              <p className="h-msg" title={item.statusMessage}>
+                                {item.statusMessage}
+                              </p>
+                            )}
+                          </td>
+                          <td>
+                            {item.resultStatus
+                              ? <span className={`badge ${resultBadge(item.resultStatus)}`}>
+                                  {item.resultStatus.replace(/_/g, " ")}
+                                </span>
+                              : <span className="td-muted">—</span>}
+                          </td>
+                          <td>
+                            {item.allottedKitta > 0
+                              ? <span className="h-allotted">{item.allottedKitta}</span>
+                              : <span className="td-muted">—</span>}
+                          </td>
+                          <td className="td-muted">{fmtDate(item.appliedAt)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="table-footer">
+                  <span>
+                    Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+                  </span>
+                  {totalPages > 1 && (
+                    <div className="pagination" role="navigation" aria-label="Pagination">
+                      <button
+                        className="page-btn"
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        disabled={page === 1}
+                        aria-label="Previous page"
+                      >
+                        <ChevronLeft />
+                      </button>
+                      <span className="page-info" aria-current="page">{page} / {totalPages}</span>
+                      <button
+                        className="page-btn"
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={page === totalPages}
+                        aria-label="Next page"
+                      >
+                        <ChevronRight />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </Layout>

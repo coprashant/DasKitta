@@ -3,6 +3,7 @@ import {
   addAccountApi, getAccountsApi,
   deleteAccountApi, getDpListApi, getBankByDpApi,
 } from "../../api/accounts";
+import { useAccount } from "../../context/AccountContext";
 import Layout from "../../components/Layout";
 import toast from "react-hot-toast";
 import "./AddAccount.css";
@@ -10,6 +11,7 @@ import "./AddAccount.css";
 const EMPTY_FORM = { dpId: "", dpCode: "", username: "", password: "", bankId: "", crn: "", pin: "" };
 
 const AddAccount = () => {
+  const { refreshAccounts } = useAccount();
   const [form, setForm] = useState(EMPTY_FORM);
   const [accounts, setAccounts] = useState([]);
   const [dpList, setDpList] = useState([]);
@@ -71,7 +73,7 @@ const AddAccount = () => {
         setForm((f) => ({ ...f, bankId: String(bankId) }));
       }
     } catch {
-      // Silent fail; backend will resolve it if frontend fails
+      // silent fail
     } finally {
       setBankLookupLoading(false);
     }
@@ -92,7 +94,8 @@ const AddAccount = () => {
       await addAccountApi(form);
       toast.success("Account added successfully");
       setForm(EMPTY_FORM);
-      fetchAccounts();
+      await fetchAccounts();
+      await refreshAccounts();
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to add account");
     } finally {
@@ -107,6 +110,7 @@ const AddAccount = () => {
       await deleteAccountApi(id);
       toast.success("Account removed");
       setAccounts((prev) => prev.filter((a) => a.id !== id));
+      await refreshAccounts();
     } catch {
       toast.error("Failed to remove account");
     } finally {
@@ -150,9 +154,9 @@ const AddAccount = () => {
                 </select>
                 {selectedDp && (
                   <span className="form-hint">
-                    DP code: {selectedDp.code} &middot; ID: {selectedDp.id}
-                    {bankLookupLoading && " \u00b7 Looking up bank\u2026"}
-                    {!bankLookupLoading && form.bankId && ` \u00b7 Bank ID: ${form.bankId}`}
+                    DP code: {selectedDp.code} · ID: {selectedDp.id}
+                    {bankLookupLoading && " · Looking up bank..."}
+                    {!bankLookupLoading && form.bankId && ` · Bank ID: ${form.bankId}`}
                   </span>
                 )}
               </div>
@@ -250,7 +254,7 @@ const AddAccount = () => {
                       <p className="saved-account-name">{acc.fullName}</p>
                       <p className="saved-account-meta">
                         {acc.username}
-                        {acc.dpCode ? ` \u00b7 DP ${acc.dpCode}` : acc.dpId ? ` \u00b7 DP ${acc.dpId}` : ""}
+                        {acc.dpCode ? ` · DP ${acc.dpCode}` : acc.dpId ? ` · DP ${acc.dpId}` : ""}
                       </p>
                       {acc.boid && (
                         <p className="saved-account-boid">BOID: {acc.boid}</p>

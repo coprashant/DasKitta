@@ -12,7 +12,7 @@ client.interceptors.request.use((config) => {
   return config;
 });
 
-const PUBLIC_PATHS = ["/ipo/shares", "/ipo/result/", "/auth/login", "/auth/register"];
+const PUBLIC_PATHS = ["/ipo/shares", "/ipo/result/", "/auth/login", "/auth/register", "/nepse"];
 
 const isPublicPath = (url = "") => PUBLIC_PATHS.some((p) => url.includes(p));
 
@@ -21,11 +21,17 @@ client.interceptors.response.use(
   (error) => {
     const status = error.response?.status;
     const url = error.config?.url ?? "";
-    if ((status === 401 || status === 403) && !isPublicPath(url)) {
+    
+    const isUnauthorized = status === 401 || status === 403;
+    const isAuthRequest = isPublicPath(url);
+    const isAlreadyAtLogin = window.location.pathname === "/login";
+
+    if (isUnauthorized && !isAuthRequest && !isAlreadyAtLogin) {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
       window.location.href = "/login";
     }
+    
     return Promise.reject(error);
   }
 );
