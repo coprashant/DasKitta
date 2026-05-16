@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import Layout from "../../components/Layout";
+import NepseStrip, { NepseHeroCard } from "../../components/NepseStrip";
 import "./Home.css";
 
 const features = [
@@ -30,7 +31,7 @@ const features = [
   {
     num: "03",
     title: "Result checker",
-    desc: "Check IPO allotment results instantly. No login required for guests.",
+    desc: "Check IPO allotment results instantly for multiple accounts.",
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
@@ -45,19 +46,12 @@ const features = [
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
         <line x1="16" y1="2" x2="16" y2="6" />
-        <line x1="8"  y1="2" x2="8"  y2="6" />
-        <line x1="3"  y1="10" x2="21" y2="10" />
+        <line x1="8" y1="2" x2="8" y2="6" />
+        <line x1="3" y1="10" x2="21" y2="10" />
       </svg>
     ),
   },
 ];
-
-const StatusRow = ({ label, status, cls, delay }) => (
-  <div className="status-row" style={{ animationDelay: delay }}>
-    <span className="status-row-label">{label}</span>
-    <span className={`status-pill status-pill--${cls}`}>{status}</span>
-  </div>
-);
 
 const Home = ({ theme, onThemeToggle }) => {
   const { user } = useAuth();
@@ -84,54 +78,21 @@ const Home = ({ theme, onThemeToggle }) => {
               ) : (
                 <>
                   <Link to="/register" className="btn btn-primary btn-lg">Get started free</Link>
-                  <Link to="/login"    className="btn btn-secondary btn-lg">Sign in</Link>
+                  <Link to="/login" className="btn btn-secondary btn-lg">Sign in</Link>
                 </>
               )}
             </div>
-            <p className="hero-footnote">
-              Free to use. No card required.
-            </p>
+            <p className="hero-footnote">Free to use. No card required.</p>
           </div>
 
           <div className="hero-right">
-            <div className="status-card">
-              <div className="status-card-header">
-                <div className="status-card-title-group">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="status-card-icon">
-                    <rect x="2" y="3" width="20" height="14" rx="2" />
-                    <line x1="8" y1="21" x2="16" y2="21" />
-                    <line x1="12" y1="17" x2="12" y2="21" />
-                  </svg>
-                  <span className="status-card-label">IPO Status</span>
-                </div>
-                <span className="status-live">
-                  <span className="status-dot" />
-                  Live
-                </span>
-              </div>
-
-              <div className="status-card-company">
-                <span className="status-company-name">Sunrise Bank Limited</span>
-                <span className="status-company-meta">Ordinary shares</span>
-              </div>
-
-              <div className="status-rows">
-                <StatusRow label="Account 1" status="Applied"  cls="applied" delay="0.18s" />
-                <StatusRow label="Account 2" status="Applied"  cls="applied" delay="0.26s" />
-                <StatusRow label="Account 3" status="Pending"  cls="pending" delay="0.34s" />
-              </div>
-
-              <div className="status-card-footer">
-                <span className="status-footer-label">Allotment</span>
-                <span className="status-footer-checking">
-                  <span className="checking-dot" />
-                  Checking
-                </span>
-              </div>
-            </div>
+            <NepseHeroCard />
           </div>
         </div>
       </section>
+
+      {/* Live NEPSE data */}
+      <NepseStrip />
 
       {/* Features */}
       <section className="features-section">

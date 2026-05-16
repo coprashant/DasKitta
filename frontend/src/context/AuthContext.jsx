@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from "react";
+import { createContext, useContext, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { loginApi, registerApi } from "../api/auth";
 import toast from "react-hot-toast";
@@ -21,6 +21,12 @@ export const AuthProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
+  const onLoginRef  = useRef(null);
+  const onLogoutRef = useRef(null);
+
+  const registerOnLogin  = useCallback((fn) => { onLoginRef.current  = fn; }, []);
+  const registerOnLogout = useCallback((fn) => { onLogoutRef.current = fn; }, []);
+
   const persistSession = (token, username, email) => {
     localStorage.setItem("token", token);
     localStorage.setItem("user", JSON.stringify({ username, email }));
@@ -39,6 +45,7 @@ export const AuthProvider = ({ children }) => {
       const res = await loginApi(credentials);
       const { token, username, email } = res.data;
       persistSession(token, username, email);
+      if (onLoginRef.current) await onLoginRef.current();
       toast.success("Signed in successfully");
       navigate("/dashboard");
     } catch (err) {
@@ -55,13 +62,13 @@ export const AuthProvider = ({ children }) => {
       const res = await registerApi(data);
       const { token, username, email } = res.data;
       persistSession(token, username, email);
+      if (onLoginRef.current) await onLoginRef.current();
       toast.success("Account created");
       navigate("/dashboard");
     } catch (err) {
       const errors = err.response?.data?.errors;
       if (errors) {
-        const first = Object.values(errors)[0];
-        toast.error(first);
+        toast.error(Object.values(errors)[0]);
       } else {
         toast.error(err.response?.data?.message || "Registration failed");
       }
@@ -72,12 +79,21 @@ export const AuthProvider = ({ children }) => {
 
   const logout = useCallback(() => {
     clearSession();
+    if (onLogoutRef.current) onLogoutRef.current();
     toast.success("Signed out");
     navigate("/login");
   }, [clearSession, navigate]);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{
+      user,
+      isLoading,
+      login,
+      register,
+      logout,
+      registerOnLogin,
+      registerOnLogout,
+    }}>
       {children}
     </AuthContext.Provider>
   );

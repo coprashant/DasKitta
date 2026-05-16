@@ -4,6 +4,7 @@ import com.meroshare.backend.dto.IpoApplyRequest;
 import com.meroshare.backend.dto.IpoApplyResult;
 import com.meroshare.backend.dto.IpoApplicationResponse;
 import com.meroshare.backend.service.IpoService;
+import com.meroshare.backend.dto.CdscSummaryDto;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -66,5 +67,12 @@ public class IpoController {
     public ResponseEntity<List<IpoApplicationResponse>> getHistory(
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(ipoService.getHistory(userDetails.getUsername()));
+    }
+
+    @GetMapping("/cdsc-summary")
+    public ResponseEntity<CdscSummaryDto> getCdscSummary(
+            @RequestParam Long accountId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(ipoService.getCdscSummary(accountId, userDetails.getUsername()));
     }
 }

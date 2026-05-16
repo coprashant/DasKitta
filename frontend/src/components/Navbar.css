@@ -52,18 +52,24 @@
 @media (min-width: 768px) { .navbar-links { display: flex; } }
 
 .navbar-link {
-  padding: 5px 10px;
+  display: inline-block;
+  padding: 8px 12px;
   border-radius: var(--r);
   font-size: 14px;
   font-weight: 400;
   color: var(--text-2);
-  text-decoration: none;
-  transition:
-    background var(--t-fast) var(--ease),
-    color var(--t-fast) var(--ease);
+  text-decoration: underline transparent 3px;
+  text-underline-offset: 5px;
   white-space: nowrap;
+  transition: 
+    color var(--t-fast) var(--ease), 
+    text-decoration-color var(--t-fast) var(--ease);
 }
-.navbar-link:hover { color: var(--text); background: var(--surface-2); }
+
+.navbar-link:hover {
+  color: var(--text);
+  text-decoration-color: var(--accent-hover);
+}
 .navbar-link.active { color: var(--text); font-weight: 500; }
 .navbar-link.navbar-link-ghost { display: none; }
 @media (min-width: 768px) { .navbar-link.navbar-link-ghost { display: inline-flex; } }

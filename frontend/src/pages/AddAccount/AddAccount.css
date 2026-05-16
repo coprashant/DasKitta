@@ -38,6 +38,11 @@
   letter-spacing: 0.06em;
 }
 
+.acc-click-hint {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
 .form-note {
   display: flex;
   align-items: flex-start;
@@ -63,23 +68,42 @@
   align-items: center;
   gap: 12px;
   padding: 14px 16px;
-  transition: box-shadow var(--t-fast) var(--ease);
+  transition:
+    box-shadow var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease);
 }
 .saved-account-card:hover { box-shadow: var(--shadow); }
+
+/* active card gets accent border */
+.saved-account-card-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-muted), var(--shadow-sm);
+  cursor: default !important;
+}
+.saved-account-card-active:hover {
+  box-shadow: 0 0 0 1px var(--accent-muted), var(--shadow-sm);
+}
 
 .saved-account-avatar {
   width: 38px;
   height: 38px;
   border-radius: var(--r);
-  background: var(--accent-dim);
-  border: 1px solid var(--accent-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 15px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--text-2);
   flex-shrink: 0;
+  font-family: var(--font);
+}
+
+.saved-account-avatar-active {
+  background: var(--accent-dim);
+  border-color: var(--accent-muted);
+  color: var(--accent);
 }
 
 .saved-account-info {
@@ -107,4 +131,18 @@
   color: var(--text-3);
   font-family: var(--mono);
   margin-top: 1px;
+}
+
+.saved-account-active-badge {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-muted);
+  border-radius: var(--r-sm);
+  padding: 3px 8px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }

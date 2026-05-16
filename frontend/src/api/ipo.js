@@ -20,3 +20,6 @@ export const checkResultGuestApi = (shareId, boid) =>
   client.get(`/ipo/result/${shareId}`, { params: { boid } });
 
 export const getHistoryApi = () => client.get("/ipo/history");
+
+export const getCdscSummaryApi = (accountId) =>
+  client.get("/ipo/cdsc-summary", { params: { accountId } });

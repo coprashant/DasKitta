@@ -7,7 +7,7 @@ import "./Navbar.css";
 
 const authLinks = [
   { path: "/dashboard",  label: "Dashboard" },
-  { path: "/nepse",      label: "Nepse"     },
+  { path: "/nepse",      label: "Nepse"      },
   { path: "/ipo/apply",  label: "Apply IPO"  },
   { path: "/ipo/result", label: "Results"    },
   { path: "/portfolio",  label: "Portfolio"  },

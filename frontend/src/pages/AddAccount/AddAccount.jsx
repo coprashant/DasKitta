@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   addAccountApi, getAccountsApi,
   deleteAccountApi, getDpListApi, getBankByDpApi,
@@ -11,7 +12,8 @@ import "./AddAccount.css";
 const EMPTY_FORM = { dpId: "", dpCode: "", username: "", password: "", bankId: "", crn: "", pin: "" };
 
 const AddAccount = () => {
-  const { refreshAccounts } = useAccount();
+  const navigate = useNavigate();
+  const { refreshAccounts, activeAccount, setActiveAccount } = useAccount();
   const [form, setForm] = useState(EMPTY_FORM);
   const [accounts, setAccounts] = useState([]);
   const [dpList, setDpList] = useState([]);
@@ -55,23 +57,13 @@ const AddAccount = () => {
   const handleDpChange = async (e) => {
     const selectedId = e.target.value;
     const dp = dpList.find((d) => String(d.id) === String(selectedId));
-
-    setForm((f) => ({
-      ...f,
-      dpId: selectedId,
-      dpCode: dp ? dp.code : "",
-      bankId: "",
-    }));
-
+    setForm((f) => ({ ...f, dpId: selectedId, dpCode: dp ? dp.code : "", bankId: "" }));
     if (!selectedId) return;
-
     setBankLookupLoading(true);
     try {
       const res = await getBankByDpApi(selectedId);
       const bankId = res.data?.bankId ?? "";
-      if (bankId) {
-        setForm((f) => ({ ...f, bankId: String(bankId) }));
-      }
+      if (bankId) setForm((f) => ({ ...f, bankId: String(bankId) }));
     } catch {
       // silent fail
     } finally {
@@ -116,6 +108,12 @@ const AddAccount = () => {
     } finally {
       setDeleting(null);
     }
+  };
+
+  const handleSelectAccount = (acc) => {
+    setActiveAccount(acc);
+    toast.success(`Switched to ${acc.fullName}`);
+    navigate("/dashboard");
   };
 
   const selectedDp = dpList.find((d) => String(d.id) === String(form.dpId));
@@ -221,6 +219,9 @@ const AddAccount = () => {
               <span className="section-title-sm">
                 Saved accounts ({accounts.length})
               </span>
+              {accounts.length > 0 && (
+                <span className="acc-click-hint">Click a card to switch</span>
+              )}
             </div>
 
             {accsLoading ? (
@@ -241,34 +242,43 @@ const AddAccount = () => {
               </div>
             ) : (
               <div className="saved-accounts-list">
-                {accounts.map((acc, i) => (
-                  <div
-                    className="card saved-account-card anim-fade-up"
-                    key={acc.id}
-                    style={{ animationDelay: `${i * 0.07}s` }}
-                  >
-                    <div className="saved-account-avatar">
-                      {acc.fullName?.charAt(0)?.toUpperCase() || "?"}
-                    </div>
-                    <div className="saved-account-info">
-                      <p className="saved-account-name">{acc.fullName}</p>
-                      <p className="saved-account-meta">
-                        {acc.username}
-                        {acc.dpCode ? ` · DP ${acc.dpCode}` : acc.dpId ? ` · DP ${acc.dpId}` : ""}
-                      </p>
-                      {acc.boid && (
-                        <p className="saved-account-boid">BOID: {acc.boid}</p>
+                {accounts.map((acc, i) => {
+                  const isActive = activeAccount?.id === acc.id;
+                  return (
+                    <div
+                      className={`card saved-account-card anim-fade-up${isActive ? " saved-account-card-active" : ""}`}
+                      key={acc.id}
+                      style={{ animationDelay: `${i * 0.07}s`, cursor: "pointer" }}
+                      onClick={() => !isActive && handleSelectAccount(acc)}
+                      title={isActive ? "Currently active" : `Switch to ${acc.fullName}`}
+                    >
+                      <div className={`saved-account-avatar${isActive ? " saved-account-avatar-active" : ""}`}>
+                        {acc.fullName?.charAt(0)?.toUpperCase() || "?"}
+                      </div>
+                      <div className="saved-account-info">
+                        <p className="saved-account-name">{acc.fullName}</p>
+                        <p className="saved-account-meta">
+                          {acc.username}
+                          {acc.dpCode ? ` · DP ${acc.dpCode}` : acc.dpId ? ` · DP ${acc.dpId}` : ""}
+                        </p>
+                        {acc.boid && (
+                          <p className="saved-account-boid">BOID: {acc.boid}</p>
+                        )}
+                      </div>
+                      {isActive ? (
+                        <span className="saved-account-active-badge">Active</span>
+                      ) : (
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={(e) => { e.stopPropagation(); handleDelete(acc.id); }}
+                          disabled={deleting === acc.id}
+                        >
+                          {deleting === acc.id ? <SpinnerIcon /> : "Remove"}
+                        </button>
                       )}
                     </div>
-                    <button
-                      className="btn btn-danger btn-sm"
-                      onClick={() => handleDelete(acc.id)}
-                      disabled={deleting === acc.id}
-                    >
-                      {deleting === acc.id ? <SpinnerIcon /> : "Remove"}
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

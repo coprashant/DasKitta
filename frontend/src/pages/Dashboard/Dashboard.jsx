@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useAccount } from "../../context/AccountContext";
@@ -71,17 +71,96 @@ const IconFile = () => (
 );
 
 const IconUser = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
     <circle cx="12" cy="7" r="4"/>
   </svg>
 );
 
+const IconChevronDown = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <polyline points="6 9 12 15 18 9"/>
+  </svg>
+);
+
+const IconCheckSmall = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+);
+
+const AccountSwitcher = () => {
+  const { accounts, activeAccount, setActiveAccount } = useAccount();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  if (!activeAccount) return null;
+
+  return (
+    <div className="dash-switcher-wrap" ref={ref}>
+      <button
+        className={`dash-switcher-btn${open ? " open" : ""}`}
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <div className="dash-switcher-avatar">
+          {activeAccount.fullName?.[0]?.toUpperCase() ?? "?"}
+        </div>
+        <div className="dash-switcher-info">
+          <span className="dash-switcher-name">{activeAccount.fullName}</span>
+          <span className="dash-switcher-meta">{activeAccount.username}</span>
+        </div>
+        <span className="dash-switcher-chevron"><IconChevronDown /></span>
+      </button>
+
+      {open && (
+        <div className="dash-switcher-dropdown" role="listbox" aria-label="Switch account">
+          <div className="dash-switcher-dropdown-label">Switch account</div>
+          {accounts.map((acc) => {
+            const active = activeAccount?.id === acc.id;
+            return (
+              <button
+                key={acc.id}
+                role="option"
+                aria-selected={active}
+                className={`dash-switcher-option${active ? " active" : ""}`}
+                onClick={() => { setActiveAccount(acc); setOpen(false); }}
+              >
+                <div className={`dash-switcher-opt-avatar${active ? " active" : ""}`}>
+                  {acc.fullName?.[0]?.toUpperCase() ?? "?"}
+                </div>
+                <div className="dash-switcher-opt-info">
+                  <span className="dash-switcher-opt-name">{acc.fullName}</span>
+                  <span className="dash-switcher-opt-meta">{acc.username}{acc.dpCode ? ` · DP ${acc.dpCode}` : ""}</span>
+                </div>
+                {active && <span className="dash-switcher-opt-check"><IconCheckSmall /></span>}
+              </button>
+            );
+          })}
+          <div className="dash-switcher-footer">
+            <Link to="/accounts/add" className="dash-switcher-add-link" onClick={() => setOpen(false)}>
+              <IconPlus /> Add account
+            </Link>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const NoAccountBanner = () => (
   <div className="dash-no-account">
-    <div className="dash-no-account-icon">
-      <IconUser />
-    </div>
+    <div className="dash-no-account-icon"><IconUser /></div>
     <p className="dash-no-account-title">No account selected</p>
     <p className="dash-no-account-desc">Add a Meroshare account to get started.</p>
     <Link to="/accounts/add" className="btn btn-primary btn-sm">
@@ -92,7 +171,7 @@ const NoAccountBanner = () => (
 
 const Dashboard = () => {
   const { user } = useAuth();
-  const { activeAccount, accounts } = useAccount();
+  const { activeAccount, accounts, loading: accountLoading } = useAccount();
   const [allHistory, setAllHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
 
@@ -101,8 +180,7 @@ const Dashboard = () => {
     setHistoryLoading(true);
     (async () => {
       try {
-        const { getHistoryApi: api } = await import("../../api/ipo");
-        const res = await api();
+        const res = await getHistoryApi();
         if (cancelled) return;
         const sorted = (Array.isArray(res?.data) ? res.data : [])
           .sort((a, b) => new Date(b.appliedAt) - new Date(a.appliedAt));
@@ -118,9 +196,7 @@ const Dashboard = () => {
 
   const history = useMemo(() => {
     if (!activeAccount) return [];
-    return allHistory.filter(
-      (h) => h.accountUsername === activeAccount.username
-    );
+    return allHistory.filter((h) => h.accountUsername === activeAccount.username);
   }, [allHistory, activeAccount]);
 
   const stats = useMemo(() => ({
@@ -151,7 +227,7 @@ const Dashboard = () => {
     labelStyle: { color: "var(--text-2)" },
   };
 
-  const loading = historyLoading;
+  const loading = accountLoading || historyLoading;
 
   return (
     <Layout>
@@ -174,30 +250,12 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {!activeAccount && !loading ? (
+        <AccountSwitcher />
+
+        {!activeAccount && !accountLoading ? (
           <NoAccountBanner />
         ) : (
           <>
-            {activeAccount && (
-              <div className="dash-account-pill">
-                <div className="dash-account-pill-avatar">
-                  {activeAccount.fullName?.[0]?.toUpperCase() ?? "?"}
-                </div>
-                <div className="dash-account-pill-info">
-                  <span className="dash-account-pill-name">{activeAccount.fullName}</span>
-                  <span className="dash-account-pill-meta">
-                    {activeAccount.username}
-                    {activeAccount.dpCode ? ` · DP ${activeAccount.dpCode}` : ""}
-                  </span>
-                </div>
-                {accounts.length > 1 && (
-                  <span className="dash-account-pill-hint">
-                    Switch accounts from the profile menu
-                  </span>
-                )}
-              </div>
-            )}
-
             <div className="dash-stats">
               {loading ? (
                 [1, 2, 3].map((k) => (
@@ -266,7 +324,7 @@ const Dashboard = () => {
                       {[1, 2, 3, 4].map((k) => (
                         <div key={k} className="table-skeleton-row">
                           <Skeleton h={12} w="35%" />
-                          <Skeleton h={12} w="20%" />
+                          <Skeleton h={12} w="15%" />
                           <Skeleton h={20} w={60} />
                           <Skeleton h={20} w={60} />
                         </div>
@@ -331,23 +389,26 @@ const Dashboard = () => {
                     </div>
                   ) : (
                     <div className="account-list">
-                      {accounts.map((acc) => (
-                        <div key={acc.id} className="account-row">
-                          <div className={`account-initial${activeAccount?.id === acc.id ? " account-initial-active" : ""}`}>
-                            {acc.fullName?.[0]?.toUpperCase() || "?"}
+                      {accounts.map((acc) => {
+                        const active = activeAccount?.id === acc.id;
+                        return (
+                          <div key={acc.id} className="account-row">
+                            <div className={`account-initial${active ? " account-initial-active" : ""}`}>
+                              {acc.fullName?.[0]?.toUpperCase() || "?"}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <p className="account-name">{acc.fullName}</p>
+                              <p className="account-meta">
+                                {acc.username}
+                                {acc.dpCode ? ` · DP ${acc.dpCode}` : ""}
+                              </p>
+                            </div>
+                            {active && (
+                              <span className="account-active-badge">Active</span>
+                            )}
                           </div>
-                          <div>
-                            <p className="account-name">{acc.fullName}</p>
-                            <p className="account-meta">
-                              {acc.username}
-                              {acc.dpCode ? ` · DP ${acc.dpCode}` : ""}
-                            </p>
-                          </div>
-                          {activeAccount?.id === acc.id && (
-                            <span className="account-active-badge">Active</span>
-                          )}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>

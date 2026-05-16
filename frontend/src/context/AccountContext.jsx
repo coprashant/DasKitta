@@ -28,48 +28,64 @@ export const AccountProvider = ({ children }) => {
     }
   }, []);
 
+  const resetAccounts = useCallback(() => {
+    setAccounts([]);
+    setActiveAccountState(null);
+    localStorage.removeItem(STORAGE_KEY);
+    setLoading(false);
+  }, []);
+
   const refreshAccounts = useCallback(async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      resetAccounts();
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await getAccountsApi();
       const list = Array.isArray(res?.data) ? res.data : [];
       setAccounts(list);
 
+      if (list.length === 0) {
+        localStorage.removeItem(STORAGE_KEY);
+        setActiveAccountState(null);
+        return;
+      }
+
       setActiveAccountState((prev) => {
-        if (!prev && list.length > 0) {
-          const first = list[0];
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(first));
-          return first;
+        if (!prev) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(list[0]));
+          return list[0];
         }
-        if (prev && list.length > 0) {
-          const still = list.find((a) => a.id === prev.id);
-          if (still) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(still));
-            return still;
-          }
-          const first = list[0];
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(first));
-          return first;
-        }
-        if (list.length === 0) {
-          localStorage.removeItem(STORAGE_KEY);
-          return null;
-        }
-        return prev;
+        const still = list.find((a) => a.id === prev.id);
+        const next = still ?? list[0];
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        return next;
       });
     } catch {
       setAccounts([]);
+      setActiveAccountState(null);
+      localStorage.removeItem(STORAGE_KEY);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [resetAccounts]);
 
   useEffect(() => {
     refreshAccounts();
   }, [refreshAccounts]);
 
   return (
-    <AccountContext.Provider value={{ accounts, activeAccount, setActiveAccount, loading, refreshAccounts }}>
+    <AccountContext.Provider value={{
+      accounts,
+      activeAccount,
+      setActiveAccount,
+      loading,
+      refreshAccounts,
+      resetAccounts,
+    }}>
       {children}
     </AccountContext.Provider>
   );

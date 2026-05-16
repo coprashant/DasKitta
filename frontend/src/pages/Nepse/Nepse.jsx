@@ -7,6 +7,7 @@ import {
   getTopLosers,
   getTopTurnover,
   getFloorsheet,
+  getPriceVolume,
 } from "../../api/nepse";
 import Layout from "../../components/Layout";
 import "./Nepse.css";
@@ -16,6 +17,12 @@ const REFRESH_INTERVAL = 30000;
 const IconClock = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+  </svg>
+);
+
+const IconSearch = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
   </svg>
 );
 
@@ -38,15 +45,27 @@ const Skeleton = ({ h = 16, w = "100%" }) => (
 const fmt = (n, dec = 2) =>
   n == null ? "—" : Number(n).toLocaleString("en-NP", { minimumFractionDigits: dec, maximumFractionDigits: dec });
 
+const fmtCompact = (n) => {
+  if (n == null) return "—";
+  const num = Number(n);
+  if (num >= 1e12) return (num / 1e12).toFixed(2) + "T";
+  if (num >= 1e9)  return (num / 1e9).toFixed(2) + "B";
+  if (num >= 1e6)  return (num / 1e6).toFixed(2) + "M";
+  if (num >= 1e3)  return (num / 1e3).toFixed(2) + "K";
+  return String(num);
+};
+
 const getValClass = (n) => (n > 0 ? "text-success" : n < 0 ? "text-danger" : "");
 
 function MarketBadge({ isOpen }) {
-  const statusClass = isOpen ? "badge-success" : "badge-muted";
-  const dotClass = isOpen ? "badge-dot-success" : "";
+  if (isOpen === null) return <div className="badge badge-muted"><span className="badge-dot" />···</div>;
+  const open = typeof isOpen === "object"
+    ? isOpen?.isOpen === "OPEN"
+    : isOpen === true || isOpen === "OPEN";
   return (
-    <div className={`badge ${statusClass}`}>
-      <span className={`badge-dot ${dotClass}`} />
-      {isOpen ? "Market Open" : "Market Closed"}
+    <div className={`badge ${open ? "badge-success" : "badge-muted"}`}>
+      <span className={`badge-dot ${open ? "badge-dot-success" : ""}`} />
+      {open ? "Market Open" : "Market Closed"}
     </div>
   );
 }
@@ -54,7 +73,7 @@ function MarketBadge({ isOpen }) {
 function IndexCard({ name, data }) {
   if (!data) return null;
   const val = data.currentValue ?? data.value;
-  const change = data.percentageChange ?? data.change ?? 0;
+  const change = data.percentageChange ?? data.perChange ?? data.change ?? 0;
   return (
     <div className="stat-card anim-fade-up">
       <p className="stat-label">
@@ -64,6 +83,86 @@ function IndexCard({ name, data }) {
       <p className={`stat-meta ${getValClass(change)}`}>
         {change >= 0 ? "+" : ""}{fmt(change)}%
       </p>
+    </div>
+  );
+}
+
+function StockSearch() {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+  const [allStocks, setAllStocks] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    getPriceVolume().then(r => setAllStocks(r.data ?? [])).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!query.trim()) { setResults([]); setOpen(false); return; }
+    const q = query.toUpperCase();
+    const filtered = allStocks
+      .filter(s => s.symbol?.toUpperCase().includes(q) || s.securityName?.toUpperCase().includes(q))
+      .slice(0, 8);
+    setResults(filtered);
+    setOpen(filtered.length > 0);
+  }, [query, allStocks]);
+
+  const select = (stock) => {
+    setSelected(stock);
+    setQuery(stock.symbol);
+    setOpen(false);
+  };
+
+  return (
+    <div className="stock-search-wrap">
+      <div className="stock-search-box">
+        <IconSearch />
+        <input
+          className="stock-search-input"
+          placeholder="Search symbol or company…"
+          value={query}
+          onChange={e => { setQuery(e.target.value); setSelected(null); }}
+          onFocus={() => results.length && setOpen(true)}
+        />
+        {query && (
+          <button className="stock-search-clear" onClick={() => { setQuery(""); setSelected(null); setOpen(false); }}>×</button>
+        )}
+      </div>
+
+      {open && (
+        <div className="stock-search-dropdown">
+          {results.map(s => (
+            <div key={s.symbol} className="stock-search-item" onClick={() => select(s)}>
+              <span className="cell-primary">{s.symbol}</span>
+              <span className="cell-dim stock-search-name">{s.securityName}</span>
+              <span className={`stock-search-ltp ${getValClass(s.percentageChange)}`}>
+                {fmt(s.lastTradedPrice ?? s.closePrice)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {selected && (
+        <div className="stock-detail-pill">
+          <div className="stock-detail-row">
+            <div>
+              <span className="cell-primary">{selected.symbol}</span>
+              <span className="cell-dim" style={{ marginLeft: 8, fontSize: 12 }}>{selected.securityName}</span>
+            </div>
+            <span className={getValClass(selected.percentageChange)}>
+              {selected.percentageChange >= 0 ? "+" : ""}{fmt(selected.percentageChange)}%
+            </span>
+          </div>
+          <div className="stock-detail-stats">
+            <div className="stock-stat"><span className="summary-key">LTP</span><span className="summary-val">{fmt(selected.lastTradedPrice ?? selected.closePrice)}</span></div>
+            <div className="stock-stat"><span className="summary-key">Prev Close</span><span className="summary-val">{fmt(selected.previousClose)}</span></div>
+            <div className="stock-stat"><span className="summary-key">Volume</span><span className="summary-val">{fmt(selected.totalTradeQuantity, 0)}</span></div>
+            <div className="stock-stat"><span className="summary-key">% Change</span><span className={`summary-val ${getValClass(selected.percentageChange)}`}>{fmt(selected.percentageChange)}%</span></div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -124,7 +223,8 @@ export default function Nepse() {
   return (
     <Layout>
       <div className="page">
-        <div className="dash-header">
+        {/* Header */}
+        <div className="dash-header nepse-header-row">
           <div>
             <h1 className="page-title">Market Overview</h1>
             {lastUpdated && (
@@ -133,11 +233,15 @@ export default function Nepse() {
               </p>
             )}
           </div>
-          <MarketBadge isOpen={marketOpen} />
+          <div className="nepse-header-right">
+            <StockSearch />
+            <MarketBadge isOpen={marketOpen} />
+          </div>
         </div>
 
         {error && <div className="badge badge-danger nepse-err-banner">{error}</div>}
 
+        {/* Index stat cards */}
         <div className="dash-stats">
           {loading ? (
             [1, 2, 3, 4].map(i => (
@@ -147,25 +251,31 @@ export default function Nepse() {
               </div>
             ))
           ) : (
-            KEY_INDICES.map(name => indices?.[name] && <IndexCard key={name} name={name} data={indices[name]} />)
+            KEY_INDICES.map(name =>
+              indices?.[name] ? <IndexCard key={name} name={name} data={indices[name]} /> : null
+            )
           )}
         </div>
 
+        {/* Summary bar */}
         {summary && !loading && (
           <div className="dash-account-pill nepse-summary-bar">
-            {Object.entries(summary).slice(0, 6).map(([k, v]) => (
+            {Object.entries(summary).map(([k, v]) => (
               <div key={k} className="summary-col">
                 <span className="summary-key">{k}</span>
-                <span className="summary-val">{v}</span>
+                <span className="summary-val">
+                  {fmtCompact(typeof v === "object" ? JSON.stringify(v) : v)}
+                </span>
               </div>
             ))}
           </div>
         )}
 
+        {/* Tabs */}
         <div className="nepse-tabs">
           {["Overview", "Gainers & Losers", "Turnover", "Floorsheet"].map(tab => (
-            <button 
-              key={tab} 
+            <button
+              key={tab}
               className={`tab-item ${activeTab === tab ? "active" : ""}`}
               onClick={() => setActiveTab(tab)}
             >
@@ -174,18 +284,23 @@ export default function Nepse() {
           ))}
         </div>
 
+        {/* Tab content */}
         <div className="card anim-fade-up">
           <div className="table-scroll">
             {activeTab === "Overview" && indices && (
               <table className="dash-table">
-                <thead><tr><th>Index</th><th>Value</th><th>Change</th><th>% Change</th></tr></thead>
+                <thead>
+                  <tr><th>Index</th><th>Value</th><th>Change</th><th>% Change</th></tr>
+                </thead>
                 <tbody>
                   {Object.entries(indices).map(([name, d]) => (
                     <tr key={name}>
                       <td><span className="cell-primary">{name}</span></td>
                       <td>{fmt(d.currentValue ?? d.value)}</td>
                       <td className={getValClass(d.change)}>{fmt(d.change)}</td>
-                      <td className={getValClass(d.percentageChange)}>{fmt(d.percentageChange)}%</td>
+                      <td className={getValClass(d.percentageChange ?? d.perChange)}>
+                        {fmt(d.percentageChange ?? d.perChange)}%
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -198,18 +313,30 @@ export default function Nepse() {
                   <p className="table-heading-sm text-success">Top Gainers</p>
                   <table className="dash-table">
                     <thead><tr><th>Symbol</th><th>LTP</th><th>%</th></tr></thead>
-                    <tbody>{gainers.map(r => (
-                      <tr key={r.symbol}><td><span className="cell-primary">{r.symbol}</span></td><td>{fmt(r.ltp)}</td><td className="text-success">+{r.percentageChange}%</td></tr>
-                    ))}</tbody>
+                    <tbody>
+                      {gainers.map(r => (
+                        <tr key={r.symbol}>
+                          <td><span className="cell-primary">{r.symbol}</span></td>
+                          <td>{fmt(r.ltp)}</td>
+                          <td className="text-success">+{fmt(r.percentageChange)}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
                   </table>
                 </div>
                 <div className="table-wrapper">
                   <p className="table-heading-sm text-danger">Top Losers</p>
                   <table className="dash-table">
                     <thead><tr><th>Symbol</th><th>LTP</th><th>%</th></tr></thead>
-                    <tbody>{losers.map(r => (
-                      <tr key={r.symbol}><td><span className="cell-primary">{r.symbol}</span></td><td>{fmt(r.ltp)}</td><td className="text-danger">{r.percentageChange}%</td></tr>
-                    ))}</tbody>
+                    <tbody>
+                      {losers.map(r => (
+                        <tr key={r.symbol}>
+                          <td><span className="cell-primary">{r.symbol}</span></td>
+                          <td>{fmt(r.ltp)}</td>
+                          <td className="text-danger">{fmt(r.percentageChange)}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
                   </table>
                 </div>
               </div>
@@ -217,7 +344,9 @@ export default function Nepse() {
 
             {activeTab === "Turnover" && (
               <table className="dash-table">
-                <thead><tr><th>Symbol</th><th>Turnover (Rs)</th><th>Shares</th><th>LTP</th></tr></thead>
+                <thead>
+                  <tr><th>Symbol</th><th>Turnover (Rs)</th><th>Shares</th><th>LTP</th></tr>
+                </thead>
                 <tbody>
                   {turnover.map(r => (
                     <tr key={r.symbol}>
@@ -233,9 +362,14 @@ export default function Nepse() {
 
             {activeTab === "Floorsheet" && (
               <table className="dash-table">
-                <thead><tr><th>Symbol</th><th>Qty</th><th>Rate</th><th>Buyer</th><th>Seller</th></tr></thead>
+                <thead>
+                  <tr><th>Symbol</th><th>Qty</th><th>Rate</th><th>Buyer</th><th>Seller</th></tr>
+                </thead>
                 <tbody>
-                  {(Array.isArray(floorsheet) ? floorsheet : floorsheet?.floorsheets?.content ?? []).slice(0, 20).map((r, i) => (
+                  {(Array.isArray(floorsheet)
+                    ? floorsheet
+                    : floorsheet?.floorsheets?.content ?? []
+                  ).slice(0, 20).map((r, i) => (
                     <tr key={i}>
                       <td><span className="cell-primary">{r.stockSymbol}</span></td>
                       <td>{fmt(r.contractQuantity, 0)}</td>

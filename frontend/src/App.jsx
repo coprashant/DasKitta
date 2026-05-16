@@ -3,6 +3,7 @@ import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { AccountProvider } from "./context/AccountContext";
+import AccountSync from "./components/AccountSync";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 import Home          from "./pages/Home/Home";
@@ -23,6 +24,7 @@ const App = () => {
       <ThemeProvider>
         <AuthProvider>
           <AccountProvider>
+            <AccountSync />
             <Toaster
               position="top-right"
               containerStyle={{ zIndex: 500 }}

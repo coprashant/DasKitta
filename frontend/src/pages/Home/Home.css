@@ -44,7 +44,7 @@
 }
 @media (min-width: 768px) {
   .hero-inner {
-    grid-template-columns: 1fr 340px;
+    grid-template-columns: 1fr 480px;
     padding: 88px 70px 110px;
     gap: 72px;
   }

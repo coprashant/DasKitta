@@ -1,18 +1,23 @@
 package com.meroshare.backend.controller;
 
 import com.meroshare.backend.service.NepseService;
+import com.meroshare.backend.service.nepse.NepseSymbolResolver;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
+
+import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/api/nepse")
 public class NepseController {
 
-    private final NepseService nepseService;
+    private final NepseService       nepseService;
+    private final NepseSymbolResolver symbolResolver;
 
-    public NepseController(NepseService nepseService) {
-        this.nepseService = nepseService;
+    public NepseController(NepseService nepseService, NepseSymbolResolver symbolResolver) {
+        this.nepseService   = nepseService;
+        this.symbolResolver = symbolResolver;
     }
 
     // ── Live Market ───────────────────────────────────────────────────────────
@@ -42,7 +47,7 @@ public class NepseController {
         return nepseService.isNepseOpen().map(ResponseEntity::ok);
     }
 
-    // ── Top Gainers & Losers ──────────────────────────────────────────────────
+    // ── Gainers / Losers / Top scrips ─────────────────────────────────────────
 
     @GetMapping("/top-gainers")
     public Mono<ResponseEntity<Object>> getTopGainers() {
@@ -55,17 +60,17 @@ public class NepseController {
     }
 
     @GetMapping("/top-turnover")
-    public Mono<ResponseEntity<Object>> getTopTenTurnoverScrips() {
+    public Mono<ResponseEntity<Object>> getTopTurnover() {
         return nepseService.getTopTenTurnoverScrips().map(ResponseEntity::ok);
     }
 
     @GetMapping("/top-trade")
-    public Mono<ResponseEntity<Object>> getTopTenTradeScrips() {
+    public Mono<ResponseEntity<Object>> getTopTrade() {
         return nepseService.getTopTenTradeScrips().map(ResponseEntity::ok);
     }
 
     @GetMapping("/top-transaction")
-    public Mono<ResponseEntity<Object>> getTopTenTransactionScrips() {
+    public Mono<ResponseEntity<Object>> getTopTransaction() {
         return nepseService.getTopTenTransactionScrips().map(ResponseEntity::ok);
     }
 
@@ -74,16 +79,11 @@ public class NepseController {
         return nepseService.getSupplyDemand().map(ResponseEntity::ok);
     }
 
-    // ── Company Details / Price History ───────────────────────────────────────
+    // ── Company / Security ────────────────────────────────────────────────────
 
     @GetMapping("/companies")
     public Mono<ResponseEntity<Object>> getCompanyList() {
         return nepseService.getCompanyList().map(ResponseEntity::ok);
-    }
-
-    @GetMapping("/company/details")
-    public Mono<ResponseEntity<Object>> getCompanyDetails(@RequestParam String symbol) {
-        return nepseService.getCompanyDetails(symbol).map(ResponseEntity::ok);
     }
 
     @GetMapping("/price-volume")
@@ -91,46 +91,58 @@ public class NepseController {
         return nepseService.getPriceVolume().map(ResponseEntity::ok);
     }
 
-    @GetMapping("/price-volume-history")
-    public Mono<ResponseEntity<Object>> getPriceVolumeHistory(@RequestParam String symbol) {
-        return nepseService.getPriceVolumeHistory(symbol).map(ResponseEntity::ok);
-    }
-
-    @GetMapping("/scrip-price-graph")
-    public Mono<ResponseEntity<Object>> getDailyScripPriceGraph(@RequestParam String symbol) {
-        return nepseService.getDailyScripPriceGraph(symbol).map(ResponseEntity::ok);
-    }
-
-    @GetMapping("/market-depth")
-    public Mono<ResponseEntity<Object>> getMarketDepth(@RequestParam String symbol) {
-        return nepseService.getMarketDepth(symbol).map(ResponseEntity::ok);
-    }
-
-    @GetMapping("/sector-scrips")
-    public Mono<ResponseEntity<Object>> getSectorScrips() {
-        return nepseService.getSectorScrips().map(ResponseEntity::ok);
-    }
-
     @GetMapping("/security-list")
     public Mono<ResponseEntity<Object>> getSecurityList() {
         return nepseService.getSecurityList().map(ResponseEntity::ok);
     }
 
-    @GetMapping("/trade-turnover-subindices")
-    public Mono<ResponseEntity<Object>> getTradeTurnoverTransactionSubindices() {
-        return nepseService.getTradeTurnoverTransactionSubindices().map(ResponseEntity::ok);
+    // Symbol-based endpoints: resolve symbol → numeric ID first
+
+    @GetMapping("/company/details")
+    public Mono<ResponseEntity<Object>> getCompanyDetails(@RequestParam String symbol) {
+        return symbolResolver.resolveSecurityId(symbol.toUpperCase())
+                .flatMap(nepseService::getCompanyDetails)
+                .map(ResponseEntity::ok);
+    }
+
+    @GetMapping("/scrip-price-graph")
+    public Mono<ResponseEntity<Object>> getDailyScripPriceGraph(@RequestParam String symbol) {
+        return symbolResolver.resolveSecurityId(symbol.toUpperCase())
+                .flatMap(nepseService::getDailyScripPriceGraph)
+                .map(ResponseEntity::ok);
+    }
+
+    @GetMapping("/price-volume-history")
+    public Mono<ResponseEntity<Object>> getPriceVolumeHistory(
+            @RequestParam String symbol,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
+        String end   = endDate   != null ? endDate   : LocalDate.now().toString();
+        String start = startDate != null ? startDate : LocalDate.now().minusDays(365).toString();
+        return symbolResolver.resolveSecurityId(symbol.toUpperCase())
+                .flatMap(id -> nepseService.getCompanyPriceVolumeHistory(id, start, end))
+                .map(ResponseEntity::ok);
+    }
+
+    @GetMapping("/market-depth")
+    public Mono<ResponseEntity<Object>> getMarketDepth(@RequestParam String symbol) {
+        return symbolResolver.resolveSecurityId(symbol.toUpperCase())
+                .flatMap(nepseService::getMarketDepth)
+                .map(ResponseEntity::ok);
     }
 
     // ── Floorsheet ────────────────────────────────────────────────────────────
 
     @GetMapping("/floorsheet")
     public Mono<ResponseEntity<Object>> getFloorsheet() {
-        return nepseService.getFloorsheet().map(ResponseEntity::ok);
+        return nepseService.getFloorSheet().map(ResponseEntity::ok);
     }
 
     @GetMapping("/floorsheet/company")
     public Mono<ResponseEntity<Object>> getFloorsheetOf(@RequestParam String symbol) {
-        return nepseService.getFloorsheetOf(symbol).map(ResponseEntity::ok);
+        return symbolResolver.resolveSecurityId(symbol.toUpperCase())
+                .flatMap(nepseService::getFloorSheetOf)
+                .map(ResponseEntity::ok);
     }
 
     // ── Index Graphs ──────────────────────────────────────────────────────────
@@ -155,15 +167,13 @@ public class NepseController {
         return nepseService.getDailySensitiveFloatIndexGraph().map(ResponseEntity::ok);
     }
 
-    // ── Sector Subindex Graphs ────────────────────────────────────────────────
-
     @GetMapping("/graph/bank")
     public Mono<ResponseEntity<Object>> getDailyBankSubindexGraph() {
         return nepseService.getDailyBankSubindexGraph().map(ResponseEntity::ok);
     }
 
     @GetMapping("/graph/dev-bank")
-    public Mono<ResponseEntity<Object>> getDailyDevelopmentBankSubindexGraph() {
+    public Mono<ResponseEntity<Object>> getDailyDevBankSubindexGraph() {
         return nepseService.getDailyDevelopmentBankSubindexGraph().map(ResponseEntity::ok);
     }
 
@@ -193,7 +203,7 @@ public class NepseController {
     }
 
     @GetMapping("/graph/manufacturing")
-    public Mono<ResponseEntity<Object>> getDailyManufacturingProcessingSubindexGraph() {
+    public Mono<ResponseEntity<Object>> getDailyManufacturingSubindexGraph() {
         return nepseService.getDailyManufacturingProcessingSubindexGraph().map(ResponseEntity::ok);
     }
 

@@ -10,10 +10,13 @@ import com.meroshare.backend.repository.AppUserRepository;
 import com.meroshare.backend.repository.IpoApplicationRepository;
 import com.meroshare.backend.repository.MeroshareAccountRepository;
 import com.meroshare.backend.security.EncryptionUtil;
+import com.meroshare.backend.entity.CdscResultCache;
+import com.meroshare.backend.repository.CdscResultCacheRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.meroshare.backend.dto.CdscSummaryDto;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -28,6 +31,7 @@ public class IpoService {
 
     private final IpoApplicationRepository ipoApplicationRepository;
     private final MeroshareAccountRepository accountRepository;
+    private final CdscResultCacheRepository cdscResultCacheRepository;
     private final AppUserRepository appUserRepository;
     private final MeroshareApiService meroshareApiService;
     private final EncryptionUtil encryptionUtil;
@@ -341,10 +345,10 @@ public class IpoService {
         return switch (n) {
             case "ALLOTED", "ALLOTTED", "ALLOCATE", "SHARE_ALLOTED", "SHARE_ALLOTTED" ->
                     IpoApplication.ResultStatus.ALLOTTED;
-            case "NOT_ALLOTED", "NOT_ALLOTTED", "SHARE_NOT_ALLOTED", "SHARE_NOT_ALLOTTED" ->
+            case "NOT_ALLOTED", "NOT_ALLOTTED", "SHARE_NOT_ALLOTED", "SHARE_NOT_ALLOTTED", "REJECTED" ->
                     IpoApplication.ResultStatus.NOT_ALLOTTED;
             case "NOT_PUBLISHED", "RESULT_NOT_PUBLISHED", "PENDING",
-                 "PROCESSING", "SUBMITTED", "RECEIVED" ->
+                 "PROCESSING", "SUBMITTED", "RECEIVED", "VERIFIED" ->
                     IpoApplication.ResultStatus.NOT_PUBLISHED;
             case "TRANSACTION_SUCCESS", "APPROVED", "SUCCESS", "COMPLETE" ->
                     IpoApplication.ResultStatus.NOT_PUBLISHED;
@@ -423,5 +427,118 @@ public class IpoService {
                 .accountUsername(app.getMeroshareAccount().getUsername())
                 .accountFullName(app.getMeroshareAccount().getFullName())
                 .build();
+    }
+
+    public CdscSummaryDto getCdscSummary(Long accountId, String username) {
+        AppUser appUser = getAppUser(username);
+
+        MeroshareAccount account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new RuntimeException("Account not found"));
+
+        if (!account.getAppUser().getId().equals(appUser.getId())) {
+            throw new RuntimeException("Unauthorized");
+        }
+
+        String token = loginAccount(account);
+        List<Map> history = meroshareApiService.getApplicationHistory(token);
+
+        Map<String, CdscResultCache> cacheByFormId = cdscResultCacheRepository
+                .findByMeroshareAccountId(accountId)
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        CdscResultCache::getApplicantFormId,
+                        c -> c
+                ));
+
+        List<CdscSummaryDto.Item> items = new ArrayList<>();
+        int allotted     = 0;
+        int failed       = 0;
+        int notPublished = 0;
+
+        for (Map entry : history) {
+            String applicantFormId = safeStr(entry.get("applicantFormId"), null);
+            String companyName     = safeStr(entry.get("companyName"), safeStr(entry.get("scrip"), ""));
+            String scrip           = safeStr(entry.get("scrip"), "");
+            String shareTypeName   = safeStr(entry.get("shareTypeName"), "");
+            String companyShareId  = safeStr(entry.get("companyShareId"), "");
+
+            String resultStatus  = "NOT_PUBLISHED";
+            int    allottedKitta = 0;
+
+            if (applicantFormId != null) {
+                CdscResultCache cached = cacheByFormId.get(applicantFormId);
+
+                boolean alreadyResolved = cached != null &&
+                        ("ALLOTTED".equals(cached.getResultStatus()) ||
+                         "NOT_ALLOTTED".equals(cached.getResultStatus()));
+
+                if (alreadyResolved) {
+                    resultStatus  = cached.getResultStatus();
+                    allottedKitta = cached.getAllottedKitta();
+                    log.debug("[CDSC_SUMMARY] cache hit formId={} status={}", applicantFormId, resultStatus);
+                } else {
+                    try {
+                        MeroshareApiService.ResultInfo detail =
+                                meroshareApiService.checkResultDetail(token, applicantFormId);
+                        IpoApplication.ResultStatus mapped = mapResultStatus(detail.getStatus());
+                        resultStatus  = mapped.name();
+                        allottedKitta = detail.getAllottedKitta();
+                        log.debug("[CDSC_SUMMARY] fetched formId={} status={}", applicantFormId, resultStatus);
+                    } catch (Exception e) {
+                        log.warn("[CDSC_SUMMARY] detail fetch failed for formId={}: {}",
+                                applicantFormId, e.getMessage());
+                        resultStatus = cached != null ? cached.getResultStatus() : "NOT_PUBLISHED";
+                    }
+
+                    upsertCache(cached, account, applicantFormId, companyShareId,
+                            companyName, scrip, shareTypeName, resultStatus, allottedKitta);
+                }
+            }
+
+            switch (resultStatus) {
+                case "ALLOTTED"     -> allotted++;
+                case "NOT_ALLOTTED" -> failed++;
+                default             -> notPublished++;
+            }
+
+            items.add(CdscSummaryDto.Item.builder()
+                    .companyName(companyName)
+                    .scrip(scrip)
+                    .shareTypeName(shareTypeName)
+                    .applicantFormId(applicantFormId)
+                    .companyShareId(companyShareId)
+                    .resultStatus(resultStatus)
+                    .allottedKitta(allottedKitta)
+                    .build());
+        }
+
+        return CdscSummaryDto.builder()
+                .total(history.size())
+                .allotted(allotted)
+                .failed(failed)
+                .notPublished(notPublished)
+                .items(items)
+                .build();
+    }
+
+    private void upsertCache(CdscResultCache existing, MeroshareAccount account,
+                             String applicantFormId, String companyShareId,
+                             String companyName, String scrip, String shareTypeName,
+                             String resultStatus, int allottedKitta) {
+        CdscResultCache row = existing != null
+                ? existing
+                : CdscResultCache.builder()
+                        .meroshareAccount(account)
+                        .applicantFormId(applicantFormId)
+                        .build();
+
+        row.setCompanyShareId(companyShareId);
+        row.setCompanyName(companyName);
+        row.setScrip(scrip);
+        row.setShareTypeName(shareTypeName);
+        row.setResultStatus(resultStatus);
+        row.setAllottedKitta(allottedKitta);
+
+        cdscResultCacheRepository.save(row);
     }
 }
