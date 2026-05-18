@@ -21,13 +21,16 @@
 
 .section-title {
   font-family: var(--font-display);
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 400;
   color: var(--text);
   letter-spacing: -0.3px;
   line-height: 1.15;
 }
-@media (min-width: 768px) { .section-title { font-size: 32px; } }
+@media (min-width: 480px) { .section-title { font-size: 28px; } }
+/* tablet gets a modest bump not the full desktop jump */
+@media (min-width: 768px) { .section-title { font-size: 30px; } }
+@media (min-width: 1024px) { .section-title { font-size: 32px; } }
 
 /* HERO */
 .hero {
@@ -36,13 +39,27 @@
 
 .hero-inner {
   margin: 0 auto;
-  padding: 56px 20px 80px;
+  padding: 40px 16px 60px;
   display: grid;
   grid-template-columns: 1fr;
-  gap: 48px;
+  gap: 40px;
   align-items: center;
 }
+@media (min-width: 480px) {
+  .hero-inner {
+    padding: 48px 20px 72px;
+  }
+}
+/* tablet: two columns but tighter card, more breathing room */
 @media (min-width: 768px) {
+  .hero-inner {
+    grid-template-columns: 1fr 340px;
+    padding: 64px 40px 80px;
+    gap: 48px;
+  }
+}
+/* desktop: restore original wide layout */
+@media (min-width: 1024px) {
   .hero-inner {
     grid-template-columns: 1fr 480px;
     padding: 88px 70px 110px;
@@ -63,39 +80,46 @@
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--accent);
-  margin-bottom: 22px;
+  margin-bottom: 18px;
   padding: 4px 10px;
   border: 1px solid var(--accent-muted);
   border-radius: var(--r-sm);
   background: var(--accent-dim);
   display: inline-block;
 }
+@media (min-width: 768px) { .hero-eyebrow { margin-bottom: 22px; } }
 
 .hero-title {
   font-family: var(--font-display);
-  font-size: 46px;
+  font-size: 36px;
   font-weight: 400;
   line-height: 1.08;
   letter-spacing: -0.8px;
   color: var(--text);
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
-@media (min-width: 640px)  { .hero-title { font-size: 56px; } }
+@media (min-width: 480px)  { .hero-title { font-size: 46px; margin-bottom: 20px; } }
+@media (min-width: 640px)  { .hero-title { font-size: 52px; } }
+/* tablet: scale back from 640px to avoid overflow into card column */
+@media (min-width: 768px)  { .hero-title { font-size: 44px; } }
 @media (min-width: 1024px) { .hero-title { font-size: 64px; } }
 
-/* weight contrast instead of color for second line */
 .hero-title-strong {
   font-style: italic;
   color: var(--text-2);
 }
 
 .hero-desc {
-  font-size: 15px;
+  font-size: 14px;
   color: var(--text-2);
   line-height: 1.8;
   max-width: 400px;
-  margin-bottom: 28px;
+  margin-bottom: 24px;
 }
+@media (min-width: 480px) { .hero-desc { font-size: 15px; margin-bottom: 28px; } }
+/* tablet: cap width so it doesnt stretch under a smaller title */
+@media (min-width: 768px) { .hero-desc { max-width: 340px; } }
+@media (min-width: 1024px) { .hero-desc { max-width: 400px; } }
 
 .hero-actions {
   display: flex;
@@ -128,6 +152,9 @@
   box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
+/* tablet: card fills its column naturally */
+@media (min-width: 768px) { .status-card { max-width: 100%; } }
+@media (min-width: 1024px) { .status-card { max-width: 440px; } }
 
 .status-card-header {
   display: flex;
@@ -143,9 +170,7 @@
   gap: 7px;
 }
 
-.status-card-icon {
-  color: var(--text-3);
-}
+.status-card-icon { color: var(--text-3); }
 
 .status-card-label {
   font-size: 11px;
@@ -172,7 +197,6 @@
   animation: pulse-dot 2s var(--ease) infinite;
 }
 
-/* company row below header */
 .status-card-company {
   padding: 10px 16px 8px;
   border-bottom: 1px solid var(--border);
@@ -275,29 +299,38 @@
 
 .features-inner {
   margin: 0 auto;
-  padding: 72px 20px;
+  padding: 48px 16px;
 }
-@media (min-width: 768px) { .features-inner { padding: 88px 70px; } }
+@media (min-width: 480px) { .features-inner { padding: 60px 20px; } }
+/* tablet: use 40px sides not 70px which is too tight at 834px */
+@media (min-width: 768px) { .features-inner { padding: 72px 40px; } }
+@media (min-width: 1024px) { .features-inner { padding: 88px 70px; } }
 
-.features-header { margin-bottom: 36px; }
+.features-header { margin-bottom: 28px; }
+@media (min-width: 480px) { .features-header { margin-bottom: 36px; } }
 
 .features-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 1px;
   background: var(--border);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   overflow: hidden;
 }
-@media (min-width: 768px) { .features-grid { grid-template-columns: repeat(4, 1fr); } }
+@media (min-width: 480px) { .features-grid { grid-template-columns: 1fr 1fr; } }
+/* tablet already gets 2 cols at 480px which is fine; 4 cols only at 1024px */
+@media (min-width: 1024px) { .features-grid { grid-template-columns: repeat(4, 1fr); } }
 
 .feature-card {
   background: var(--bg);
-  padding: 22px 20px;
+  padding: 20px 18px;
   transition: background var(--t-fast) var(--ease);
   animation: fade-up 0.4s var(--ease) both;
 }
+@media (min-width: 480px) { .feature-card { padding: 22px 20px; } }
+/* tablet: give cards a bit more room */
+@media (min-width: 768px) { .feature-card { padding: 26px 24px; } }
 .feature-card:hover { background: var(--surface-2); }
 
 .feature-top {
@@ -315,7 +348,6 @@
   padding-top: 2px;
 }
 
-/* icon with no background — let the svg speak */
 .feature-icon {
   color: var(--accent);
   opacity: 0.85;
@@ -337,23 +369,27 @@
 
 /* CTA */
 .cta-section {
-  padding: 72px 20px;
+  padding: 48px 16px;
 }
-@media (min-width: 768px) { .cta-section { padding: 88px 70px; } }
+@media (min-width: 480px) { .cta-section { padding: 60px 20px; } }
+/* tablet: same 40px side rhythm as features */
+@media (min-width: 768px) { .cta-section { padding: 72px 40px; } }
+@media (min-width: 1024px) { .cta-section { padding: 88px 70px; } }
 
-.cta-inner {
-  max-width: none;
-}
+.cta-inner { max-width: none; }
 
 .cta-box {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  padding: 48px 40px;
+  padding: 32px 24px;
   max-width: 560px;
   box-shadow: var(--shadow-sm);
 }
-@media (min-width: 768px) { .cta-box { padding: 56px 56px; } }
+@media (min-width: 480px) { .cta-box { padding: 40px 32px; } }
+/* tablet: comfortable internal padding without going full 56px */
+@media (min-width: 768px) { .cta-box { padding: 44px 44px; } }
+@media (min-width: 1024px) { .cta-box { padding: 56px 56px; } }
 
 .cta-box .eyebrow { margin-bottom: 10px; }
 .cta-box .section-title { margin-bottom: 12px; }
@@ -362,9 +398,10 @@
   font-size: 14px;
   color: var(--text-2);
   line-height: 1.75;
-  margin-bottom: 28px;
+  margin-bottom: 24px;
   max-width: 380px;
 }
+@media (min-width: 480px) { .cta-desc { margin-bottom: 28px; } }
 
 .cta-actions {
   display: flex;
@@ -382,6 +419,4 @@
   text-decoration: none;
   transition: color var(--t-fast) var(--ease);
 }
-.cta-guest-link:hover {
-  color: var(--accent);
-}
+.cta-guest-link:hover { color: var(--accent); }

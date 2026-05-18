@@ -1,4 +1,4 @@
-/* ── Header ───────────────────────────────────────────────────────────── */
+/* Header */
 .dash-header {
   display: flex;
   align-items: flex-start;
@@ -12,9 +12,10 @@
   gap: 8px;
   flex-shrink: 0;
   align-items: center;
+  flex-wrap: wrap;
 }
 
-/* ── Account Switcher ─────────────────────────────────────────────────── */
+/* Account Switcher */
 .dash-switcher-wrap {
   position: relative;
   margin-bottom: 18px;
@@ -47,8 +48,8 @@
   flex-shrink: 0; font-family: var(--font);
 }
 .dash-switcher-info { flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.dash-switcher-name { font-size: 13px; font-weight: 600; color: var(--text); }
-.dash-switcher-meta { font-size: 11px; color: var(--text-3); font-family: var(--mono); }
+.dash-switcher-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dash-switcher-meta { font-size: 11px; color: var(--text-3); font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dash-switcher-chevron {
   color: var(--text-3); flex-shrink: 0; display: flex; align-items: center;
   transition: transform var(--t-fast) var(--ease);
@@ -96,13 +97,14 @@
 }
 .dash-switcher-add-link:hover { background: var(--accent-dim); }
 
-/* ── No account ───────────────────────────────────────────────────────── */
+/* No account */
 .dash-no-account {
   display: flex; flex-direction: column; align-items: center;
-  justify-content: center; gap: 10px; padding: 72px 24px;
+  justify-content: center; gap: 10px; padding: 48px 20px;
   text-align: center; background: var(--surface);
   border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--shadow-sm);
 }
+@media (min-width: 480px) { .dash-no-account { padding: 72px 24px; } }
 .dash-no-account-icon {
   width: 48px; height: 48px; border-radius: var(--r-lg);
   background: var(--surface-2); display: flex; align-items: center; justify-content: center; color: var(--text-3);
@@ -110,12 +112,12 @@
 .dash-no-account-title { font-size: 15px; font-weight: 600; color: var(--text); margin: 0; }
 .dash-no-account-desc  { font-size: 13px; color: var(--text-2); margin: 0 0 6px; max-width: 280px; }
 
-/* ── Stats bar ────────────────────────────────────────────────────────── */
+/* Stats bar */
 .dash-stats-bar {
   display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: 10px; flex-wrap: wrap; gap: 8px;
 }
-.dash-stats-bar-left { display: flex; align-items: center; gap: 10px; }
+.dash-stats-bar-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .dash-source-tag {
   font-size: 10px; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.09em; color: var(--text-3);
@@ -124,7 +126,7 @@
 }
 .dash-source-count { font-size: 12px; color: var(--text-3); }
 
-/* ── Refresh button ───────────────────────────────────────────────────── */
+/* Refresh button */
 .dash-refresh-btn {
   display: flex; align-items: center; gap: 5px;
   font-size: 12px; font-weight: 500; color: var(--text-2);
@@ -132,19 +134,21 @@
   border-radius: var(--r); padding: 5px 11px;
   cursor: pointer; font-family: var(--font);
   transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+  white-space: nowrap;
 }
 .dash-refresh-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
 .dash-refresh-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
 @keyframes dash-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-/* ── Error bar ────────────────────────────────────────────────────────── */
+/* Error bar */
 .dash-error-bar {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   font-size: 12px; color: var(--danger);
   background: color-mix(in srgb, var(--danger) 8%, transparent);
   border: 1px solid color-mix(in srgb, var(--danger) 22%, transparent);
   border-radius: var(--r); padding: 8px 12px; margin-bottom: 12px;
+  flex-wrap: wrap;
 }
 .dash-error-retry {
   font-size: 12px; font-weight: 500; color: var(--danger);
@@ -152,7 +156,7 @@
   text-decoration: underline; flex-shrink: 0;
 }
 
-/* ── Stat cards ───────────────────────────────────────────────────────── */
+/* Stat cards */
 .dash-stats {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -163,10 +167,11 @@
 
 .stat-card {
   background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--r-lg); padding: 16px 18px;
-  box-shadow: var(--shadow-sm); display: flex; align-items: flex-start; gap: 14px;
+  border-radius: var(--r-lg); padding: 14px 16px;
+  box-shadow: var(--shadow-sm); display: flex; align-items: flex-start; gap: 12px;
   transition: box-shadow var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
 }
+@media (min-width: 480px) { .stat-card { padding: 16px 18px; gap: 14px; } }
 .stat-card:hover { box-shadow: var(--shadow); border-color: var(--border-strong); }
 
 .stat-icon-wrap {
@@ -188,14 +193,15 @@
 }
 .stat-value {
   font-family: var(--font-display, var(--font));
-  font-size: 32px; line-height: 1; font-weight: 700; color: var(--text);
+  font-size: 26px; line-height: 1; font-weight: 700; color: var(--text);
 }
+@media (min-width: 480px) { .stat-value { font-size: 32px; } }
 .stat-value-accent  { color: var(--text); }
 .stat-value-success { color: var(--success); }
 .stat-value-danger  { color: var(--danger);  }
 .stat-value-muted   { color: var(--text-2);  }
 
-/* ── Charts ───────────────────────────────────────────────────────────── */
+/* Charts */
 .dash-charts {
   display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 16px;
 }
@@ -218,7 +224,7 @@
 }
 .pie-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
 
-/* ── Main grid ────────────────────────────────────────────────────────── */
+/* Main grid */
 .dash-main { display: grid; grid-template-columns: 1fr; gap: 10px; }
 @media (min-width: 900px) { .dash-main { grid-template-columns: 1fr 300px; } }
 
@@ -226,7 +232,7 @@
 .dash-main-sidebar { display: flex; flex-direction: column; gap: 10px; }
 
 .section-head {
-  display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 6px;
 }
 .section-title-sm {
   font-size: 11px; font-weight: 700; color: var(--text-2);
@@ -242,8 +248,8 @@
 .section-link { font-size: 12px; color: var(--accent); text-decoration: none; }
 .section-link:hover { text-decoration: underline; }
 
-/* ── Table ────────────────────────────────────────────────────────────── */
-.table-scroll { overflow-x: auto; }
+/* Table */
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
 .dash-table {
   width: 100%; border-collapse: collapse; font-size: 13px; min-width: 320px;
@@ -272,7 +278,7 @@
 
 .badge { border-radius: 20px; display: inline-flex; align-items: center; gap: 5px; }
 
-/* ── Table skeleton ───────────────────────────────────────────────────── */
+/* Table skeleton */
 .table-skeleton { display: flex; flex-direction: column; }
 .table-skeleton-row {
   display: flex; align-items: center; gap: 16px;
@@ -280,7 +286,7 @@
 }
 .table-skeleton-row:last-child { border-bottom: none; }
 
-/* ── Accounts list ────────────────────────────────────────────────────── */
+/* Accounts list */
 .account-list { display: flex; flex-direction: column; }
 .account-row {
   display: flex; align-items: center; gap: 10px;
@@ -307,10 +313,11 @@
   border-radius: var(--r-sm); padding: 2px 6px; flex-shrink: 0;
 }
 
-/* ── Inline states ────────────────────────────────────────────────────── */
+/* Inline states */
 .inline-empty {
-  padding: 28px 24px; text-align: center; color: var(--text-2); font-size: 13px;
+  padding: 24px 16px; text-align: center; color: var(--text-2); font-size: 13px;
 }
+@media (min-width: 480px) { .inline-empty { padding: 28px 24px; } }
 .inline-link-btn {
   background: none; border: none; color: var(--accent); font-size: 13px;
   font-family: var(--font); cursor: pointer; padding: 0; text-decoration: underline;

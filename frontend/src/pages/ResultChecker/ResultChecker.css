@@ -54,10 +54,7 @@
   text-align: center;
   line-height: 1.6;
 }
-.login-cta a {
-  color: var(--accent);
-  text-decoration: none;
-}
+.login-cta a { color: var(--accent); text-decoration: none; }
 .login-cta a:hover { text-decoration: underline; }
 
 /* Results */
@@ -67,7 +64,8 @@
   gap: 12px;
 }
 
-.res-card { padding: 18px 20px; }
+.res-card { padding: 16px 16px; }
+@media (min-width: 480px) { .res-card { padding: 18px 20px; } }
 
 .res-head {
   display: flex;
@@ -75,6 +73,7 @@
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 14px;
+  flex-wrap: wrap;
 }
 
 .res-name  { font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 3px; }
@@ -87,9 +86,12 @@
   background: var(--success-dim);
   border: 1px solid color-mix(in srgb, var(--success) 20%, transparent);
   border-radius: var(--r);
-  padding: 13px 16px;
+  padding: 12px 14px;
   margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
 }
+@media (min-width: 360px) { .allotted-row { padding: 13px 16px; } }
 
 .allotted-lbl {
   font-size: 11px;
@@ -101,10 +103,11 @@
 
 .allotted-num {
   font-family: var(--font-display);
-  font-size: 28px;
+  font-size: 26px;
   color: var(--success);
   line-height: 1;
 }
+@media (min-width: 360px) { .allotted-num { font-size: 28px; } }
 
 .warn-box {
   display: flex;

@@ -28,6 +28,8 @@
   align-items: center;
   justify-content: space-between;
   margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .section-title-sm {
@@ -71,10 +73,10 @@
   transition:
     box-shadow var(--t-fast) var(--ease),
     border-color var(--t-fast) var(--ease);
+  flex-wrap: nowrap;
 }
 .saved-account-card:hover { box-shadow: var(--shadow); }
 
-/* active card gets accent border */
 .saved-account-card-active {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent-muted), var(--shadow-sm);
@@ -124,6 +126,9 @@
 .saved-account-meta {
   font-size: 12px;
   color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .saved-account-boid {
@@ -145,4 +150,10 @@
   padding: 3px 8px;
   flex-shrink: 0;
   white-space: nowrap;
+}
+
+@media (max-width: 400px) {
+  .saved-account-card { padding: 12px; gap: 10px; }
+  .saved-account-avatar { width: 32px; height: 32px; font-size: 13px; }
+  .saved-account-name { font-size: 13px; }
 }

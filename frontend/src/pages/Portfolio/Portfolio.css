@@ -1,8 +1,9 @@
 .portfolio-page {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 28px 16px 64px;
+  padding: 24px 14px 56px;
 }
+@media (min-width: 480px)  { .portfolio-page { padding: 28px 16px 64px; } }
 @media (min-width: 640px)  { .portfolio-page { padding: 36px 24px 72px; } }
 @media (min-width: 1024px) { .portfolio-page { padding: 44px 40px 80px; } }
 
@@ -26,6 +27,7 @@
   padding: 10px 14px;
   margin-bottom: 16px;
   box-shadow: var(--shadow-sm);
+  flex-wrap: wrap;
 }
 
 .portfolio-account-avatar {
@@ -48,38 +50,44 @@
   display: flex;
   flex-direction: column;
   gap: 1px;
+  min-width: 0;
 }
 
 .portfolio-account-name {
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .portfolio-account-meta {
   font-size: 11px;
   color: var(--text-3);
   font-family: var(--mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* summary cards */
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
   margin-bottom: 16px;
 }
-@media (max-width: 560px) {
-  .summary-grid { grid-template-columns: 1fr 1fr; }
-}
+@media (min-width: 480px) { .summary-grid { grid-template-columns: repeat(3, 1fr); } }
 
 .summary-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  padding: 16px 18px;
+  padding: 14px 14px;
   box-shadow: var(--shadow-sm);
 }
+@media (min-width: 480px) { .summary-card { padding: 16px 18px; } }
 
 .summary-card-up   { border-color: color-mix(in srgb, var(--success) 30%, var(--border)); }
 .summary-card-down { border-color: color-mix(in srgb, var(--danger)  30%, var(--border)); }
@@ -99,10 +107,13 @@
 
 .summary-value {
   font-family: var(--font-display);
-  font-size: 20px;
+  font-size: 17px;
   line-height: 1.1;
   color: var(--text);
+  word-break: break-all;
 }
+@media (min-width: 360px) { .summary-value { font-size: 18px; } }
+@media (min-width: 480px) { .summary-value { font-size: 20px; } }
 @media (min-width: 640px) { .summary-value { font-size: 22px; } }
 
 .positive { color: var(--success); }
@@ -117,13 +128,13 @@
   overflow: hidden;
 }
 
-.table-scroll { overflow-x: auto; }
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
 .portfolio-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
-  min-width: 680px;
+  min-width: 580px;
 }
 
 .portfolio-table thead {
@@ -174,20 +185,13 @@
   color: var(--text);
   vertical-align: middle;
 }
-
 .portfolio-table tbody tr:last-child td { border-bottom: none; }
-
 .portfolio-table tbody tr:hover td {
   background: var(--surface-2);
   transition: background var(--t-fast) var(--ease);
 }
 
-.col-num {
-  width: 36px;
-  text-align: left;
-  padding-right: 4px;
-}
-
+.col-num   { width: 36px; text-align: left; padding-right: 4px; }
 .col-left  { text-align: left; }
 .col-right { text-align: right; }
 .col-dim   { color: var(--text-3); }
@@ -208,22 +212,15 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 200px;
+  max-width: 160px;
 }
+@media (min-width: 768px) { .scrip-desc { max-width: 200px; } }
 
-.cell-mono {
-  font-family: var(--mono);
-  font-size: 12px;
-}
-
+.cell-mono { font-family: var(--mono); font-size: 12px; }
 .ltp-val.positive { color: var(--success); }
 .ltp-val.negative { color: var(--danger); }
 
-.tfoot-row {
-  background: var(--surface-2);
-  border-top: 1px solid var(--border);
-}
-
+.tfoot-row { background: var(--surface-2); border-top: 1px solid var(--border); }
 .tfoot-label {
   padding: 10px 14px;
   font-size: 11px;
@@ -232,7 +229,6 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
-
 .tfoot-val {
   padding: 10px 14px;
   font-family: var(--mono);
@@ -242,10 +238,7 @@
   text-align: right;
 }
 
-.table-skeleton {
-  display: flex;
-  flex-direction: column;
-}
+.table-skeleton { display: flex; flex-direction: column; }
 .table-skeleton-row {
   display: flex;
   align-items: center;
@@ -259,7 +252,7 @@
   background: var(--danger-dim);
   border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
   border-radius: var(--r-lg);
-  padding: 18px 20px;
+  padding: 16px 18px;
   color: var(--danger);
   font-size: 13px;
   display: flex;
@@ -275,7 +268,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 64px 24px;
+  padding: 48px 20px;
   color: var(--text-2);
   font-size: 13px;
   gap: 12px;
@@ -285,6 +278,7 @@
   box-shadow: var(--shadow-sm);
   text-align: center;
 }
+@media (min-width: 480px) { .portfolio-empty { padding: 64px 24px; } }
 
 .portfolio-empty-icon {
   width: 44px;
@@ -298,6 +292,6 @@
 }
 .portfolio-empty-icon svg { width: 22px; height: 22px; }
 
-.spin svg {
-  animation: spin 0.8s linear infinite;
-}
+.spin svg { animation: spin 0.8s linear infinite; }
+
+@keyframes spin { to { transform: rotate(360deg); } }

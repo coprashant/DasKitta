@@ -9,23 +9,21 @@
 }
 
 .nepse-strip-inner {
-  padding: 0 20px;
+  padding: 0 16px;
 }
-@media (min-width: 768px) {
-  .nepse-strip-inner {
-    padding: 0 70px;
-  }
-}
+@media (min-width: 480px) { .nepse-strip-inner { padding: 0 20px; } }
+@media (min-width: 768px) { .nepse-strip-inner { padding: 0 70px; } }
 
 /* INDEX PANEL */
 .index-panel {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 0;
+  padding: 16px 0;
   border-bottom: 1px solid var(--border);
-  gap: 16px;
+  gap: 12px;
 }
+@media (min-width: 480px) { .index-panel { padding: 20px 0; gap: 16px; } }
 @media (min-width: 768px) {
   .index-panel {
     border-bottom: none;
@@ -46,6 +44,7 @@
   align-items: center;
   gap: 8px;
   margin-bottom: 2px;
+  flex-wrap: wrap;
 }
 
 .index-label {
@@ -86,25 +85,25 @@
   background: currentColor;
   opacity: 0.9;
 }
-
-.market-badge--open .market-dot {
-  animation: pulse-dot 2s var(--ease) infinite;
-}
+.market-badge--open .market-dot { animation: pulse-dot 2s var(--ease) infinite; }
 
 .index-value {
   font-family: var(--font-display);
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 400;
   color: var(--text);
   letter-spacing: -0.5px;
   line-height: 1;
 }
+@media (min-width: 360px) { .index-value { font-size: 26px; } }
+@media (min-width: 480px) { .index-value { font-size: 28px; } }
 
 .index-sub {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-top: 2px;
+  flex-wrap: wrap;
 }
 
 .txt-up   { color: var(--success); font-size: 12px; font-weight: 500; }
@@ -119,47 +118,32 @@
   padding: 2px 6px;
   border-radius: var(--r-sm);
 }
+.change-chip--up   { background: var(--success-dim); color: var(--success); }
+.change-chip--down { background: var(--danger-dim);  color: var(--danger);  }
 
-.change-chip--up {
-  background: var(--success-dim);
-  color: var(--success);
-}
+.index-right { flex-shrink: 0; }
 
-.change-chip--down {
-  background: var(--danger-dim);
-  color: var(--danger);
-}
+.sparkline-svg { display: block; opacity: 0.9; }
 
-.index-right {
-  flex-shrink: 0;
-}
-
-.sparkline-svg {
-  display: block;
-  opacity: 0.9;
-}
-
-.spark-placeholder {
-  border-radius: var(--r);
-}
+.spark-placeholder { border-radius: var(--r); }
 
 .index-skeleton-val {
-  width: 140px;
-  height: 28px;
+  width: 120px;
+  height: 24px;
   border-radius: var(--r);
   margin-bottom: 6px;
 }
+@media (min-width: 480px) { .index-skeleton-val { width: 140px; height: 28px; } }
 
 .index-skeleton-sub {
-  width: 90px;
-  height: 14px;
+  width: 80px;
+  height: 12px;
   border-radius: var(--r-sm);
 }
+@media (min-width: 480px) { .index-skeleton-sub { width: 90px; height: 14px; } }
 
 /* DIVIDER */
-.strip-divider {
-  display: none;
-}
+.strip-divider { display: none; }
 @media (min-width: 768px) {
   .strip-divider {
     display: block;
@@ -170,9 +154,9 @@
 }
 
 /* MOVERS PANEL */
-.movers-panel {
-  padding: 20px 0;
-}
+/* removed overflow hidden so pct values are never clipped */
+.movers-panel { padding: 16px 0; }
+@media (min-width: 480px) { .movers-panel { padding: 20px 0; } }
 
 .movers-columns {
   display: grid;
@@ -180,14 +164,9 @@
   height: 100%;
 }
 
-.movers-col {
-  display: flex;
-  flex-direction: column;
-}
-
-.movers-col:last-child {
-  padding-left: 16px;
-}
+.movers-col { display: flex; flex-direction: column; }
+.movers-col:last-child { padding-left: 12px; }
+@media (min-width: 480px) { .movers-col:last-child { padding-left: 16px; } }
 
 .movers-col-header {
   display: inline-flex;
@@ -214,36 +193,34 @@
   border: 1px solid color-mix(in srgb, var(--danger) 18%, transparent);
 }
 
-.movers-divider {
-  width: 1px;
-  background: var(--border);
-  margin: 0 16px;
-}
+.movers-divider { width: 1px; background: var(--border); margin: 0 10px; }
+@media (min-width: 480px) { .movers-divider { margin: 0 16px; } }
 
-.movers-list {
-  display: flex;
-  flex-direction: column;
-}
+.movers-list { display: flex; flex-direction: column; }
 
 .ticker-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 7px 0;
+  padding: 6px 0;
   border-bottom: 1px solid var(--border);
-  gap: 12px;
+  /* gap removed so pct never gets pushed off */
+  gap: 4px;
   animation: fade-in 0.2s var(--ease) both;
+  /* prevent row itself from overflowing its column */
+  min-width: 0;
 }
-
-.ticker-row:last-child {
-  border-bottom: none;
-}
+@media (min-width: 480px) { .ticker-row { padding: 7px 0; gap: 8px; } }
+.ticker-row:last-child { border-bottom: none; }
 
 .ticker-sym-group {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: 4px;
+  /* allow this group to shrink so pct always fits */
   min-width: 0;
+  flex: 1;
+  overflow: hidden;
 }
 
 .ticker-sym {
@@ -252,37 +229,52 @@
   font-weight: 500;
   color: var(--text);
   white-space: nowrap;
+  /* sym must never shrink away */
+  flex-shrink: 0;
 }
 
 .ticker-name {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 80px;
+  /* reduced max widths so price and pct have room */
+  max-width: 40px;
+  display: none;
 }
+@media (min-width: 360px) { .ticker-name { display: block; max-width: 44px; } }
+@media (min-width: 480px) { .ticker-name { max-width: 60px; font-size: 11px; } }
 
 .ticker-right {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  /* never let pct get squeezed out */
   flex-shrink: 0;
 }
+@media (min-width: 480px) { .ticker-right { gap: 6px; } }
 
 .ticker-ltp {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-2);
   font-family: var(--mono);
+  display: none;
+  white-space: nowrap;
 }
+/* show price only at wider widths to avoid crowding */
+@media (min-width: 520px) { .ticker-ltp { display: block; font-size: 11px; } }
 
 .ticker-pct {
   font-size: 11px;
   font-weight: 600;
   font-family: var(--mono);
-  min-width: 44px;
+  /* fixed min width so pct column stays aligned */
+  min-width: 42px;
   text-align: right;
+  white-space: nowrap;
 }
+@media (min-width: 480px) { .ticker-pct { min-width: 48px; } }
 
 /* NEPSE HERO CARD */
 .nepse-hero-card {
@@ -317,9 +309,7 @@
   color: var(--text-2);
 }
 
-.nepse-hero-body {
-  padding: 14px 16px 10px;
-}
+.nepse-hero-body { padding: 14px 16px 10px; }
 
 .nepse-hero-value {
   font-family: var(--font-display);
@@ -335,8 +325,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
-.nepse-hero-graph {
-  padding: 4px 16px 14px;
-}
+.nepse-hero-graph { padding: 4px 16px 14px; }
