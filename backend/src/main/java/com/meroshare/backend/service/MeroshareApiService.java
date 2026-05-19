@@ -6,9 +6,9 @@ import com.meroshare.backend.dto.PortfolioResponse;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
@@ -18,18 +18,20 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class MeroshareApiService {
 
-    private static final String MERO_SHARE_BASE = "https://webbackend.cdsc.com.np/api/meroShare";
+    private static final String MERO_SHARE_BASE   = "https://webbackend.cdsc.com.np/api/meroShare";
+    private static final String PORTFOLIO_BASE    = "https://webbackend.cdsc.com.np/api/meroShareView";
     private static final String PUBLIC_RESULT_URL = "https://iporesult.cdsc.com.np";
 
     private static final String USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-            "(KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
+            "(KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0";
 
     private static final long TOKEN_TTL_MS = 25 * 60 * 1000;
 
@@ -44,7 +46,7 @@ public class MeroshareApiService {
         final long expiresAt;
 
         CachedToken(String token) {
-            this.token = token;
+            this.token     = token;
             this.expiresAt = System.currentTimeMillis() + TOKEN_TTL_MS;
         }
 
@@ -53,25 +55,31 @@ public class MeroshareApiService {
         }
     }
 
-    private WebClient buildClient(String token) {
-        WebClient.Builder builder = WebClient.builder()
-                .baseUrl(MERO_SHARE_BASE)
+    private WebClient.Builder baseHeaders(WebClient.Builder builder) {
+        return builder
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                .defaultHeader(HttpHeaders.ACCEPT, "application/json, text/plain, */*")
-                .defaultHeader("Accept-Encoding", "gzip, deflate, br")
-                .defaultHeader("Accept-Language", "en-US,en;q=0.9")
-                .defaultHeader("Cache-Control", "no-cache")
-                .defaultHeader("Connection", "keep-alive")
-                .defaultHeader("Host", "webbackend.cdsc.com.np")
-                .defaultHeader("Origin", "https://meroshare.cdsc.com.np")
-                .defaultHeader("Pragma", "no-cache")
-                .defaultHeader("Referer", "https://meroshare.cdsc.com.np/")
-                .defaultHeader("Sec-Fetch-Dest", "empty")
-                .defaultHeader("Sec-Fetch-Mode", "cors")
-                .defaultHeader("Sec-Fetch-Site", "same-site")
-                .defaultHeader("User-Agent", USER_AGENT)
+                .defaultHeader(HttpHeaders.ACCEPT,       "application/json, text/plain, */*")
+                .defaultHeader("Accept-Encoding",        "gzip, deflate, br")
+                .defaultHeader("Accept-Language",        "en-GB,en;q=0.9,en-US;q=0.8")
+                .defaultHeader("Cache-Control",          "no-cache")
+                .defaultHeader("Connection",             "keep-alive")
+                .defaultHeader("Host",                   "webbackend.cdsc.com.np")
+                .defaultHeader("Origin",                 "https://meroshare.cdsc.com.np")
+                .defaultHeader("Pragma",                 "no-cache")
+                .defaultHeader("Referer",                "https://meroshare.cdsc.com.np/")
+                .defaultHeader("sec-ch-ua",              "\"Chromium\";v=\"148\", \"Microsoft Edge\";v=\"148\", \"Not/A)Brand\";v=\"99\"")
+                .defaultHeader("sec-ch-ua-mobile",       "?0")
+                .defaultHeader("sec-ch-ua-platform",     "\"Windows\"")
+                .defaultHeader("Sec-Fetch-Dest",         "empty")
+                .defaultHeader("Sec-Fetch-Mode",         "cors")
+                .defaultHeader("Sec-Fetch-Site",         "same-site")
+                .defaultHeader("User-Agent",             USER_AGENT)
                 .codecs(c -> c.defaultCodecs().maxInMemorySize(8 * 1024 * 1024));
+    }
 
+    private WebClient buildClient(String token) {
+        WebClient.Builder builder = WebClient.builder().baseUrl(MERO_SHARE_BASE);
+        baseHeaders(builder);
         if (token != null && !token.isBlank()) {
             builder.defaultHeader("Authorization", token);
         }
@@ -82,25 +90,32 @@ public class MeroshareApiService {
         return buildClient(null);
     }
 
+    private WebClient buildPortfolioClient(String token) {
+        WebClient.Builder builder = WebClient.builder().baseUrl(PORTFOLIO_BASE);
+        baseHeaders(builder);
+        if (token != null && !token.isBlank()) {
+            builder.defaultHeader("Authorization", token);
+        }
+        return builder.build();
+    }
+
     private WebClient buildResultClient() {
-        return WebClient.builder()
+        WebClient.Builder builder = WebClient.builder()
                 .baseUrl(PUBLIC_RESULT_URL)
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                .defaultHeader(HttpHeaders.ACCEPT, "application/json, text/plain, */*")
-                .defaultHeader("Accept-Encoding", "gzip, deflate, br")
-                .defaultHeader("Accept-Language", "en-US,en;q=0.9")
-                .defaultHeader("Cache-Control", "no-cache")
-                .defaultHeader("Connection", "keep-alive")
-                .defaultHeader("Origin", PUBLIC_RESULT_URL)
-                .defaultHeader("Referer", PUBLIC_RESULT_URL + "/")
-                .defaultHeader("Sec-Fetch-Dest", "empty")
-                .defaultHeader("Sec-Fetch-Mode", "cors")
-                .defaultHeader("Sec-Fetch-Site", "same-origin")
-                .defaultHeader("User-Agent",
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-                        "(KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
-                .codecs(c -> c.defaultCodecs().maxInMemorySize(8 * 1024 * 1024))
-                .build();
+                .defaultHeader(HttpHeaders.ACCEPT,       "application/json, text/plain, */*")
+                .defaultHeader("Accept-Encoding",        "gzip, deflate, br")
+                .defaultHeader("Accept-Language",        "en-US,en;q=0.9")
+                .defaultHeader("Cache-Control",          "no-cache")
+                .defaultHeader("Connection",             "keep-alive")
+                .defaultHeader("Origin",                 PUBLIC_RESULT_URL)
+                .defaultHeader("Referer",                PUBLIC_RESULT_URL + "/")
+                .defaultHeader("Sec-Fetch-Dest",         "empty")
+                .defaultHeader("Sec-Fetch-Mode",         "cors")
+                .defaultHeader("Sec-Fetch-Site",         "same-origin")
+                .defaultHeader("User-Agent",             USER_AGENT)
+                .codecs(c -> c.defaultCodecs().maxInMemorySize(8 * 1024 * 1024));
+        return builder.build();
     }
 
     public List<Map> getDpList() {
@@ -111,9 +126,8 @@ public class MeroshareApiService {
             List<Map> result = parseJsonArray(raw, "DP_LIST");
             if (!result.isEmpty()) return result;
         } catch (Exception e) {
-            log.warn("[DP_LIST] WebClient failed: {}", e.getMessage());
+            log.warn("[DP_LIST] WebClient failed {}", e.getMessage());
         }
-
         String curlRaw = curlClient.get(url, null);
         return parseJsonArray(curlRaw, "DP_LIST_CURL");
     }
@@ -127,14 +141,14 @@ public class MeroshareApiService {
                 .orElse(null);
 
         if (match == null) {
-            log.warn("[BANK_BY_DP] No DP found for dpId={}", dpId);
+            log.warn("[BANK_BY_DP] No DP found for dpId {}", dpId);
             return Map.of();
         }
 
         Object bankId = match.get("bankId");
         if (bankId == null) bankId = match.get("id");
 
-        log.info("[BANK_BY_DP] dpId={} bankId={}", dpId, bankId);
+        log.info("[BANK_BY_DP] dpId {} bankId {}", dpId, bankId);
         return Map.of("bankId", bankId, "dpId", dpId);
     }
 
@@ -143,7 +157,7 @@ public class MeroshareApiService {
 
         CachedToken cached = tokenCache.get(cacheKey);
         if (cached != null && cached.isValid()) {
-            log.debug("[LOGIN] Returning cached token for: {}", username);
+            log.debug("[LOGIN] Returning cached token for {}", username);
             return cached.token;
         }
 
@@ -154,9 +168,9 @@ public class MeroshareApiService {
             if (cached != null && cached.isValid()) {
                 return cached.token;
             }
-            String token = doLogin(dpId, username, password);
-            tokenCache.put(cacheKey, new CachedToken(token));
-            return token;
+            CachedToken ct = doLogin(dpId, username, password);
+            tokenCache.put(cacheKey, ct);
+            return ct.token;
         } finally {
             lock.unlock();
         }
@@ -165,32 +179,31 @@ public class MeroshareApiService {
     public String loginFresh(String dpId, String username, String password) {
         String cacheKey = dpId + ":" + username;
         tokenCache.remove(cacheKey);
-        log.info("[LOGIN] Forced fresh login for: {}", username);
+        log.info("[LOGIN] Forced fresh login for {}", username);
         return login(dpId, username, password);
     }
 
-    private String doLogin(String dpId, String username, String password) {
+    private CachedToken doLogin(String dpId, String username, String password) {
         int clientId;
         try {
             clientId = Integer.parseInt(dpId.trim());
         } catch (NumberFormatException e) {
-            throw new RuntimeException("Invalid DP ID format: " + dpId);
+            throw new RuntimeException("Invalid DP ID format " + dpId);
         }
 
         if (password == null || password.isBlank()) {
-            throw new RuntimeException("Password is empty for user: " + username);
+            throw new RuntimeException("Password is empty for user " + username);
         }
 
         Map<String, Object> body = Map.of(
                 "clientId", clientId,
                 "username", username.trim(),
-                "password", password
-        );
+                "password", password);
 
-        log.info("[LOGIN] Attempting user={} dpId={}", username, dpId);
+        log.info("[LOGIN] Attempting user {} dpId {}", username, dpId);
 
         try {
-            var response = buildClient().post()
+            ResponseEntity<String> response = buildClient().post()
                     .uri("/auth/")
                     .bodyValue(body)
                     .retrieve()
@@ -201,23 +214,22 @@ public class MeroshareApiService {
                 String token = response.getHeaders().getFirst("Authorization");
                 if (token != null && !token.isBlank()) {
                     validateLoginBody(response.getBody(), username);
-                    log.info("[LOGIN] Token from Authorization header for: {}", username);
-                    tokenCache.put(dpId + ":" + username, new CachedToken(token));
-                    return token;
+                    log.info("[LOGIN] Token ok for {}", username);
+                    return new CachedToken(token);
                 }
                 validateLoginBody(response.getBody(), username);
             }
         } catch (WebClientResponseException e) {
             String errBody = e.getResponseBodyAsString();
-            log.error("[LOGIN] HTTP {}: {}", e.getStatusCode(), errBody);
+            log.error("[LOGIN] HTTP {} {}", e.getStatusCode(), errBody);
             if (e.getStatusCode().value() == 401 || e.getStatusCode().value() == 403) {
-                throw new RuntimeException("Invalid credentials for: " + username + ". " + extractMessage(errBody));
+                throw new RuntimeException("Invalid credentials for " + username + ". " + extractMessage(errBody));
             }
-            log.warn("[LOGIN] WebClient HTTP error, trying curl");
+            log.warn("[LOGIN] WebClient HTTP error trying curl");
         } catch (RuntimeException re) {
             throw re;
         } catch (Exception e) {
-            log.warn("[LOGIN] WebClient failed: {}, trying curl", e.getMessage());
+            log.warn("[LOGIN] WebClient failed {} trying curl", e.getMessage());
         }
 
         String curlRaw = curlClient.postJsonWithHeaders(MERO_SHARE_BASE + "/auth/", toJson(body), null);
@@ -226,14 +238,14 @@ public class MeroshareApiService {
                 String token = curlClient.getLastResponseHeader("Authorization");
                 if (token != null && !token.isBlank()) {
                     validateLoginBody(curlRaw, username);
-                    log.info("[LOGIN] Token from curl Authorization header for: {}", username);
-                    return token;
+                    log.info("[LOGIN] Token from curl for {}", username);
+                    return new CachedToken(token);
                 }
                 validateLoginBody(curlRaw, username);
             } catch (RuntimeException re) {
                 throw re;
             } catch (Exception e) {
-                log.warn("[LOGIN] Curl response parse failed: {}", e.getMessage());
+                log.warn("[LOGIN] Curl response parse failed {}", e.getMessage());
             }
         }
 
@@ -246,12 +258,14 @@ public class MeroshareApiService {
         try {
             JsonNode n = objectMapper.readTree(body);
             boolean passwordExpired = n.has("passwordExpired") && n.get("passwordExpired").asBoolean();
-            boolean accountExpired = n.has("accountExpired") && n.get("accountExpired").asBoolean();
-            boolean dematExpired = n.has("dematExpired") && n.get("dematExpired").asBoolean();
+            boolean accountExpired  = n.has("accountExpired")  && n.get("accountExpired").asBoolean();
+            boolean dematExpired    = n.has("dematExpired")    && n.get("dematExpired").asBoolean();
 
             if (passwordExpired || accountExpired || dematExpired) {
-                String msg = n.has("message") ? n.get("message").asText("Account has expired issues") : "Account has expired issues";
-                throw new RuntimeException("Meroshare account issue for '" + username + "': " + msg);
+                String msg = n.has("message")
+                        ? n.get("message").asText("Account has expired issues")
+                        : "Account has expired issues";
+                throw new RuntimeException("Meroshare account issue for '" + username + "' " + msg);
             }
         } catch (RuntimeException re) {
             throw re;
@@ -266,7 +280,7 @@ public class MeroshareApiService {
             raw = buildClient(token).get().uri("/ownDetail/")
                     .retrieve().bodyToMono(String.class).block();
         } catch (Exception e) {
-            log.warn("[OWN_DETAIL] WebClient failed: {}", e.getMessage());
+            log.warn("[OWN_DETAIL] WebClient failed {}", e.getMessage());
         }
 
         if (isHtml(raw)) {
@@ -283,10 +297,10 @@ public class MeroshareApiService {
             d.setFullName(getText(node, "name"));
             d.setBoid(getText(node, "boid"));
             d.setDemat(getText(node, "demat"));
-            log.info("[OWN_DETAIL] name={} boid={}", d.getFullName(), d.getBoid());
+            log.info("[OWN_DETAIL] name {} boid {}", d.getFullName(), d.getBoid());
             return d;
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse account details: " + e.getMessage(), e);
+            throw new RuntimeException("Failed to parse account details " + e.getMessage(), e);
         }
     }
 
@@ -298,7 +312,7 @@ public class MeroshareApiService {
             raw = buildClient(token).get().uri("/bank/" + bankId)
                     .retrieve().bodyToMono(String.class).block();
         } catch (Exception e) {
-            log.warn("[BANK_DETAIL] WebClient failed: {}", e.getMessage());
+            log.warn("[BANK_DETAIL] WebClient failed {}", e.getMessage());
         }
 
         if (isHtml(raw)) {
@@ -306,7 +320,7 @@ public class MeroshareApiService {
         }
 
         if (isHtml(raw) || raw == null) {
-            log.warn("[BANK_DETAIL] Could not fetch bank details for bankId={}", bankId);
+            log.warn("[BANK_DETAIL] Could not fetch bank details for bankId {}", bankId);
             return null;
         }
 
@@ -315,13 +329,15 @@ public class MeroshareApiService {
             BankDetails d = new BankDetails();
             d.setBankId(String.valueOf(node.has("bankId") ? node.get("bankId").asInt() : 0));
             d.setAccountNumber(getText(node, "accountNumber"));
-            d.setAccountBranchId(node.has("accountBranchId") ? String.valueOf(node.get("accountBranchId").asInt()) : null);
+            d.setAccountBranchId(
+                    node.has("accountBranchId") ? String.valueOf(node.get("accountBranchId").asInt()) : null);
             d.setCustomerId(node.has("id") ? String.valueOf(node.get("id").asInt()) : null);
             d.setBranchName(getText(node, "branchName"));
-            log.info("[BANK_DETAIL] bankId={} accountNumber={} customerId={}", d.getBankId(), d.getAccountNumber(), d.getCustomerId());
+            log.info("[BANK_DETAIL] bankId {} accountNumber {} customerId {}",
+                    d.getBankId(), d.getAccountNumber(), d.getCustomerId());
             return d;
         } catch (Exception e) {
-            log.warn("[BANK_DETAIL] Parse failed: {}", e.getMessage());
+            log.warn("[BANK_DETAIL] Parse failed {}", e.getMessage());
             return null;
         }
     }
@@ -334,7 +350,7 @@ public class MeroshareApiService {
             List<Map> result = parseJsonArray(raw, "USER_BANKS");
             if (!result.isEmpty()) return result;
         } catch (Exception e) {
-            log.warn("[USER_BANKS] WebClient failed: {}", e.getMessage());
+            log.warn("[USER_BANKS] WebClient failed {}", e.getMessage());
         }
         String curlRaw = curlClient.get(url, token);
         return parseJsonArray(curlRaw, "USER_BANKS_CURL");
@@ -350,7 +366,7 @@ public class MeroshareApiService {
             List<Map> result = parseJsonResponse(raw, "OPEN_IPOS");
             if (!result.isEmpty()) return result;
         } catch (Exception e) {
-            log.warn("[OPEN_IPOS] WebClient failed: {}", e.getMessage());
+            log.warn("[OPEN_IPOS] WebClient failed {}", e.getMessage());
         }
 
         String curlRaw = curlClient.postJson(url, toJson(payload), token);
@@ -377,7 +393,7 @@ public class MeroshareApiService {
             List<Map> result = parseJsonResponse(raw, "APP_HISTORY");
             if (!result.isEmpty()) return result;
         } catch (Exception e) {
-            log.warn("[APP_HISTORY] WebClient failed: {}", e.getMessage());
+            log.warn("[APP_HISTORY] WebClient failed {}", e.getMessage());
         }
 
         String curlRaw = curlClient.postJson(url, toJson(payload), token);
@@ -385,40 +401,39 @@ public class MeroshareApiService {
     }
 
     private Map<String, Object> buildAppHistoryPayload() {
-        LocalDate today = LocalDate.now();
+        LocalDate today           = LocalDate.now();
         LocalDate twelveMonthsAgo = today.minusMonths(12);
-        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-        Map<String, Object> p = new LinkedHashMap<>();
+        DateTimeFormatter fmt     = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        Map<String, Object> p    = new LinkedHashMap<>();
         p.put("page", 1);
         p.put("size", 200);
         p.put("searchRoleViewConstants", "VIEW_APPLICANT_FORM_COMPLETE");
         p.put("filterFieldParams", List.of());
         p.put("filterDateParams", List.of(
-                Map.of("key", "appliedDate",
+                Map.of("key",       "appliedDate",
                        "condition", "",
-                       "alias", "",
-                       "value", "BETWEEN '" + twelveMonthsAgo.format(fmt) + "' AND '" + today.format(fmt) + "'")
-        ));
+                       "alias",     "",
+                       "value",     "BETWEEN '" + twelveMonthsAgo.format(fmt) + "' AND '" + today.format(fmt) + "'")));
         return p;
     }
 
     public String applyIpo(String token, int companyShareId, String demat, String boid,
-                            String accountNumber, String customerId, String accountBranchId,
-                            String bankId, int kitta, String crn, String pin) {
+            String accountNumber, String customerId, String accountBranchId,
+            String bankId, int kitta, String crn, String pin) {
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("accountBranchId", Integer.parseInt(accountBranchId));
-        body.put("accountNumber", accountNumber);
-        body.put("appliedKitta", kitta);
-        body.put("bankId", bankId);
-        body.put("boid", boid);
-        body.put("companyShareId", companyShareId);
-        body.put("crnNumber", crn != null ? crn : "");
-        body.put("customerId", Integer.parseInt(customerId));
-        body.put("demat", demat);
-        body.put("transactionPIN", pin != null ? pin : "");
+        body.put("accountNumber",   accountNumber);
+        body.put("appliedKitta",    kitta);
+        body.put("bankId",          bankId);
+        body.put("boid",            boid);
+        body.put("companyShareId",  companyShareId);
+        body.put("crnNumber",       crn != null ? crn : "");
+        body.put("customerId",      Integer.parseInt(customerId));
+        body.put("demat",           demat);
+        body.put("transactionPIN",  pin != null ? pin : "");
 
-        log.info("[APPLY_IPO] companyShareId={} boid={} kitta={}", companyShareId, boid, kitta);
+        log.info("[APPLY_IPO] companyShareId {} boid {} kitta {}", companyShareId, boid, kitta);
 
         String applyUrl = MERO_SHARE_BASE + "/applicantForm/share/apply/";
 
@@ -429,22 +444,22 @@ public class MeroshareApiService {
                     .retrieve()
                     .bodyToMono(String.class)
                     .block();
-            log.info("[APPLY_IPO] WebClient response: {}", snippet(raw));
+            log.info("[APPLY_IPO] WebClient response {}", snippet(raw));
             if (!isHtml(raw) && raw != null) {
                 return extractApplyMessage(raw);
             }
         } catch (WebClientResponseException e) {
             String errBody = e.getResponseBodyAsString();
-            log.warn("[APPLY_IPO] WebClient HTTP {}: {}", e.getStatusCode(), errBody);
+            log.warn("[APPLY_IPO] WebClient HTTP {} {}", e.getStatusCode(), errBody);
             if (e.getStatusCode().value() == 400) {
                 throw new RuntimeException(extractMessage(errBody));
             }
         } catch (Exception e) {
-            log.warn("[APPLY_IPO] WebClient failed: {}, trying curl", e.getMessage());
+            log.warn("[APPLY_IPO] WebClient failed {} trying curl", e.getMessage());
         }
 
         String curlRaw = curlClient.postJson(applyUrl, toJson(body), token);
-        log.info("[APPLY_IPO_CURL] Response: {}", snippet(curlRaw));
+        log.info("[APPLY_IPO_CURL] Response {}", snippet(curlRaw));
         if (!isHtml(curlRaw) && curlRaw != null) {
             return extractApplyMessage(curlRaw);
         }
@@ -470,20 +485,20 @@ public class MeroshareApiService {
 
     public ResultInfo checkResultDetail(String token, String applicantFormId) {
         String url = MERO_SHARE_BASE + "/applicantForm/report/detail/" + applicantFormId;
-        log.info("[RESULT_DETAIL] applicantFormId={}", applicantFormId);
+        log.info("[RESULT_DETAIL] applicantFormId {}", applicantFormId);
 
         String curlRaw = curlClient.get(url, token);
-        log.info("[RESULT_DETAIL] Curl raw: {}", snippet300(curlRaw));
+        log.info("[RESULT_DETAIL] Curl raw {}", snippet300(curlRaw));
         if (!isHtml(curlRaw) && curlRaw != null) return parseDetailResult(curlRaw);
 
         try {
             String raw = buildClient(token).get()
                     .uri("/applicantForm/report/detail/" + applicantFormId)
                     .retrieve().bodyToMono(String.class).block();
-            log.info("[RESULT_DETAIL] WebClient raw: {}", snippet300(raw));
+            log.info("[RESULT_DETAIL] WebClient raw {}", snippet300(raw));
             if (!isHtml(raw) && raw != null) return parseDetailResult(raw);
         } catch (Exception e) {
-            log.warn("[RESULT_DETAIL] WebClient failed: {}", e.getMessage());
+            log.warn("[RESULT_DETAIL] WebClient failed {}", e.getMessage());
         }
 
         ResultInfo result = new ResultInfo();
@@ -500,7 +515,7 @@ public class MeroshareApiService {
                     ? root.get("body") : root;
             result.setStatus(node.has("statusName") ? node.get("statusName").asText("UNKNOWN") : "UNKNOWN");
             result.setAllottedKitta(node.has("receivedKitta") ? node.get("receivedKitta").asInt(0) : 0);
-            log.info("[RESULT_DETAIL_PARSE] statusName={} receivedKitta={}",
+            log.info("[RESULT_DETAIL_PARSE] statusName {} receivedKitta {}",
                     result.getStatus(), result.getAllottedKitta());
         } catch (Exception e) {
             log.warn("[RESULT_DETAIL_PARSE] {}", e.getMessage());
@@ -515,17 +530,17 @@ public class MeroshareApiService {
             String raw = buildResultClient().get()
                     .uri("/result/companyShares/fileUploaded")
                     .retrieve().bodyToMono(String.class).block();
-            log.info("[SHARE_LIST] WebClient raw (first 300): {}", snippet300(raw));
+            log.info("[SHARE_LIST] WebClient raw first 300 {}", snippet300(raw));
             if (!isHtml(raw) && raw != null) {
                 List<Map> r = parseShareList(raw, "SHARE_LIST");
                 if (!r.isEmpty()) return r;
             }
         } catch (Exception e) {
-            log.warn("[SHARE_LIST] WebClient: {}", e.getMessage());
+            log.warn("[SHARE_LIST] WebClient {}", e.getMessage());
         }
 
         String curlRaw = curlClient.get(url, null);
-        log.info("[SHARE_LIST] Curl raw (first 300): {}", snippet300(curlRaw));
+        log.info("[SHARE_LIST] Curl raw first 300 {}", snippet300(curlRaw));
         if (!isHtml(curlRaw) && curlRaw != null) {
             return parseShareList(curlRaw, "SHARE_LIST_CURL");
         }
@@ -535,13 +550,13 @@ public class MeroshareApiService {
 
     private List<Map> parseShareList(String raw, String context) {
         if (isHtml(raw)) {
-            log.warn("[{}] HTML/WAF block", context);
+            log.warn("[{}] HTML WAF block", context);
             return List.of();
         }
         try {
             JsonNode root = objectMapper.readTree(raw);
             if (root.isArray()) {
-                log.info("[{}] bare array, size={}", context, root.size());
+                log.info("[{}] bare array size {}", context, root.size());
                 return nodeArrayToList(root);
             }
             if (root.has("body") && root.get("body").isObject()) {
@@ -549,7 +564,7 @@ public class MeroshareApiService {
                 String[] innerKeys = {"companyShareList", "object", "data", "list", "shares"};
                 for (String key : innerKeys) {
                     if (body.has(key) && body.get(key).isArray()) {
-                        log.info("[{}] found at body.{}, size={}", context, key, body.get(key).size());
+                        log.info("[{}] found at body {} size {}", context, key, body.get(key).size());
                         return nodeArrayToList(body.get(key));
                     }
                 }
@@ -557,64 +572,56 @@ public class MeroshareApiService {
             String[] wrappers = {"object", "data", "result", "list", "shares", "companyShares", "companyShareList"};
             for (String key : wrappers) {
                 if (root.has(key) && root.get(key).isArray()) {
-                    log.info("[{}] wrapped under '{}', size={}", context, key, root.get(key).size());
+                    log.info("[{}] wrapped under {} size {}", context, key, root.get(key).size());
                     return nodeArrayToList(root.get(key));
                 }
             }
-            log.warn("[{}] Could not find array in response. Shape: {}", context, snippet300(raw));
+            log.warn("[{}] Could not find array in response shape {}", context, snippet300(raw));
             return List.of();
         } catch (Exception e) {
-            log.warn("[{}] Parse error: {}", context, e.getMessage());
+            log.warn("[{}] Parse error {}", context, e.getMessage());
             return List.of();
         }
     }
 
-    public PortfolioResponse getPortfolio(String token, String dpCode, String demat) {
-        String url = "https://webbackend.cdsc.com.np/api/meroShareView/myPortfolio";
+    public PortfolioResponse getPortfolio(String token, String dpCode, String demat,
+                                          String dpId, String username) {
+
+        String portfolioUrl = PORTFOLIO_BASE + "/myPortfolio/";
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("clientCode", dpCode);
-        payload.put("demat", List.of(demat));
-        payload.put("page", 1);
-        payload.put("size", 500);
-        payload.put("sortAsc", true);
-        payload.put("sortBy", "script");
+        payload.put("demat",      List.of(demat));
+        payload.put("page",       1);
+        payload.put("size",       500);
+        payload.put("sortAsc",    true);
+        payload.put("sortBy",     "script");
+
+        log.info("[PORTFOLIO] dpCode {} demat {}", dpCode, demat);
 
         String raw = null;
 
         try {
-            raw = WebClient.builder()
-                    .baseUrl("https://webbackend.cdsc.com.np/api/meroShareView")
-                    .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                    .defaultHeader(HttpHeaders.ACCEPT, "application/json, text/plain, */*")
-                    .defaultHeader("Accept-Language", "en-US,en;q=0.9")
-                    .defaultHeader("Cache-Control", "no-cache")
-                    .defaultHeader("Connection", "keep-alive")
-                    .defaultHeader("Host", "webbackend.cdsc.com.np")
-                    .defaultHeader("Origin", "https://meroshare.cdsc.com.np")
-                    .defaultHeader("Pragma", "no-cache")
-                    .defaultHeader("Referer", "https://meroshare.cdsc.com.np/")
-                    .defaultHeader("Sec-Fetch-Dest", "empty")
-                    .defaultHeader("Sec-Fetch-Mode", "cors")
-                    .defaultHeader("Sec-Fetch-Site", "same-site")
-                    .defaultHeader("User-Agent", USER_AGENT)
-                    .defaultHeader("Authorization", token)
-                    .codecs(c -> c.defaultCodecs().maxInMemorySize(8 * 1024 * 1024))
-                    .build()
-                    .post().uri("/myPortfolio")
+            raw = buildPortfolioClient(token)
+                    .post()
+                    .uri("/myPortfolio/")
                     .bodyValue(payload)
                     .retrieve()
                     .bodyToMono(String.class)
                     .block();
+            log.info("[PORTFOLIO] WebClient snippet {}", snippet300(raw));
         } catch (Exception e) {
-            log.warn("[PORTFOLIO] WebClient failed: {}", e.getMessage());
+            log.warn("[PORTFOLIO] WebClient failed {}", e.getMessage());
         }
 
         if (isHtml(raw)) {
-            raw = curlClient.postJson(url, toJson(payload), token);
+            log.warn("[PORTFOLIO] WebClient returned HTML trying curl");
+            raw = curlClient.postJson(portfolioUrl, toJson(payload), token);
+            log.info("[PORTFOLIO] Curl snippet {}", snippet300(raw));
         }
 
         if (isHtml(raw) || raw == null) {
+            log.error("[PORTFOLIO] Both returned HTML or null {}", snippet300(raw));
             throw new RuntimeException("Could not fetch portfolio. Please try again later.");
         }
 
@@ -625,10 +632,14 @@ public class MeroshareApiService {
         try {
             JsonNode root = objectMapper.readTree(raw);
 
-            double totalLTP      = root.has("totalValueOfLastTransPrice")  ? root.get("totalValueOfLastTransPrice").asDouble(0)  : 0;
-            double totalPrevClose = root.has("totalValueOfPrevClosingPrice") ? root.get("totalValueOfPrevClosingPrice").asDouble(0) : 0;
+            double totalLTP       = root.has("totalValueOfLastTransPrice")
+                    ? root.get("totalValueOfLastTransPrice").asDouble(0)  : 0;
+            double totalPrevClose = root.has("totalValueOfPrevClosingPrice")
+                    ? root.get("totalValueOfPrevClosingPrice").asDouble(0) : 0;
 
-            JsonNode itemsNode = root.has("meroShareMyPortfolio") ? root.get("meroShareMyPortfolio") : objectMapper.createArrayNode();
+            JsonNode itemsNode = root.has("meroShareMyPortfolio")
+                    ? root.get("meroShareMyPortfolio")
+                    : objectMapper.createArrayNode();
             int totalItems = root.has("totalItems") ? (int) root.get("totalItems").asDouble(0) : 0;
 
             List<PortfolioResponse.PortfolioItem> items = new ArrayList<>();
@@ -639,8 +650,10 @@ public class MeroshareApiService {
                         .currentBalance(n.has("currentBalance") ? n.get("currentBalance").asDouble(0) : 0)
                         .lastTransactionPrice(parseDoubleFromText(n, "lastTransactionPrice"))
                         .previousClosingPrice(parseDoubleFromText(n, "previousClosingPrice"))
-                        .valueAsOfLTP(n.has("valueOfLastTransPrice")   ? n.get("valueOfLastTransPrice").asDouble(0)  : 0)
-                        .valueAsOfPrevClose(n.has("valueOfPrevClosingPrice") ? n.get("valueOfPrevClosingPrice").asDouble(0) : 0)
+                        .valueAsOfLTP(n.has("valueOfLastTransPrice")
+                                ? n.get("valueOfLastTransPrice").asDouble(0)      : 0)
+                        .valueAsOfPrevClose(n.has("valueOfPrevClosingPrice")
+                                ? n.get("valueOfPrevClosingPrice").asDouble(0)    : 0)
                         .build());
             }
 
@@ -652,7 +665,7 @@ public class MeroshareApiService {
                     .build();
 
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse portfolio response: " + e.getMessage(), e);
+            throw new RuntimeException("Failed to parse portfolio response " + e.getMessage(), e);
         }
     }
 
@@ -660,8 +673,11 @@ public class MeroshareApiService {
         if (!node.has(field)) return 0;
         JsonNode f = node.get(field);
         if (f.isNumber()) return f.asDouble(0);
-        try { return Double.parseDouble(f.asText("0").replace(",", "")); }
-        catch (NumberFormatException e) { return 0; }
+        try {
+            return Double.parseDouble(f.asText("0").replace(",", ""));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     private String snippet300(String s) {
@@ -685,7 +701,7 @@ public class MeroshareApiService {
             if (node.isArray()) return nodeArrayToList(node);
             return List.of();
         } catch (Exception e) {
-            log.warn("[{}] Parse error: {}", context, e.getMessage());
+            log.warn("[{}] Parse error {}", context, e.getMessage());
             return List.of();
         }
     }
@@ -702,10 +718,10 @@ public class MeroshareApiService {
                 return nodeArrayToList(root.get("object"));
             if (root.has("data") && root.get("data").isArray())
                 return nodeArrayToList(root.get("data"));
-            log.warn("[{}] Unrecognised JSON shape: {}", context, snippet(raw));
+            log.warn("[{}] Unrecognised JSON shape {}", context, snippet(raw));
             return List.of();
         } catch (Exception e) {
-            log.warn("[{}] Parse error: {}", context, e.getMessage());
+            log.warn("[{}] Parse error {}", context, e.getMessage());
             return List.of();
         }
     }

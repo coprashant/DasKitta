@@ -83,18 +83,18 @@ const IconArrowDown = () => (
 const IconUser = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
     strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-    <circle cx="12" cy="7" r="4"/>
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
   </svg>
 );
 
 const Portfolio = () => {
   const { activeAccount, loading: accountLoading } = useAccount();
-  const [portfolio, setPortfolio]                 = useState(null);
-  const [portfolioLoading, setPortfolioLoading]   = useState(false);
-  const [error, setError]                         = useState(null);
-  const [sortKey, setSortKey]                     = useState("script");
-  const [sortAsc, setSortAsc]                     = useState(true);
+  const [portfolio, setPortfolio] = useState(null);
+  const [portfolioLoading, setPortfolioLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [sortKey, setSortKey] = useState("script");
+  const [sortAsc, setSortAsc] = useState(true);
 
   const loadPortfolio = useCallback(async (id) => {
     if (!id) return;
@@ -112,13 +112,14 @@ const Portfolio = () => {
   }, []);
 
   useEffect(() => {
+    if (accountLoading) return;
     if (activeAccount?.id) {
       loadPortfolio(activeAccount.id);
     } else {
       setPortfolio(null);
       setError(null);
     }
-  }, [activeAccount?.id, loadPortfolio]);
+  }, [activeAccount?.id, accountLoading, loadPortfolio]);
 
   const handleSort = (key) => {
     if (sortKey === key) {
@@ -131,14 +132,14 @@ const Portfolio = () => {
 
   const sortedItems = portfolio?.items
     ? [...portfolio.items].sort((a, b) => {
-        let av = a[sortKey] ?? "";
-        let bv = b[sortKey] ?? "";
-        if (typeof av === "string") av = av.toLowerCase();
-        if (typeof bv === "string") bv = bv.toLowerCase();
-        if (av < bv) return sortAsc ? -1 : 1;
-        if (av > bv) return sortAsc ? 1 : -1;
-        return 0;
-      })
+      let av = a[sortKey] ?? "";
+      let bv = b[sortKey] ?? "";
+      if (typeof av === "string") av = av.toLowerCase();
+      if (typeof bv === "string") bv = bv.toLowerCase();
+      if (av < bv) return sortAsc ? -1 : 1;
+      if (av > bv) return sortAsc ? 1 : -1;
+      return 0;
+    })
     : [];
 
   const totalPnL = portfolio
@@ -155,12 +156,12 @@ const Portfolio = () => {
   };
 
   const cols = [
-    { key: "script",               label: "Scrip",      align: "left"  },
-    { key: "currentBalance",       label: "Units",      align: "right" },
-    { key: "lastTransactionPrice", label: "LTP",        align: "right" },
+    { key: "script", label: "Scrip", align: "left" },
+    { key: "currentBalance", label: "Units", align: "right" },
+    { key: "lastTransactionPrice", label: "LTP", align: "right" },
     { key: "previousClosingPrice", label: "Prev Close", align: "right" },
-    { key: "valueAsOfLTP",         label: "LTP Value",  align: "right" },
-    { key: "valueAsOfPrevClose",   label: "Prev Value", align: "right" },
+    { key: "valueAsOfLTP", label: "LTP Value", align: "right" },
+    { key: "valueAsOfPrevClose", label: "Prev Value", align: "right" },
   ];
 
   const showEmpty = !accountLoading && !activeAccount;

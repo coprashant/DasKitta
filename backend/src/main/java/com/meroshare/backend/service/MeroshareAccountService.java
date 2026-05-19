@@ -30,13 +30,13 @@ public class MeroshareAccountService {
     @Transactional
     public MeroshareAccountResponse addAccount(MeroshareAccountRequest request, String appUsername) {
         AppUser appUser = appUserRepository.findByUsername(appUsername)
-                .orElseThrow(() -> new RuntimeException("User not found: " + appUsername));
+                .orElseThrow(() -> new RuntimeException("User not found " + appUsername));
 
         if (accountRepository.existsByUsernameAndAppUserId(request.getUsername(), appUser.getId())) {
             throw new RuntimeException("Account '" + request.getUsername() + "' already exists");
         }
 
-        String dpId = String.valueOf(request.getDpId());
+        String dpId          = String.valueOf(request.getDpId());
         String plainPassword = request.getPassword();
 
         String token = meroshareApiService.login(dpId, request.getUsername(), plainPassword);
@@ -75,7 +75,7 @@ public class MeroshareAccountService {
         }
 
         accountRepository.save(account);
-        log.info("[ADD_ACCOUNT] Saved account for user={} boid={}", request.getUsername(), ownDetail.getBoid());
+        log.info("[ADD_ACCOUNT] Saved account for user {} boid {}", request.getUsername(), ownDetail.getBoid());
 
         return toResponse(account);
     }
@@ -83,7 +83,7 @@ public class MeroshareAccountService {
     @Transactional(readOnly = true)
     public List<MeroshareAccountResponse> getAccounts(String appUsername) {
         AppUser appUser = appUserRepository.findByUsername(appUsername)
-                .orElseThrow(() -> new RuntimeException("User not found: " + appUsername));
+                .orElseThrow(() -> new RuntimeException("User not found " + appUsername));
         return accountRepository.findByAppUserId(appUser.getId())
                 .stream().map(this::toResponse).collect(Collectors.toList());
     }
@@ -91,13 +91,37 @@ public class MeroshareAccountService {
     @Transactional
     public void deleteAccount(Long accountId, String appUsername) {
         AppUser appUser = appUserRepository.findByUsername(appUsername)
-                .orElseThrow(() -> new RuntimeException("User not found: " + appUsername));
+                .orElseThrow(() -> new RuntimeException("User not found " + appUsername));
         MeroshareAccount account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new RuntimeException("Account not found"));
         if (!account.getAppUser().getId().equals(appUser.getId())) {
             throw new RuntimeException("Unauthorized");
         }
         accountRepository.delete(account);
+    }
+
+    @Transactional(readOnly = true)
+    public PortfolioResponse getPortfolio(Long accountId, String appUsername) {
+        AppUser appUser = appUserRepository.findByUsername(appUsername)
+                .orElseThrow(() -> new RuntimeException("User not found " + appUsername));
+
+        MeroshareAccount account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new RuntimeException("Account not found"));
+
+        if (!account.getAppUser().getId().equals(appUser.getId())) {
+            throw new RuntimeException("Unauthorized");
+        }
+
+        String plainPassword = encryptionUtil.decrypt(account.getPassword());
+        String token = meroshareApiService.login(
+                account.getDpId(), account.getUsername(), plainPassword);
+
+        return meroshareApiService.getPortfolio(
+                token,
+                account.getDpCode(),
+                account.getDemat(),
+                account.getDpId(),
+                account.getUsername());
     }
 
     private MeroshareAccountResponse toResponse(MeroshareAccount account) {
@@ -111,23 +135,5 @@ public class MeroshareAccountService {
                 .bankId(account.getBankId())
                 .createdAt(account.getCreatedAt())
                 .build();
-    }
-
-      @Transactional(readOnly = true)
-    public PortfolioResponse getPortfolio(Long accountId, String appUsername) {
-        AppUser appUser = appUserRepository.findByUsername(appUsername)
-                .orElseThrow(() -> new RuntimeException("User not found: " + appUsername));
- 
-        MeroshareAccount account = accountRepository.findById(accountId)
-                .orElseThrow(() -> new RuntimeException("Account not found"));
- 
-        if (!account.getAppUser().getId().equals(appUser.getId())) {
-            throw new RuntimeException("Unauthorized");
-        }
- 
-        String plainPassword = encryptionUtil.decrypt(account.getPassword());
-        String token = meroshareApiService.login(account.getDpId(), account.getUsername(), plainPassword);
- 
-        return meroshareApiService.getPortfolio(token, account.getDpCode(), account.getDemat());
     }
 }
