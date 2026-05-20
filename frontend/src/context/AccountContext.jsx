@@ -4,6 +4,7 @@ import { getAccountsApi } from "../api/accounts";
 const AccountContext = createContext(null);
 
 const STORAGE_KEY = "dk-active-account";
+const ORDER_KEY = "dk-account-order";
 
 const readStored = () => {
   try {
@@ -12,6 +13,24 @@ const readStored = () => {
   } catch {
     return null;
   }
+};
+
+const readOrder = () => {
+  try {
+    const s = localStorage.getItem(ORDER_KEY);
+    return s ? JSON.parse(s) : [];
+  } catch {
+    return [];
+  }
+};
+
+const applyOrder = (list, order) => {
+  if (!order.length) return list;
+  const map = new Map(list.map((a) => [a.id, a]));
+  const ordered = order.filter((id) => map.has(id)).map((id) => map.get(id));
+  const seen = new Set(order);
+  const appended = list.filter((a) => !seen.has(a.id));
+  return [...ordered, ...appended];
 };
 
 export const AccountProvider = ({ children }) => {
@@ -26,6 +45,11 @@ export const AccountProvider = ({ children }) => {
     } else {
       localStorage.removeItem(STORAGE_KEY);
     }
+  }, []);
+
+  const reorderAccounts = useCallback((newList) => {
+    setAccounts(newList);
+    localStorage.setItem(ORDER_KEY, JSON.stringify(newList.map((a) => a.id)));
   }, []);
 
   const resetAccounts = useCallback(() => {
@@ -46,9 +70,10 @@ export const AccountProvider = ({ children }) => {
     try {
       const res = await getAccountsApi();
       const list = Array.isArray(res?.data) ? res.data : [];
-      setAccounts(list);
+      const ordered = applyOrder(list, readOrder());
+      setAccounts(ordered);
 
-      if (list.length === 0) {
+      if (ordered.length === 0) {
         localStorage.removeItem(STORAGE_KEY);
         setActiveAccountState(null);
         return;
@@ -56,11 +81,11 @@ export const AccountProvider = ({ children }) => {
 
       setActiveAccountState((prev) => {
         if (!prev) {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(list[0]));
-          return list[0];
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(ordered[0]));
+          return ordered[0];
         }
-        const still = list.find((a) => a.id === prev.id);
-        const next = still ?? list[0];
+        const still = ordered.find((a) => a.id === prev.id);
+        const next = still ?? ordered[0];
         localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
         return next;
       });
@@ -85,6 +110,7 @@ export const AccountProvider = ({ children }) => {
       loading,
       refreshAccounts,
       resetAccounts,
+      reorderAccounts,
     }}>
       {children}
     </AccountContext.Provider>

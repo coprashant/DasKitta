@@ -152,6 +152,14 @@
   white-space: nowrap;
 }
 
+.drag-handle-icon {
+  opacity: 0.4;
+  transition: opacity var(--t-fast) var(--ease);
+}
+.saved-account-card:hover .drag-handle-icon {
+  opacity: 0.75;
+}
+
 @media (max-width: 400px) {
   .saved-account-card { padding: 12px; gap: 10px; }
   .saved-account-avatar { width: 32px; height: 32px; font-size: 13px; }

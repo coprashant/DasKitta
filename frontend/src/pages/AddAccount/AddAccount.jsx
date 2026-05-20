@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   addAccountApi, getAccountsApi,
@@ -6,6 +6,7 @@ import {
 } from "../../api/accounts";
 import { useAccount } from "../../context/AccountContext";
 import Layout from "../../components/Layout";
+import { InfoIcon, SpinnerIcon, DragHandleIcon } from "../../components/Icons";
 import toast from "react-hot-toast";
 import "./AddAccount.css";
 
@@ -13,7 +14,7 @@ const EMPTY_FORM = { dpId: "", dpCode: "", username: "", password: "", bankId: "
 
 const AddAccount = () => {
   const navigate = useNavigate();
-  const { refreshAccounts, activeAccount, setActiveAccount } = useAccount();
+  const { refreshAccounts, activeAccount, setActiveAccount, reorderAccounts } = useAccount();
   const [form, setForm] = useState(EMPTY_FORM);
   const [accounts, setAccounts] = useState([]);
   const [dpList, setDpList] = useState([]);
@@ -22,6 +23,10 @@ const AddAccount = () => {
   const [dpLoading, setDpLoading] = useState(true);
   const [accsLoading, setAccsLoading] = useState(true);
   const [bankLookupLoading, setBankLookupLoading] = useState(false);
+
+  // drag state
+  const dragIndex = useRef(null);
+  const dragOverIndex = useRef(null);
 
   useEffect(() => {
     fetchAccounts();
@@ -44,7 +49,19 @@ const AddAccount = () => {
     setAccsLoading(true);
     try {
       const res = await getAccountsApi();
-      setAccounts(Array.isArray(res.data) ? res.data : []);
+      const list = Array.isArray(res.data) ? res.data : [];
+      // respect context order already stored
+      const stored = (() => {
+        try {
+          const s = localStorage.getItem("dk-account-order");
+          return s ? JSON.parse(s) : [];
+        } catch { return []; }
+      })();
+      const map = new Map(list.map((a) => [a.id, a]));
+      const ordered = stored.filter((id) => map.has(id)).map((id) => map.get(id));
+      const seen = new Set(stored);
+      const rest = list.filter((a) => !seen.has(a.id));
+      setAccounts([...ordered, ...rest]);
     } catch {
       toast.error("Failed to load saved accounts.");
     } finally {
@@ -65,7 +82,7 @@ const AddAccount = () => {
       const bankId = res.data?.bankId ?? "";
       if (bankId) setForm((f) => ({ ...f, bankId: String(bankId) }));
     } catch {
-      // silent fail
+      // silent
     } finally {
       setBankLookupLoading(false);
     }
@@ -101,7 +118,9 @@ const AddAccount = () => {
     try {
       await deleteAccountApi(id);
       toast.success("Account removed");
-      setAccounts((prev) => prev.filter((a) => a.id !== id));
+      const next = accounts.filter((a) => a.id !== id);
+      setAccounts(next);
+      reorderAccounts(next);
       await refreshAccounts();
     } catch {
       toast.error("Failed to remove account");
@@ -114,6 +133,28 @@ const AddAccount = () => {
     setActiveAccount(acc);
     toast.success(`Switched to ${acc.fullName}`);
     navigate("/dashboard");
+  };
+
+  // drag handlers
+  const handleDragStart = (e, index) => {
+    dragIndex.current = index;
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragEnter = (index) => {
+    dragOverIndex.current = index;
+    if (dragIndex.current === index) return;
+    const next = [...accounts];
+    const dragged = next.splice(dragIndex.current, 1)[0];
+    next.splice(index, 0, dragged);
+    dragIndex.current = index;
+    setAccounts(next);
+  };
+
+  const handleDragEnd = () => {
+    reorderAccounts(accounts);
+    dragIndex.current = null;
+    dragOverIndex.current = null;
   };
 
   const selectedDp = dpList.find((d) => String(d.id) === String(form.dpId));
@@ -219,8 +260,8 @@ const AddAccount = () => {
               <span className="section-title-sm">
                 Saved accounts ({accounts.length})
               </span>
-              {accounts.length > 0 && (
-                <span className="acc-click-hint">Click a card to switch</span>
+              {accounts.length > 1 && (
+                <span className="acc-click-hint">Drag to reorder</span>
               )}
             </div>
 
@@ -246,12 +287,18 @@ const AddAccount = () => {
                   const isActive = activeAccount?.id === acc.id;
                   return (
                     <div
-                      className={`card saved-account-card anim-fade-up${isActive ? " saved-account-card-active" : ""}`}
                       key={acc.id}
-                      style={{ animationDelay: `${i * 0.07}s`, cursor: "pointer" }}
+                      className={`card saved-account-card anim-fade-up${isActive ? " saved-account-card-active" : ""}`}
+                      style={{ animationDelay: `${i * 0.07}s`, cursor: "grab" }}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, i)}
+                      onDragEnter={() => handleDragEnter(i)}
+                      onDragEnd={handleDragEnd}
+                      onDragOver={(e) => e.preventDefault()}
                       onClick={() => !isActive && handleSelectAccount(acc)}
                       title={isActive ? "Currently active" : `Switch to ${acc.fullName}`}
                     >
+                      <DragHandleIcon />
                       <div className={`saved-account-avatar${isActive ? " saved-account-avatar-active" : ""}`}>
                         {acc.fullName?.charAt(0)?.toUpperCase() || "?"}
                       </div>
@@ -287,23 +334,5 @@ const AddAccount = () => {
     </Layout>
   );
 };
-
-const InfoIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-    style={{ flexShrink: 0, marginTop: 1 }}>
-    <circle cx="12" cy="12" r="10" />
-    <line x1="12" y1="8" x2="12" y2="12" />
-    <line x1="12" y1="16" x2="12.01" y2="16" />
-  </svg>
-);
-
-const SpinnerIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
-    style={{ animation: "spin 0.7s linear infinite" }}>
-    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-  </svg>
-);
 
 export default AddAccount;

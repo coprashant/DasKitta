@@ -146,7 +146,6 @@
 .dash-main { display: grid; grid-template-columns: 1fr; gap: 10px; }
 @media (min-width: 900px) { .dash-main { grid-template-columns: 1fr 300px; } }
 
-.dash-main-primary {}
 .dash-main-sidebar { display: flex; flex-direction: column; gap: 10px; }
 
 .section-head {
