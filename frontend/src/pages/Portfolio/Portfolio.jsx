@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { getPortfolioApi } from "../../api/accounts";
 import { useAccount } from "../../context/AccountContext";
 import Layout from "../../components/Layout";
+import AccountSwitcher from "../../components/AccountSwitcher";
 import "./Portfolio.css";
 
 const fmt = (n) =>
@@ -202,20 +203,7 @@ const Portfolio = () => {
           </div>
         ) : (
           <>
-            {activeAccount && (
-              <div className="portfolio-account-pill">
-                <div className="portfolio-account-avatar">
-                  {activeAccount.fullName?.[0]?.toUpperCase() ?? "?"}
-                </div>
-                <div className="portfolio-account-info">
-                  <span className="portfolio-account-name">{activeAccount.fullName}</span>
-                  <span className="portfolio-account-meta">
-                    {activeAccount.username}
-                    {activeAccount.boid ? ` · BOID ${activeAccount.boid}` : ""}
-                  </span>
-                </div>
-              </div>
-            )}
+            <AccountSwitcher />
 
             {portfolioLoading ? (
               <div className="summary-grid">
