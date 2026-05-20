@@ -22,6 +22,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -35,6 +36,7 @@ public class IpoService {
     private final AppUserRepository appUserRepository;
     private final MeroshareApiService meroshareApiService;
     private final EncryptionUtil encryptionUtil;
+    private final Random random = new Random();
 
     private AppUser getAppUser(String username) {
         return appUserRepository.findByUsername(username)
