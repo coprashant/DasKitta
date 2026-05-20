@@ -6,17 +6,17 @@ import com.meroshare.backend.dto.IpoApplicationResponse;
 import com.meroshare.backend.entity.AppUser;
 import com.meroshare.backend.entity.IpoApplication;
 import com.meroshare.backend.entity.MeroshareAccount;
+import com.meroshare.backend.entity.CdscResultCache;
 import com.meroshare.backend.repository.AppUserRepository;
 import com.meroshare.backend.repository.IpoApplicationRepository;
 import com.meroshare.backend.repository.MeroshareAccountRepository;
-import com.meroshare.backend.security.EncryptionUtil;
-import com.meroshare.backend.entity.CdscResultCache;
 import com.meroshare.backend.repository.CdscResultCacheRepository;
+import com.meroshare.backend.security.EncryptionUtil;
+import com.meroshare.backend.dto.CdscSummaryDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.meroshare.backend.dto.CdscSummaryDto;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -36,6 +36,7 @@ public class IpoService {
     private final AppUserRepository appUserRepository;
     private final MeroshareApiService meroshareApiService;
     private final EncryptionUtil encryptionUtil;
+    private final IpoApplicationStore store;
     private final Random random = new Random();
 
     private AppUser getAppUser(String username) {
@@ -104,7 +105,25 @@ public class IpoService {
         AppUser appUser = getAppUser(username);
         List<IpoApplyResult> results = new ArrayList<>();
 
+        if (request.getShareId() == null || request.getShareId().isBlank()) {
+            throw new RuntimeException("Share ID must not be blank");
+        }
+        try {
+            Integer.parseInt(request.getShareId());
+        } catch (NumberFormatException e) {
+            throw new RuntimeException("Share ID is not a valid number: " + request.getShareId());
+        }
+
+        if (request.getCompanyName() == null || request.getCompanyName().isBlank()) {
+            throw new RuntimeException("Company name must not be blank");
+        }
+
         for (Long accountId : request.getAccountIds()) {
+            if (accountId == null) {
+                results.add(buildResult(null, null, null, "FAILED", "Account ID must not be null"));
+                continue;
+            }
+
             MeroshareAccount account = accountRepository.findById(accountId).orElse(null);
 
             if (account == null) {
@@ -133,61 +152,117 @@ public class IpoService {
                 Thread.sleep(jitter);
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
+                log.warn("[APPLY_ALL] Thread interrupted, stopping remaining accounts");
+                break;
             }
         }
 
         return results;
     }
 
-    @Transactional
     public IpoApplyResult applySingleAccount(MeroshareAccount account, IpoApplyRequest request) {
-        IpoApplication application = IpoApplication.builder()
-                .companyName(request.getCompanyName())
-                .shareId(request.getShareId())
-                .appliedKitta(request.getKitta())
-                .status(IpoApplication.ApplicationStatus.PENDING)
-                .meroshareAccount(account)
-                .build();
-        application = ipoApplicationRepository.save(application);
-
+        String token;
         try {
-            String token = loginAccount(account);
+            token = loginAccount(account);
+        } catch (Exception e) {
+            log.error("[APPLY] Login failed for {}: {}", account.getUsername(), e.getMessage());
+            return buildResult(account.getId(), account.getUsername(),
+                    account.getFullName(), "FAILED", "Login failed: " + e.getMessage());
+        }
 
-            if (account.getBoid() == null || account.getBoid().isBlank()) {
+        if (account.getBoid() == null || account.getBoid().isBlank()) {
+            try {
                 MeroshareApiService.AccountDetails ownDetail = meroshareApiService.fetchAccountDetails(token);
                 account.setBoid(ownDetail.getBoid());
                 account.setDemat(ownDetail.getDemat());
-                accountRepository.save(account);
+                store.saveAccount(account);
+            } catch (Exception e) {
+                log.error("[APPLY] fetchAccountDetails failed for {}: {}", account.getUsername(), e.getMessage());
+                return buildResult(account.getId(), account.getUsername(),
+                        account.getFullName(), "FAILED", "Could not fetch account details: " + e.getMessage());
             }
+        }
 
-            if (account.getCustomerId() == null || account.getCustomerId().isBlank()) {
+        if (account.getCustomerId() == null || account.getCustomerId().isBlank()) {
+            try {
                 List<Map> banks = meroshareApiService.getUserBanks(token);
-                if (!banks.isEmpty()) {
-                    String firstBankId = String.valueOf(banks.get(0).get("id"));
-                    MeroshareApiService.BankDetails bankDetails = meroshareApiService.fetchBankDetails(token, firstBankId);
-                    if (bankDetails != null) {
-                        account.setBankId(bankDetails.getBankId());
-                        account.setAccountNumber(bankDetails.getAccountNumber());
-                        account.setAccountBranchId(bankDetails.getAccountBranchId());
-                        account.setCustomerId(bankDetails.getCustomerId());
-                        accountRepository.save(account);
-                    }
+                if (banks.isEmpty()) {
+                    return buildResult(account.getId(), account.getUsername(),
+                            account.getFullName(), "FAILED",
+                            "No bank linked to Meroshare account: " + account.getUsername() +
+                            ". Please link a bank in Meroshare and try again.");
                 }
-            }
-
-            String decryptedPin = "";
-            if (account.getPin() != null && !account.getPin().isBlank()) {
-                try {
-                    decryptedPin = encryptionUtil.decrypt(account.getPin());
-                } catch (Exception e) {
-                    log.warn("[APPLY] Could not decrypt PIN for {}: {}", account.getUsername(), e.getMessage());
+                String firstBankId = String.valueOf(banks.get(0).get("id"));
+                MeroshareApiService.BankDetails bankDetails =
+                        meroshareApiService.fetchBankDetails(token, firstBankId);
+                if (bankDetails == null) {
+                    return buildResult(account.getId(), account.getUsername(),
+                            account.getFullName(), "FAILED",
+                            "Could not fetch bank details for account: " + account.getUsername());
                 }
+                if ("0".equals(bankDetails.getBankId())) {
+                    return buildResult(account.getId(), account.getUsername(),
+                            account.getFullName(), "FAILED",
+                            "Bank ID returned as 0 for account: " + account.getUsername() +
+                            ". Please re-add the account.");
+                }
+                account.setBankId(bankDetails.getBankId());
+                account.setAccountNumber(bankDetails.getAccountNumber());
+                account.setAccountBranchId(bankDetails.getAccountBranchId());
+                account.setCustomerId(bankDetails.getCustomerId());
+                store.saveAccount(account);
+            } catch (Exception e) {
+                log.error("[APPLY] Bank fetch failed for {}: {}", account.getUsername(), e.getMessage());
+                return buildResult(account.getId(), account.getUsername(),
+                        account.getFullName(), "FAILED", "Could not fetch bank details: " + e.getMessage());
             }
+        }
 
+        String decryptedPin;
+        if (account.getPin() != null && !account.getPin().isBlank()) {
+            try {
+                decryptedPin = encryptionUtil.decrypt(account.getPin());
+            } catch (Exception e) {
+                log.error("[APPLY] PIN decrypt failed for {}: {}", account.getUsername(), e.getMessage());
+                return buildResult(account.getId(), account.getUsername(),
+                        account.getFullName(), "FAILED",
+                        "Could not decrypt PIN for account '" + account.getUsername() +
+                        "'. Please remove and re-add this Meroshare account.");
+            }
+        } else {
+            decryptedPin = "";
+        }
+
+        try {
             validateApplyFields(account);
+        } catch (RuntimeException e) {
+            return buildResult(account.getId(), account.getUsername(),
+                    account.getFullName(), "FAILED", e.getMessage());
+        }
+
+        try {
+            Integer.parseInt(account.getAccountBranchId());
+        } catch (NumberFormatException e) {
+            return buildResult(account.getId(), account.getUsername(),
+                    account.getFullName(), "FAILED",
+                    "Account branch ID is not a valid number for account: " + account.getUsername());
+        }
+        try {
+            Integer.parseInt(account.getCustomerId());
+        } catch (NumberFormatException e) {
+            return buildResult(account.getId(), account.getUsername(),
+                    account.getFullName(), "FAILED",
+                    "Customer ID is not a valid number for account: " + account.getUsername());
+        }
+
+        IpoApplication application = store.savePending(
+                account, request.getCompanyName(), request.getShareId(), request.getKitta());
+
+        try {
+            String freshToken = loginAccountFresh(account);
 
             String message = meroshareApiService.applyIpo(
-                    token,
+                    freshToken,
                     Integer.parseInt(request.getShareId()),
                     account.getDemat(),
                     account.getBoid(),
@@ -200,19 +275,14 @@ public class IpoService {
                     decryptedPin
             );
 
-            application.setStatus(IpoApplication.ApplicationStatus.SUCCESS);
-            application.setStatusMessage(message);
-            ipoApplicationRepository.save(application);
-
             log.info("[APPLY] SUCCESS for {}: {}", account.getUsername(), message);
+            store.finalize(application.getId(), IpoApplication.ApplicationStatus.SUCCESS, message);
             return buildResult(account.getId(), account.getUsername(),
                     account.getFullName(), "SUCCESS", message);
 
         } catch (Exception e) {
             log.error("[APPLY] FAILED for {}: {}", account.getUsername(), e.getMessage());
-            application.setStatus(IpoApplication.ApplicationStatus.FAILED);
-            application.setStatusMessage(e.getMessage());
-            ipoApplicationRepository.save(application);
+            store.finalize(application.getId(), IpoApplication.ApplicationStatus.FAILED, e.getMessage());
             return buildResult(account.getId(), account.getUsername(),
                     account.getFullName(), "FAILED", e.getMessage());
         }
@@ -226,14 +296,14 @@ public class IpoService {
         if (account.getAccountNumber() == null || account.getAccountNumber().isBlank())
             throw new RuntimeException("Account number not set for account: " + account.getUsername());
         if (account.getCustomerId() == null || account.getCustomerId().isBlank())
-            throw new RuntimeException("Customer ID not set for account: " + account.getUsername() + ". Please re-add the account.");
+            throw new RuntimeException("Customer ID not set for account: " + account.getUsername()
+                    + ". Please re-add the account.");
         if (account.getAccountBranchId() == null || account.getAccountBranchId().isBlank())
             throw new RuntimeException("Account branch ID not set for account: " + account.getUsername());
         if (account.getBankId() == null || account.getBankId().isBlank())
             throw new RuntimeException("Bank ID not set for account: " + account.getUsername());
     }
 
-    @Transactional
     public List<IpoApplicationResponse> checkResults(String shareId, String username) {
         AppUser appUser = getAppUser(username);
         List<MeroshareAccount> accounts = accountRepository.findByAppUserId(appUser.getId());
@@ -243,7 +313,10 @@ public class IpoService {
         for (int i = 0; i < accounts.size(); i++) {
             responses.add(checkResultForAccount(accounts.get(i), shareId));
             if (i < accounts.size() - 1) {
-                try { Thread.sleep(1500); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+                try { Thread.sleep(1500); } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
             }
         }
         return responses;
@@ -252,9 +325,9 @@ public class IpoService {
     private IpoApplicationResponse checkResultForAccount(MeroshareAccount account, String shareId) {
         try {
             String token = loginAccount(account);
-
             List<Map> history = meroshareApiService.getApplicationHistory(token);
-            log.info("[CHECK_RESULT] account={} historySize={} shareId={}", account.getUsername(), history.size(), shareId);
+            log.info("[CHECK_RESULT] account={} historySize={} shareId={}",
+                    account.getUsername(), history.size(), shareId);
 
             Map<String, Object> entry = findInHistory(history, shareId);
 
@@ -285,24 +358,12 @@ public class IpoService {
                 mappedStatus = mapResultStatus(safeStr(entry.get("statusName"), "UNKNOWN"));
             }
 
-            IpoApplication application = ipoApplicationRepository
-                    .findByMeroshareAccountIdAndShareId(account.getId(), shareId)
-                    .orElse(null);
-
-            if (application != null) {
-                application.setResultStatus(mappedStatus);
-                application.setAllottedKitta(allottedKitta);
-                if (!companyName.isBlank() &&
-                        (application.getCompanyName() == null || application.getCompanyName().isBlank())) {
-                    application.setCompanyName(companyName);
-                }
-                application.setResultCheckedAt(LocalDateTime.now());
-                ipoApplicationRepository.save(application);
-            }
+            String resolvedName = store.saveResult(
+                    account.getId(), shareId, mappedStatus, allottedKitta, companyName);
 
             return IpoApplicationResponse.builder()
                     .shareId(shareId)
-                    .companyName(application != null ? application.getCompanyName() : companyName)
+                    .companyName(resolvedName)
                     .resultStatus(mappedStatus.name())
                     .allottedKitta(allottedKitta)
                     .resultCheckedAt(LocalDateTime.now())
@@ -377,8 +438,8 @@ public class IpoService {
                     .map(item -> {
                         Map<String, String> entry = new java.util.LinkedHashMap<>();
                         entry.put("companyShareId", safeStr(item.get("companyShareId"), ""));
-                        entry.put("companyName",    safeStr(item.get("companyName"), safeStr(item.get("scrip"), "")));
-                        entry.put("scrip",          safeStr(item.get("scrip"), ""));
+                        entry.put("companyName", safeStr(item.get("companyName"), safeStr(item.get("scrip"), "")));
+                        entry.put("scrip", safeStr(item.get("scrip"), ""));
                         return entry;
                     })
                     .filter(e -> !e.get("companyShareId").isBlank())
@@ -388,48 +449,6 @@ public class IpoService {
             log.warn("[APPLIED_COMPANIES] Failed: {}", e.getMessage());
             return List.of();
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> findInHistory(List<Map> history, String shareId) {
-        return (Map<String, Object>) history.stream()
-                .filter(item -> shareId.equals(String.valueOf(item.get("companyShareId"))))
-                .findFirst()
-                .orElse(null);
-    }
-
-    private String safeStr(Object obj, String defaultValue) {
-        if (obj == null) return defaultValue;
-        String s = String.valueOf(obj);
-        return s.equals("null") ? defaultValue : s;
-    }
-
-    private IpoApplyResult buildResult(Long accountId, String username,
-                                        String fullName, String status, String message) {
-        return IpoApplyResult.builder()
-                .accountId(accountId)
-                .username(username)
-                .fullName(fullName)
-                .status(status)
-                .message(message)
-                .build();
-    }
-
-    private IpoApplicationResponse toResponse(IpoApplication app) {
-        return IpoApplicationResponse.builder()
-                .id(app.getId())
-                .companyName(app.getCompanyName())
-                .shareId(app.getShareId())
-                .appliedKitta(app.getAppliedKitta())
-                .status(app.getStatus().name())
-                .statusMessage(app.getStatusMessage())
-                .resultStatus(app.getResultStatus() != null ? app.getResultStatus().name() : null)
-                .allottedKitta(app.getAllottedKitta())
-                .appliedAt(app.getAppliedAt())
-                .resultCheckedAt(app.getResultCheckedAt())
-                .accountUsername(app.getMeroshareAccount().getUsername())
-                .accountFullName(app.getMeroshareAccount().getFullName())
-                .build();
     }
 
     public CdscSummaryDto getCdscSummary(Long accountId, String username) {
@@ -448,10 +467,7 @@ public class IpoService {
         Map<String, CdscResultCache> cacheByFormId = cdscResultCacheRepository
                 .findByMeroshareAccountId(accountId)
                 .stream()
-                .collect(java.util.stream.Collectors.toMap(
-                        CdscResultCache::getApplicantFormId,
-                        c -> c
-                ));
+                .collect(Collectors.toMap(CdscResultCache::getApplicantFormId, c -> c));
 
         List<CdscSummaryDto.Item> items = new ArrayList<>();
         int allotted     = 0;
@@ -493,7 +509,7 @@ public class IpoService {
                         resultStatus = cached != null ? cached.getResultStatus() : "NOT_PUBLISHED";
                     }
 
-                    upsertCache(cached, account, applicantFormId, companyShareId,
+                    store.upsertCache(cached, account, applicantFormId, companyShareId,
                             companyName, scrip, shareTypeName, resultStatus, allottedKitta);
                 }
             }
@@ -524,24 +540,45 @@ public class IpoService {
                 .build();
     }
 
-    private void upsertCache(CdscResultCache existing, MeroshareAccount account,
-                             String applicantFormId, String companyShareId,
-                             String companyName, String scrip, String shareTypeName,
-                             String resultStatus, int allottedKitta) {
-        CdscResultCache row = existing != null
-                ? existing
-                : CdscResultCache.builder()
-                        .meroshareAccount(account)
-                        .applicantFormId(applicantFormId)
-                        .build();
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> findInHistory(List<Map> history, String shareId) {
+        return (Map<String, Object>) history.stream()
+                .filter(item -> shareId.equals(String.valueOf(item.get("companyShareId"))))
+                .findFirst()
+                .orElse(null);
+    }
 
-        row.setCompanyShareId(companyShareId);
-        row.setCompanyName(companyName);
-        row.setScrip(scrip);
-        row.setShareTypeName(shareTypeName);
-        row.setResultStatus(resultStatus);
-        row.setAllottedKitta(allottedKitta);
+    private String safeStr(Object obj, String defaultValue) {
+        if (obj == null) return defaultValue;
+        String s = String.valueOf(obj);
+        return s.equals("null") ? defaultValue : s;
+    }
 
-        cdscResultCacheRepository.save(row);
+    private IpoApplyResult buildResult(Long accountId, String username,
+                                       String fullName, String status, String message) {
+        return IpoApplyResult.builder()
+                .accountId(accountId)
+                .username(username)
+                .fullName(fullName)
+                .status(status)
+                .message(message)
+                .build();
+    }
+
+    private IpoApplicationResponse toResponse(IpoApplication app) {
+        return IpoApplicationResponse.builder()
+                .id(app.getId())
+                .companyName(app.getCompanyName())
+                .shareId(app.getShareId())
+                .appliedKitta(app.getAppliedKitta())
+                .status(app.getStatus().name())
+                .statusMessage(app.getStatusMessage())
+                .resultStatus(app.getResultStatus() != null ? app.getResultStatus().name() : null)
+                .allottedKitta(app.getAllottedKitta())
+                .appliedAt(app.getAppliedAt())
+                .resultCheckedAt(app.getResultCheckedAt())
+                .accountUsername(app.getMeroshareAccount().getUsername())
+                .accountFullName(app.getMeroshareAccount().getFullName())
+                .build();
     }
 }
