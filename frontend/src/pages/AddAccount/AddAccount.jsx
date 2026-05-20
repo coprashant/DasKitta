@@ -261,7 +261,7 @@ const AddAccount = () => {
                 Saved accounts ({accounts.length})
               </span>
               {accounts.length > 1 && (
-                <span className="acc-click-hint">Drag to reorder</span>
+                <span className="acc-click-hint">Drag to reorder, Click to Switch accounts.</span>
               )}
             </div>
 
