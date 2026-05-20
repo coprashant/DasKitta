@@ -127,7 +127,8 @@ public class IpoService {
             results.add(applySingleAccount(account, request));
 
             try {
-                Thread.sleep(1500);
+                long jitter = 2000 + random.nextInt(3000);
+                Thread.sleep(jitter);
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
             }
