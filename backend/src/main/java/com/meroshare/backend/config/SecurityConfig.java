@@ -37,6 +37,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/nepse/**").permitAll() 
+                .requestMatchers("/api/ping").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/ipo/shares").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/ipo/result/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/accounts/dp-list").permitAll()
