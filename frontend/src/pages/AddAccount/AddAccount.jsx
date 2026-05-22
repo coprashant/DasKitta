@@ -24,9 +24,7 @@ const AddAccount = () => {
   const [accsLoading, setAccsLoading] = useState(true);
   const [bankLookupLoading, setBankLookupLoading] = useState(false);
 
-  // drag state
   const dragIndex = useRef(null);
-  const dragOverIndex = useRef(null);
 
   useEffect(() => {
     fetchAccounts();
@@ -50,7 +48,6 @@ const AddAccount = () => {
     try {
       const res = await getAccountsApi();
       const list = Array.isArray(res.data) ? res.data : [];
-      // respect context order already stored
       const stored = (() => {
         try {
           const s = localStorage.getItem("dk-account-order");
@@ -79,10 +76,11 @@ const AddAccount = () => {
     setBankLookupLoading(true);
     try {
       const res = await getBankByDpApi(selectedId);
-      const bankId = res.data?.bankId ?? "";
+      const bankId = res.data?.bankId;
+      // only set bankId if it is a valid truthy number
       if (bankId) setForm((f) => ({ ...f, bankId: String(bankId) }));
     } catch {
-      // silent
+      // silent fail on bank lookup
     } finally {
       setBankLookupLoading(false);
     }
@@ -91,11 +89,16 @@ const AddAccount = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.dpId || !form.username || !form.password) {
-      toast.error("DP, username and password are required");
+      toast.error("DP username and password are required");
       return;
     }
     if (!form.crn.trim()) {
       toast.error("CRN number is required for IPO applications");
+      return;
+    }
+    // guard against missing bankId before submit
+    if (!form.bankId) {
+      toast.error("Bank ID could not be resolved. Please reselect your DP.");
       return;
     }
     setLoading(true);
@@ -120,6 +123,7 @@ const AddAccount = () => {
       toast.success("Account removed");
       const next = accounts.filter((a) => a.id !== id);
       setAccounts(next);
+      // full replace in localStorage via reorderAccounts
       reorderAccounts(next);
       await refreshAccounts();
     } catch {
@@ -135,14 +139,12 @@ const AddAccount = () => {
     navigate("/dashboard");
   };
 
-  // drag handlers
   const handleDragStart = (e, index) => {
     dragIndex.current = index;
     e.dataTransfer.effectAllowed = "move";
   };
 
   const handleDragEnter = (index) => {
-    dragOverIndex.current = index;
     if (dragIndex.current === index) return;
     const next = [...accounts];
     const dragged = next.splice(dragIndex.current, 1)[0];
@@ -154,7 +156,6 @@ const AddAccount = () => {
   const handleDragEnd = () => {
     reorderAccounts(accounts);
     dragIndex.current = null;
-    dragOverIndex.current = null;
   };
 
   const selectedDp = dpList.find((d) => String(d.id) === String(form.dpId));
@@ -196,6 +197,11 @@ const AddAccount = () => {
                     DP code: {selectedDp.code} · ID: {selectedDp.id}
                     {bankLookupLoading && " · Looking up bank..."}
                     {!bankLookupLoading && form.bankId && ` · Bank ID: ${form.bankId}`}
+                    {!bankLookupLoading && !form.bankId && (
+                      <span style={{ color: "var(--color-danger, #e53e3e)" }}>
+                        {" "}Bank ID not found. Try a different DP.
+                      </span>
+                    )}
                   </span>
                 )}
               </div>
@@ -205,7 +211,7 @@ const AddAccount = () => {
                 <input
                   className="input" type="text" name="username"
                   value={form.username} onChange={handleChange}
-                  placeholder="Your phone number / Meroshare username" required
+                  placeholder="Your Meroshare username" required
                 />
               </div>
 
@@ -261,7 +267,7 @@ const AddAccount = () => {
                 Saved accounts ({accounts.length})
               </span>
               {accounts.length > 1 && (
-                <span className="acc-click-hint">Drag to reorder, Click to Switch accounts.</span>
+                <span className="acc-click-hint">Drag to reorder. Click to switch accounts.</span>
               )}
             </div>
 
@@ -295,8 +301,8 @@ const AddAccount = () => {
                       onDragEnter={() => handleDragEnter(i)}
                       onDragEnd={handleDragEnd}
                       onDragOver={(e) => e.preventDefault()}
-                      onClick={() => !isActive && handleSelectAccount(acc)}
-                      title={isActive ? "Currently active" : `Switch to ${acc.fullName}`}
+                      onClick={() => handleSelectAccount(acc)}
+                      title={isActive ? "Go to dashboard" : `Switch to ${acc.fullName}`}
                     >
                       <DragHandleIcon />
                       <div className={`saved-account-avatar${isActive ? " saved-account-avatar-active" : ""}`}>
@@ -306,7 +312,7 @@ const AddAccount = () => {
                         <p className="saved-account-name">{acc.fullName}</p>
                         <p className="saved-account-meta">
                           {acc.username}
-                          {acc.dpCode ? ` · DP ${acc.dpCode}` : acc.dpId ? ` · DP ${acc.dpId}` : ""}
+                          {acc.dpCode ? ` DP ${acc.dpCode}` : acc.dpId ? ` DP ${acc.dpId}` : ""}
                         </p>
                         {acc.boid && (
                           <p className="saved-account-boid">BOID: {acc.boid}</p>

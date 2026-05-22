@@ -517,3 +517,52 @@
   margin-top: 4px;
 }
 .drawer-logout:hover { background: var(--danger-dim); border-color: var(--danger); }
+
+/* BELL BUTTON */
+
+.bell-btn-wrap {
+  position: relative;
+}
+
+.navbar-bell-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  border-radius: var(--r);
+  cursor: pointer;
+  position: relative;
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+
+.navbar-bell-btn:hover,
+.navbar-bell-btn.active {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.bell-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  font-family: var(--font);
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  pointer-events: none;
+}

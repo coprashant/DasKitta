@@ -3,6 +3,8 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { useAccount } from "../context/AccountContext";
+import { useNotifications } from "../context/NotificationContext";
+import NotificationPanel from "./NotificationPanel";
 import "./Navbar.css";
 
 const authLinks = [
@@ -11,7 +13,6 @@ const authLinks = [
   { path: "/ipo/apply",  label: "Apply IPO"  },
   { path: "/ipo/result", label: "Results"    },
   { path: "/portfolio",  label: "Portfolio"  },
-  { path: "/history",    label: "History"    },
 ];
 
 const guestLinks = [
@@ -87,6 +88,14 @@ const SignOutIcon = () => (
     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
     <polyline points="16 17 21 12 16 7"/>
     <line x1="21" y1="12" x2="9" y2="12"/>
+  </svg>
+);
+
+const BellIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
   </svg>
 );
 
@@ -180,6 +189,64 @@ const ProfileDropdown = ({ onClose }) => {
   );
 };
 
+const BellButton = () => {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+  const { unreadCount, readTimestamp, markAllRead } = useNotifications();
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [open]);
+
+  const handleOpen = () => {
+    setOpen((v) => {
+      if (!v) markAllRead();
+      return !v;
+    });
+  };
+
+  return (
+    <div className="bell-btn-wrap" ref={wrapRef}>
+      <button
+        className={`navbar-bell-btn${open ? " active" : ""}`}
+        onClick={handleOpen}
+        aria-label={`Notifications${unreadCount ? ` (${unreadCount} unread)` : ""}`}
+        aria-expanded={open}
+        aria-haspopup="true"
+      >
+        <BellIcon />
+        {unreadCount > 0 && (
+          <span className="bell-badge" aria-hidden="true">
+            {unreadCount > 9 ? "9+" : unreadCount}
+          </span>
+        )}
+      </button>
+      {open && (
+        <NotificationPanel
+          readTimestamp={readTimestamp}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </div>
+  );
+};
+
 const Navbar = () => {
   const { user, logout } = useAuth();
   const { theme, toggle } = useTheme();
@@ -253,6 +320,8 @@ const Navbar = () => {
           </div>
 
           <div className="navbar-right">
+            {user && <BellButton />}
+
             <button
               className="navbar-theme-btn"
               onClick={toggle}
