@@ -229,3 +229,51 @@
   min-width: 48px;
   text-align: center;
 }
+
+/* DERIVED STATUS BADGES */
+.h-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+/* Amount blocked = applied, result not out yet */
+.h-status-blocked {
+  background: color-mix(in srgb, var(--warning, #f59e0b) 15%, transparent);
+  color: var(--warning, #f59e0b);
+}
+
+/* Allotted = got shares */
+.h-status-allotted {
+  background: color-mix(in srgb, var(--success, #22c55e) 15%, transparent);
+  color: var(--success, #22c55e);
+}
+
+/* Amount released = not allotted, money returned */
+.h-status-released {
+  background: color-mix(in srgb, var(--accent, #6366f1) 12%, transparent);
+  color: var(--accent, #6366f1);
+}
+
+/* Failed = application error */
+.h-status-failed {
+  background: color-mix(in srgb, var(--danger, #ef4444) 12%, transparent);
+  color: var(--danger, #ef4444);
+}
+
+/* Already applied / Pending */
+.h-status-warning {
+  background: color-mix(in srgb, var(--warning, #f59e0b) 12%, transparent);
+  color: var(--warning, #f59e0b);
+}
+
+.h-status-pending {
+  background: var(--surface-3);
+  color: var(--text-3);
+}

@@ -1,4 +1,5 @@
 package com.meroshare.backend.entity;
+import com.meroshare.backend.entity.CdscResultCache;
 
 import jakarta.persistence.*;
 import lombok.*;
@@ -56,8 +57,11 @@ public class MeroshareAccount {
     @JoinColumn(name = "app_user_id", nullable = false)
     private AppUser appUser;
 
-    @OneToMany(mappedBy = "meroshareAccount", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "meroshareAccount", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<IpoApplication> ipoApplications;
+
+    @OneToMany(mappedBy = "meroshareAccount", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<CdscResultCache> cdscResultCaches;
 
     @PrePersist
     public void prePersist() {

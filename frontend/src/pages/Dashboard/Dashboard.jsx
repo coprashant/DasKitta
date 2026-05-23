@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useAccount } from "../../context/AccountContext";
@@ -16,20 +16,9 @@ const Skeleton = ({ h = 16, w = "100%", style = {} }) => (
   <div className="skeleton" style={{ height: h, width: w, ...style }} />
 );
 
-const statusBadgeClass = (s) =>
-  s === "FAILED"          ? "badge-danger"  :
-  s === "ALREADY_APPLIED" ? "badge-warning" : "badge-success";
-
-const resultBadgeClass = (s) =>
-  s === "ALLOTTED"     ? "badge-success" :
-  s === "NOT_ALLOTTED" ? "badge-danger"  : "badge-muted";
-
 const cdscResultBadgeClass = (s) =>
   s === "ALLOTTED"     ? "badge-success" :
   s === "NOT_ALLOTTED" ? "badge-danger"  : "badge-muted";
-
-const statusDotClass = (s) =>
-  s === "FAILED" ? "badge-dot badge-dot-danger" : "badge-dot badge-dot-success";
 
 const TOOLTIP_STYLE = {
   background: "var(--surface)",
@@ -38,6 +27,19 @@ const TOOLTIP_STYLE = {
   fontSize: 11,
   boxShadow: "var(--shadow-lg)",
   padding: "6px 10px",
+};
+
+const deriveStatus = (item) => {
+  if (item.status === "SUCCESS") {
+    const r = item.resultStatus;
+    if (r === "ALLOTTED")     return { label: `Allotted · ${item.allottedKitta} kitta`, variant: "allotted" };
+    if (r === "NOT_ALLOTTED") return { label: "Amount released", variant: "released" };
+    return { label: "Amount blocked", variant: "blocked" };
+  }
+  if (item.status === "ALREADY_APPLIED") return { label: "Already applied", variant: "warning" };
+  if (item.status === "FAILED")          return { label: "Failed",          variant: "failed"  };
+  if (item.status === "PENDING")         return { label: "Pending",         variant: "pending" };
+  return { label: item.status ?? "—", variant: "pending" };
 };
 
 const NoAccountBanner = () => (
@@ -108,7 +110,6 @@ const Dashboard = () => {
     }
   }, []);
 
-  /* THE FIX: wait for accountLoading to settle before firing */
   useEffect(() => {
     if (accountLoading) return;
     if (!activeAccount) { setCdscSummary(null); setCdscError(null); return; }
@@ -187,8 +188,8 @@ const Dashboard = () => {
             )}
 
             <div className="dash-stats">
-              <StatCard icon={<IconStack />}  label="Total Applied"  value={cdscSummary?.total}        color="accent"   loading={statsLoading} delay="0ms" />
-              <StatCard icon={<IconCheck />}  label="Allotted"       value={cdscSummary?.allotted}     color="success"  loading={statsLoading} delay="60ms" />
+              <StatCard icon={<IconStack />}  label="Total Applied"  value={cdscSummary?.total}        color="accent"   loading={statsLoading} delay="0ms"   />
+              <StatCard icon={<IconCheck />}  label="Allotted"       value={cdscSummary?.allotted}     color="success"  loading={statsLoading} delay="60ms"  />
               <StatCard icon={<IconX />}      label="Not Allotted"   value={cdscSummary?.failed}       color="danger"   loading={statsLoading} delay="120ms" />
               <StatCard icon={<IconClock />}  label="Pending"        value={cdscSummary?.notPublished} color="muted"    loading={statsLoading} delay="180ms" />
             </div>
@@ -312,7 +313,7 @@ const Dashboard = () => {
                         {[1,2,3].map(k => (
                           <div key={k} className="table-skeleton-row">
                             <Skeleton h={12} w="55%" />
-                            <Skeleton h={22} w={65} style={{ borderRadius: 20 }} />
+                            <Skeleton h={22} w={100} style={{ borderRadius: 20 }} />
                           </div>
                         ))}
                       </div>
@@ -325,25 +326,22 @@ const Dashboard = () => {
                       <div className="table-scroll">
                         <table className="dash-table">
                           <thead>
-                            <tr><th>Company</th><th>Status</th><th>Result</th></tr>
+                            <tr><th>Company</th><th>Status</th></tr>
                           </thead>
                           <tbody>
-                            {recent.map(item => (
-                              <tr key={item.id}>
-                                <td><span className="cell-primary">{item.companyName}</span></td>
-                                <td>
-                                  <span className={`badge ${statusBadgeClass(item.status)}`}>
-                                    {item.status !== "ALREADY_APPLIED" && <span className={statusDotClass(item.status)} />}
-                                    {item.status?.replace(/_/g, " ")}
-                                  </span>
-                                </td>
-                                <td>
-                                  {item.resultStatus
-                                    ? <span className={`badge ${resultBadgeClass(item.resultStatus)}`}>{item.resultStatus.replace(/_/g, " ")}</span>
-                                    : <span className="cell-dim">—</span>}
-                                </td>
-                              </tr>
-                            ))}
+                            {recent.map(item => {
+                              const derived = deriveStatus(item);
+                              return (
+                                <tr key={item.id}>
+                                  <td><span className="cell-primary">{item.companyName}</span></td>
+                                  <td>
+                                    <span className={`h-status-badge h-status-${derived.variant}`}>
+                                      {derived.label}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
