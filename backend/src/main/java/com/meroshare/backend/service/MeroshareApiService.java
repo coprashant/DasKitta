@@ -13,8 +13,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
@@ -178,8 +176,12 @@ public class MeroshareApiService {
 
     public String loginFresh(String dpId, String username, String password) {
         String cacheKey = dpId + ":" + username;
-        tokenCache.remove(cacheKey);
-        log.info("[LOGIN] Forced fresh login for {}", username);
+        CachedToken cached = tokenCache.get(cacheKey);
+        if (cached != null && cached.isValid()) {
+            log.info("[LOGIN] Reusing valid cached token for fresh apply — skipping re-login for {}", username);
+            return cached.token;
+        }
+        log.info("[LOGIN] No valid cached token, performing fresh login for {}", username);
         return login(dpId, username, password);
     }
 
@@ -304,12 +306,12 @@ public class MeroshareApiService {
         }
     }
 
-    public BankDetails fetchBankDetails(String token, String bankId) {
-        String url = MERO_SHARE_BASE + "/bank/" + bankId;
+    public BankDetails fetchBankDetails(String token, String bankListId) {
+        String url = MERO_SHARE_BASE + "/bank/" + bankListId;
         String raw = null;
 
         try {
-            raw = buildClient(token).get().uri("/bank/" + bankId)
+            raw = buildClient(token).get().uri("/bank/" + bankListId)
                     .retrieve().bodyToMono(String.class).block();
         } catch (Exception e) {
             log.warn("[BANK_DETAIL] WebClient failed {}", e.getMessage());
@@ -320,22 +322,40 @@ public class MeroshareApiService {
         }
 
         if (isHtml(raw) || raw == null) {
-            log.warn("[BANK_DETAIL] Could not fetch bank details for bankId {}", bankId);
+            log.warn("[BANK_DETAIL] Could not fetch bank details for bankListId {}", bankListId);
             return null;
         }
 
         try {
-            JsonNode node = objectMapper.readTree(raw);
+            JsonNode root = objectMapper.readTree(raw);
+
+            // CDSC returns an array — take the first element
+            JsonNode node = root.isArray() ? root.get(0) : root;
+
+            if (node == null || node.isNull()) {
+                log.warn("[BANK_DETAIL] Empty array for bankListId {}", bankListId);
+                return null;
+            }
+
             BankDetails d = new BankDetails();
-            d.setBankId(String.valueOf(node.has("bankId") ? node.get("bankId").asInt() : 0));
+            d.setBankListId(bankListId);
             d.setAccountNumber(getText(node, "accountNumber"));
             d.setAccountBranchId(
-                    node.has("accountBranchId") ? String.valueOf(node.get("accountBranchId").asInt()) : null);
-            d.setCustomerId(node.has("id") ? String.valueOf(node.get("id").asInt()) : null);
+                node.has("accountBranchId") ? String.valueOf(node.get("accountBranchId").asInt()) : null
+            );
+            // "id" in the bank detail is used as customerId in the apply body
+            d.setCustomerId(
+                node.has("id") ? String.valueOf(node.get("id").asLong()) : null
+            );
+            d.setAccountTypeId(
+                node.has("accountTypeId") ? node.get("accountTypeId").asInt() : 1
+            );
             d.setBranchName(getText(node, "branchName"));
-            log.info("[BANK_DETAIL] bankId {} accountNumber {} customerId {}",
-                    d.getBankId(), d.getAccountNumber(), d.getCustomerId());
+
+            log.info("[BANK_DETAIL] bankListId={} accountNumber={} customerId={} accountTypeId={}",
+                    d.getBankListId(), d.getAccountNumber(), d.getCustomerId(), d.getAccountTypeId());
             return d;
+
         } catch (Exception e) {
             log.warn("[BANK_DETAIL] Parse failed {}", e.getMessage());
             return null;
@@ -357,11 +377,12 @@ public class MeroshareApiService {
     }
 
     public List<Map> getOpenIpos(String token) {
-        String url = MERO_SHARE_BASE + "/companyShare/currentIssue/";
+        // correct endpoint is applicableIssue not currentIssue
+        String url = MERO_SHARE_BASE + "/companyShare/applicableIssue/";
         Map<String, Object> payload = buildOpenIpoPayload();
 
         try {
-            String raw = buildClient(token).post().uri("/companyShare/currentIssue/")
+            String raw = buildClient(token).post().uri("/companyShare/applicableIssue/")
                     .bodyValue(payload).retrieve().bodyToMono(String.class).block();
             List<Map> result = parseJsonResponse(raw, "OPEN_IPOS");
             if (!result.isEmpty()) return result;
@@ -374,12 +395,20 @@ public class MeroshareApiService {
     }
 
     private Map<String, Object> buildOpenIpoPayload() {
+        // full filterFieldParams and filterDateParams required by the API
         Map<String, Object> p = new LinkedHashMap<>();
+        p.put("filterDateParams", List.of(
+                Map.of("alias", "", "condition", "", "key", "minIssueOpenDate",  "value", ""),
+                Map.of("alias", "", "condition", "", "key", "maxIssueCloseDate", "value", "")
+        ));
+        p.put("filterFieldParams", List.of(
+                Map.of("alias", "Scrip",         "key", "companyIssue.companyISIN.script"),
+                Map.of("alias", "Company Name",  "key", "companyIssue.companyISIN.company.name"),
+                Map.of("alias", "Issue Manager", "key", "companyIssue.assignedToClient.name", "value", "")
+        ));
         p.put("page", 1);
-        p.put("size", 20);
         p.put("searchRoleViewConstants", "VIEW_APPLICABLE_SHARE");
-        p.put("filterFieldParams", List.of());
-        p.put("filterDateParams", List.of());
+        p.put("size", 10);
         return p;
     }
 
@@ -401,39 +430,40 @@ public class MeroshareApiService {
     }
 
     private Map<String, Object> buildAppHistoryPayload() {
-        LocalDate today           = LocalDate.now();
-        LocalDate twelveMonthsAgo = today.minusMonths(12);
-        DateTimeFormatter fmt     = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-        Map<String, Object> p    = new LinkedHashMap<>();
+        // empty value in filterDateParams returns all history without date cutoff
+        Map<String, Object> p = new LinkedHashMap<>();
+        p.put("filterFieldParams", List.of(
+                Map.of("key", "companyShare.companyIssue.companyISIN.script",       "alias", "Scrip"),
+                Map.of("key", "companyShare.companyIssue.companyISIN.company.name", "alias", "Company Name")
+        ));
         p.put("page", 1);
         p.put("size", 200);
         p.put("searchRoleViewConstants", "VIEW_APPLICANT_FORM_COMPLETE");
-        p.put("filterFieldParams", List.of());
         p.put("filterDateParams", List.of(
-                Map.of("key",       "appliedDate",
-                       "condition", "",
-                       "alias",     "",
-                       "value",     "BETWEEN '" + twelveMonthsAgo.format(fmt) + "' AND '" + today.format(fmt) + "'")));
+                Map.of("key", "appliedDate", "condition", "", "alias", "", "value", ""),
+                Map.of("key", "appliedDate", "condition", "", "alias", "", "value", "")
+        ));
         return p;
     }
 
     public String applyIpo(String token, int companyShareId, String demat, String boid,
             String accountNumber, String customerId, String accountBranchId,
-            String bankId, int kitta, String crn, String pin) {
+            String bankId, int accountTypeId, int kitta, String crn, String pin) {
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("accountBranchId", Integer.parseInt(accountBranchId));
         body.put("accountNumber",   accountNumber);
-        body.put("appliedKitta",    kitta);
+        body.put("accountTypeId",   accountTypeId);
+        body.put("appliedKitta",    String.valueOf(kitta));
         body.put("bankId",          bankId);
         body.put("boid",            boid);
-        body.put("companyShareId",  companyShareId);
-        body.put("crnNumber",       crn != null ? crn : "");
+        body.put("companyShareId",  String.valueOf(companyShareId));
+        body.put("crnNumber",       crn != null && !crn.isBlank() ? crn : accountNumber);
         body.put("customerId",      Integer.parseInt(customerId));
         body.put("demat",           demat);
         body.put("transactionPIN",  pin != null ? pin : "");
 
-        log.info("[APPLY_IPO] companyShareId {} boid {} kitta {}", companyShareId, boid, kitta);
+        log.info("[APPLY_IPO] companyShareId={} boid={} kitta={}", companyShareId, boid, kitta);
 
         String applyUrl = MERO_SHARE_BASE + "/applicantForm/share/apply/";
 
@@ -450,12 +480,16 @@ public class MeroshareApiService {
             }
         } catch (WebClientResponseException e) {
             String errBody = e.getResponseBodyAsString();
-            log.warn("[APPLY_IPO] WebClient HTTP {} {}", e.getStatusCode(), errBody);
-            if (e.getStatusCode().value() == 400) {
+            int status = e.getStatusCode().value();
+            log.warn("[APPLY_IPO] WebClient HTTP {} {}", status, errBody);
+
+            if (status >= 400 && status < 500) {
                 throw new RuntimeException(extractMessage(errBody));
             }
+
+            log.warn("[APPLY_IPO] Server error {}, trying curl fallback", status);
         } catch (Exception e) {
-            log.warn("[APPLY_IPO] WebClient failed {} trying curl", e.getMessage());
+            log.warn("[APPLY_IPO] WebClient failed {}, trying curl", e.getMessage());
         }
 
         String curlRaw = curlClient.postJson(applyUrl, toJson(body), token);
@@ -470,8 +504,12 @@ public class MeroshareApiService {
     private String extractApplyMessage(String raw) {
         try {
             JsonNode n = objectMapper.readTree(raw);
-            if (n.has("status") && !"true".equalsIgnoreCase(n.get("status").asText(""))) {
-                throw new RuntimeException(extractMessage(raw));
+            // success status from CDSC is CREATED not true or APPLIED_SUCCESS
+            if (n.has("status")) {
+                String status = n.get("status").asText("");
+                if (!"CREATED".equalsIgnoreCase(status) && !status.isBlank()) {
+                    throw new RuntimeException(extractMessage(raw));
+                }
             }
             if (n.has("message")) {
                 String msg = n.get("message").asText("");
@@ -640,6 +678,7 @@ public class MeroshareApiService {
             JsonNode itemsNode = root.has("meroShareMyPortfolio")
                     ? root.get("meroShareMyPortfolio")
                     : objectMapper.createArrayNode();
+            // totalItems is a float in the API response
             int totalItems = root.has("totalItems") ? (int) root.get("totalItems").asDouble(0) : 0;
 
             List<PortfolioResponse.PortfolioItem> items = new ArrayList<>();
@@ -714,6 +753,7 @@ public class MeroshareApiService {
         try {
             JsonNode root = objectMapper.readTree(raw);
             if (root.isArray()) return nodeArrayToList(root);
+            // results are wrapped under the object key
             if (root.has("object") && root.get("object").isArray())
                 return nodeArrayToList(root.get("object"));
             if (root.has("data") && root.get("data").isArray())
@@ -769,11 +809,13 @@ public class MeroshareApiService {
 
     @Data
     public static class BankDetails {
-        private String bankId;
+        // bankListId carries the id from GET bank list used as bankId in apply body
+        private String bankListId;
         private String accountNumber;
         private String accountBranchId;
         private String customerId;
         private String branchName;
+        private Integer accountTypeId;
     }
 
     @Data

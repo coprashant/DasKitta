@@ -192,29 +192,45 @@ public class IpoService {
                             "No bank linked to Meroshare account: " + account.getUsername() +
                             ". Please link a bank in Meroshare and try again.");
                 }
-                String firstBankId = String.valueOf(banks.get(0).get("id"));
+
+                // id from the bank list is used as bankId in the apply body
+                String bankListId = String.valueOf(banks.get(0).get("id"));
                 MeroshareApiService.BankDetails bankDetails =
-                        meroshareApiService.fetchBankDetails(token, firstBankId);
+                        meroshareApiService.fetchBankDetails(token, bankListId);
+
                 if (bankDetails == null) {
                     return buildResult(account.getId(), account.getUsername(),
                             account.getFullName(), "FAILED",
                             "Could not fetch bank details for account: " + account.getUsername());
                 }
-                if ("0".equals(bankDetails.getBankId())) {
-                    return buildResult(account.getId(), account.getUsername(),
-                            account.getFullName(), "FAILED",
-                            "Bank ID returned as 0 for account: " + account.getUsername() +
-                            ". Please re-add the account.");
-                }
-                account.setBankId(bankDetails.getBankId());
+
+                // store the bank list id as bankId for use in the apply body
+                account.setBankId(bankDetails.getBankListId());
                 account.setAccountNumber(bankDetails.getAccountNumber());
                 account.setAccountBranchId(bankDetails.getAccountBranchId());
                 account.setCustomerId(bankDetails.getCustomerId());
+                // accountTypeId is required by the apply body
+                account.setAccountTypeId(bankDetails.getAccountTypeId());
                 store.saveAccount(account);
             } catch (Exception e) {
                 log.error("[APPLY] Bank fetch failed for {}: {}", account.getUsername(), e.getMessage());
                 return buildResult(account.getId(), account.getUsername(),
                         account.getFullName(), "FAILED", "Could not fetch bank details: " + e.getMessage());
+            }
+        }
+
+        // guard for missing accountTypeId without requiring a full re-add
+        if (account.getAccountTypeId() == null) {
+            try {
+                String bankListId = account.getBankId();
+                MeroshareApiService.BankDetails bankDetails =
+                        meroshareApiService.fetchBankDetails(token, bankListId);
+                if (bankDetails != null) {
+                    account.setAccountTypeId(bankDetails.getAccountTypeId());
+                    store.saveAccount(account);
+                }
+            } catch (Exception e) {
+                log.warn("[APPLY] accountTypeId fetch failed for {}: {}", account.getUsername(), e.getMessage());
             }
         }
 
@@ -261,6 +277,8 @@ public class IpoService {
         try {
             String freshToken = loginAccountFresh(account);
 
+            int accountTypeId = account.getAccountTypeId() != null ? account.getAccountTypeId() : 1;
+
             String message = meroshareApiService.applyIpo(
                     freshToken,
                     Integer.parseInt(request.getShareId()),
@@ -270,6 +288,7 @@ public class IpoService {
                     account.getCustomerId(),
                     account.getAccountBranchId(),
                     account.getBankId(),
+                    accountTypeId,
                     request.getKitta(),
                     account.getCrn(),
                     decryptedPin
@@ -412,7 +431,7 @@ public class IpoService {
             case "NOT_ALLOTED", "NOT_ALLOTTED", "SHARE_NOT_ALLOTED", "SHARE_NOT_ALLOTTED", "REJECTED" ->
                     IpoApplication.ResultStatus.NOT_ALLOTTED;
             case "NOT_PUBLISHED", "RESULT_NOT_PUBLISHED", "PENDING",
-                 "PROCESSING", "SUBMITTED", "RECEIVED", "VERIFIED" ->
+                 "PROCESSING", "SUBMITTED", "RECEIVED", "VERIFIED", "UNVERIFIED" ->
                     IpoApplication.ResultStatus.NOT_PUBLISHED;
             case "TRANSACTION_SUCCESS", "APPROVED", "SUCCESS", "COMPLETE" ->
                     IpoApplication.ResultStatus.NOT_PUBLISHED;

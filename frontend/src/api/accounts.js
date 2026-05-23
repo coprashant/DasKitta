@@ -5,11 +5,11 @@ export const getBankByDpApi = (dpId) => client.get(`/accounts/bank-by-dp/${dpId}
 export const getAccountsApi = () => client.get("/accounts");
 
 export const addAccountApi = (data) => client.post("/accounts", {
-  dpId:     Number(data.dpId),
+  dpId:     Number(data.dpId),       
   dpCode:   data.dpCode,
   username: data.username,
   password: data.password,
-  bankId:   data.bankId ? Number(data.bankId) : null,
+  bankId:   data.bankId ?? null,
   crn:      data.crn ?? "",
   pin:      data.pin ?? "",
 });

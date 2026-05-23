@@ -36,7 +36,7 @@ public class MeroshareAccountService {
             throw new RuntimeException("Account '" + request.getUsername() + "' already exists");
         }
 
-        String dpId          = String.valueOf(request.getDpId());
+        String dpId = String.valueOf(request.getDpId());
         String plainPassword = request.getPassword();
 
         String token = meroshareApiService.login(dpId, request.getUsername(), plainPassword);
@@ -61,15 +61,17 @@ public class MeroshareAccountService {
                 .demat(ownDetail.getDemat())
                 .crn(request.getCrn())
                 .pin(request.getPin() != null && !request.getPin().isBlank()
-                        ? encryptionUtil.encrypt(request.getPin()) : null)
+                        ? encryptionUtil.encrypt(request.getPin())
+                        : null)
                 .appUser(appUser)
                 .build();
 
         if (bankDetails != null) {
-            account.setBankId(bankDetails.getBankId());
+            account.setBankId(bankDetails.getBankListId()); // renamed getter
             account.setAccountNumber(bankDetails.getAccountNumber());
             account.setAccountBranchId(bankDetails.getAccountBranchId());
             account.setCustomerId(bankDetails.getCustomerId());
+            account.setAccountTypeId(bankDetails.getAccountTypeId()); // was missing
         } else if (request.getBankId() != null) {
             account.setBankId(String.valueOf(request.getBankId()));
         }

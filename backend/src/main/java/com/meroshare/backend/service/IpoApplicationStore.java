@@ -74,20 +74,16 @@ public class IpoApplicationStore {
                             String applicantFormId, String companyShareId,
                             String companyName, String scrip, String shareTypeName,
                             String resultStatus, int allottedKitta) {
-        CdscResultCache row = existing != null
-                ? existing
-                : CdscResultCache.builder()
-                        .meroshareAccount(account)
-                        .applicantFormId(applicantFormId)
-                        .build();
 
-        row.setCompanyShareId(companyShareId);
-        row.setCompanyName(companyName);
-        row.setScrip(scrip);
-        row.setShareTypeName(shareTypeName);
-        row.setResultStatus(resultStatus);
-        row.setAllottedKitta(allottedKitta);
-
-        cdscResultCacheRepository.save(row);
+        cdscResultCacheRepository.upsert(
+                account.getId(),
+                applicantFormId,
+                companyShareId,
+                companyName,
+                scrip,
+                shareTypeName,
+                resultStatus,
+                allottedKitta
+        );
     }
 }

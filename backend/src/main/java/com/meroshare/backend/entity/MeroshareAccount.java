@@ -43,6 +43,8 @@ public class MeroshareAccount {
 
     private String customerId;
 
+    private Integer accountTypeId;
+
     private String crn;
 
     private String pin;

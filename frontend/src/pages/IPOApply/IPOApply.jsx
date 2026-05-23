@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { getAccountsApi } from "../../api/accounts";
 import { getOpenIposApi, applyIpoApi } from "../../api/ipo";
+import { CheckIcon, ChevronIcon, ClearIcon, MinusIcon, PlusIcon, SearchIcon, SpinnerIcon } from "../../components/Icons";
 import Layout from "../../components/Layout";
 import toast from "react-hot-toast";
 import "./IPOApply.css";
@@ -66,7 +67,6 @@ const IPOApply = () => {
 
   const selectAll = () => {
     const visibleIds = filteredAccounts.map((a) => a.id);
-    // FIX: check only visible ids for the toggle so label matches visible state
     const allVisible = visibleIds.length > 0 && visibleIds.every((id) => selectedAccounts.includes(id));
     if (allVisible) {
       setSelectedAccounts((p) => p.filter((id) => !visibleIds.includes(id)));
@@ -78,7 +78,6 @@ const IPOApply = () => {
   const allVisibleSelected =
     filteredAccounts.length > 0 && filteredAccounts.every((a) => selectedAccounts.includes(a.id));
 
-  // FIX: clear stale results when a different IPO is selected
   const handleSelectIpo = useCallback((ipo) => {
     setSelectedIpo(ipo);
     setResults([]);
@@ -110,7 +109,6 @@ const IPOApply = () => {
 
   const canApply = !!selectedIpo && selectedAccounts.length > 0 && !applying;
 
-  // FIX: extracted ApplyButton outside render cycle via useCallback to avoid re-creating on every render
   const ApplyButton = useCallback(({ className = "" }) => (
     <button
       className={`ipo-apply-btn${canApply ? "" : " disabled"} ${className}`.trim()}
@@ -127,7 +125,6 @@ const IPOApply = () => {
   const renderIpoItem = (ipo) => {
     const sel = selectedIpo?.companyShareId === ipo.companyShareId;
     return (
-      // FIX: use handleSelectIpo to clear results on selection change
       <div key={ipo.companyShareId} className={`ipo-item${sel ? " selected" : ""}`} onClick={() => handleSelectIpo(ipo)}>
         <div className="ipo-item-body">
           <p className="ipo-name">{ipo.companyName}</p>
@@ -238,7 +235,6 @@ const IPOApply = () => {
                         value={kitta}
                         min={10}
                         onChange={(e) => {
-                          // FIX: parseInt can return NaN on empty string; default to 10 before Math.max
                           const parsed = parseInt(e.target.value, 10);
                           setKitta(Math.max(10, isNaN(parsed) ? 10 : parsed));
                         }}
@@ -288,7 +284,6 @@ const IPOApply = () => {
                       filteredAccounts.map((acc) => {
                         const on = selectedAccounts.includes(acc.id);
                         return (
-                          // FIX: use acc.id as key instead of array index for stable reconciliation
                           <div key={acc.id} className={`ipo-acc-row${on ? " on" : ""}`} onClick={() => toggleAccount(acc.id)}>
                             <div className={`ipo-checkbox${on ? " on" : ""}`}>{on && <CheckIcon />}</div>
                             <div className="ipo-acc-info">
@@ -311,7 +306,6 @@ const IPOApply = () => {
                     <div className="ipo-section-label">Results</div>
                     <div className="ipo-results-list">
                       {results.map((r, i) => (
-                        // FIX: use stable key combining username and index to avoid collisions
                         <div className="ipo-result-row" key={`${r.username ?? ""}_${i}`}>
                           <div>
                             <p className="ipo-result-name">{r.fullName || r.username}</p>
@@ -328,7 +322,6 @@ const IPOApply = () => {
 
             <div className="ipo-sticky-bar">
               <div className="ipo-sticky-summary">
-                {/* FIX: only show total kitta line when accounts are selected to avoid showing 0 */}
                 <span>{selectedAccounts.length} account{selectedAccounts.length !== 1 ? "s" : ""}</span>
                 {selectedAccounts.length > 0 && (
                   <>
@@ -348,27 +341,5 @@ const IPOApply = () => {
     </Layout>
   );
 };
-
-const CheckIcon = () => (
-  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-);
-const MinusIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
-);
-const PlusIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-);
-const SpinnerIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ animation: "spin 0.7s linear infinite" }}><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-);
-const ChevronIcon = ({ rotated }) => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: rotated ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}><polyline points="6 9 12 15 18 9"/></svg>
-);
-const SearchIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-);
-const ClearIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-);
 
 export default IPOApply;
