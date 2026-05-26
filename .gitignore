@@ -86,7 +86,7 @@ yarn-error.log*
 pnpm-debug.log*
 logs/
 
-
+postgres-data/
 repomix-output.xml
 MEROSHARE_API_REFERENCE.md
 NEPSE_API_REFERENCE.md

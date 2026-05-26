@@ -99,6 +99,7 @@ DasKitta
         │   └── ipo.js
         ├── components
         │   ├── Navbar.jsx / Navbar.css
+        │   ├── Icons.jsx
         │   └── ProtectedRoute.jsx
         ├── context
         │   └── AuthContext.jsx

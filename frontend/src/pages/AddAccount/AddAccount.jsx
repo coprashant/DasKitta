@@ -6,7 +6,7 @@ import {
 } from "../../api/accounts";
 import { useAccount } from "../../context/AccountContext";
 import Layout from "../../components/Layout";
-import { InfoIcon, SpinnerIcon, DragHandleIcon } from "../../components/Icons";
+import { InfoIcon, SpinnerIcon, DragHandleIcon , EyeIcon, EyeOffIcon} from "../../components/Icons";
 import toast from "react-hot-toast";
 import "./AddAccount.css";
 
@@ -14,6 +14,8 @@ const EMPTY_FORM = { dpId: "", dpCode: "", username: "", password: "", bankId: "
 
 const AddAccount = () => {
   const navigate = useNavigate();
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPin, setShowPin] = useState(false);
   const { refreshAccounts, activeAccount, setActiveAccount, reorderAccounts } = useAccount();
   const [form, setForm] = useState(EMPTY_FORM);
   const [accounts, setAccounts] = useState([]);
@@ -217,11 +219,23 @@ const AddAccount = () => {
 
               <div className="form-group">
                 <label className="form-label">Meroshare password</label>
-                <input
-                  className="input" type="password" name="password"
-                  value={form.password} onChange={handleChange}
-                  placeholder="Your Meroshare password" required
-                />
+                <div style={{ position: "relative" }}>
+                  <input
+                      className="input" type={showPassword ? "text" : "password"} name="password"
+                      value={form.password} onChange={handleChange}
+                      placeholder="Your Meroshare password" required
+                      style={{ paddingRight: 40 }}
+                  />
+                  <button type="button" onClick={() => setShowPassword(v => !v)}
+                          aria-label={showPassword ? "Hide password" : "Show password"}
+                          style={{
+                            position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+                            background: "none", border: "none", cursor: "pointer",
+                            color: "var(--text-3)", display: "flex", alignItems: "center", padding: 0,
+                          }}>
+                    {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                  </button>
+                </div>
               </div>
 
               <div className="form-group">
@@ -235,12 +249,25 @@ const AddAccount = () => {
 
               <div className="form-group">
                 <label className="form-label">Transaction PIN</label>
-                <input
-                  className="input" type="password" name="pin"
-                  value={form.pin} onChange={handleChange}
-                  placeholder="Meroshare transaction PIN (MPIN)"
-                />
+                <div style={{ position: "relative" }}>
+                  <input
+                      className="input" type={showPin ? "text" : "password"} name="pin"
+                      value={form.pin} onChange={handleChange}
+                      placeholder="Meroshare transaction PIN (MPIN)"
+                      style={{ paddingRight: 40 }}
+                  />
+                  <button type="button" onClick={() => setShowPin(v => !v)}
+                          aria-label={showPin ? "Hide PIN" : "Show PIN"}
+                          style={{
+                            position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+                            background: "none", border: "none", cursor: "pointer",
+                            color: "var(--text-3)", display: "flex", alignItems: "center", padding: 0,
+                          }}>
+                    {showPin ? <EyeOffIcon /> : <EyeIcon />}
+                  </button>
+                </div>
               </div>
+
 
               <div className="form-note">
                 <InfoIcon />

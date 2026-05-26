@@ -2,12 +2,14 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import Navbar from "../../components/Navbar";
+import { EyeIcon, EyeOffIcon } from "../../components/Icons";
 import "./Auth.css";
 
 const Register = () => {
   const { register } = useAuth();
   const navigate = useNavigate();
   const [form, setForm]       = useState({ username: "", email: "", password: "" });
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
@@ -87,20 +89,35 @@ const Register = () => {
               />
             </div>
             <div className="form-group">
-              <label className="form-label" htmlFor="reg-password">Password</label>
+            <label className="form-label" htmlFor="reg-password">Password</label>
+            <div style={{ position: "relative" }}>
               <input
-                id="reg-password"
-                className="input"
-                type="password"
-                name="password"
-                value={form.password}
-                onChange={handleChange}
-                placeholder="Min 6 characters"
-                required
-                autoComplete="new-password"
-                minLength={6}
+                  id="reg-password"
+                  className="input"
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  value={form.password}
+                  onChange={handleChange}
+                  placeholder="Min 6 characters"
+                  required
+                  autoComplete="new-password"
+                  minLength={6}
+                  style={{ paddingRight: 40 }}
               />
+              <button
+                  type="button"
+                  onClick={() => setShowPassword(v => !v)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  style={{
+                    position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+                    background: "none", border: "none", cursor: "pointer",
+                    color: "var(--text-3)", display: "flex", alignItems: "center", padding: 0,
+                  }}
+              >
+                {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+              </button>
             </div>
+          </div>
             <button
               type="submit"
               className="btn btn-primary btn-full btn-lg"
