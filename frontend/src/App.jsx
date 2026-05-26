@@ -8,8 +8,7 @@ import AccountSync from "./components/AccountSync";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 import Home          from "./pages/Home/Home";
-import Login         from "./pages/Auth/Login";
-import Register      from "./pages/Auth/Register";
+import Auth          from "./pages/Auth/Auth";
 import Dashboard     from "./pages/Dashboard/Dashboard";
 import AddAccount    from "./pages/AddAccount/AddAccount";
 import IPOApply      from "./pages/IPOApply/IPOApply";
@@ -46,8 +45,8 @@ const App = () => {
               />
               <Routes>
                 <Route path="/"           element={<Home />} />
-                <Route path="/login"      element={<Login />} />
-                <Route path="/register"   element={<Register />} />
+                <Route path="/login"    element={<Auth />} />
+                <Route path="/register" element={<Auth />} />
                 <Route path="/ipo/result" element={<ResultChecker />} />
                 <Route path="/nepse"      element={<Nepse />} />
 
