@@ -5,7 +5,7 @@ import {
   isNepseOpen,
   getTopGainers,
   getTopLosers,
-} from "../api/nepse";
+} from "../../api/nepse.js";
 import "./NepseStrip.css";
 
 function buildSparkline(rawPoints, width, height, padding = 6) {

@@ -10,6 +10,16 @@
   animation: fade-up 0.32s var(--ease) both;
 }
 
+@media (max-width: 768px) {
+  .layout-main {
+    padding-bottom: calc(60px + env(safe-area-inset-bottom));
+  }
+
+  .layout footer {
+    display: none;
+  }
+}
+
 @keyframes fade-up {
   from {
     opacity: 0;

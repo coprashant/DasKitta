@@ -4,7 +4,7 @@ import {
   getPublicShareListApi, getAppliedCompaniesApi,
 } from "../../api/ipo";
 import { useAuth } from "../../context/AuthContext";
-import Layout from "../../components/Layout";
+import Layout from "../../components/Layout/Layout.jsx";
 import { InfoIcon, SpinnerIcon, WarnIcon } from "../../components/Icons";
 import toast from "react-hot-toast";
 import "./ResultChecker.css";

@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import Layout from "../../components/Layout";
-import NepseStrip, { NepseHeroCard } from "../../components/NepseStrip";
+import Layout from "../../components/Layout/Layout.jsx";
+import NepseStrip, { NepseHeroCard } from "../../components/NepseStrip/NepseStrip.jsx";
 import "./Home.css";
 
 const features = [

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { getHistoryApi } from "../../api/ipo";
 import { useAccount } from "../../context/AccountContext";
-import Layout from "../../components/Layout";
+import Layout from "../../components/Layout/Layout.jsx";
 import { ChevronLeft, ChevronRight, EmptyIllustration, SearchIcon } from "../../components/Icons";
 import "./History.css";
 

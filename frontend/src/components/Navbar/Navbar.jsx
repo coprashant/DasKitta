@@ -1,23 +1,22 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-import { useTheme } from "../context/ThemeContext";
-import { useAccount } from "../context/AccountContext";
-import { useNotifications } from "../context/NotificationContext";
-import NotificationPanel from "./NotificationPanel";
+import { useAuth } from "../../context/AuthContext";
+import { useTheme } from "../../context/ThemeContext";
+import { useAccount } from "../../context/AccountContext";
+import { useNotifications } from "../../context/NotificationContext";
+import NotificationPanel from "../NotificationPanel/NotificationPanel";
 import {
   BellIcon, SunIcon, MoonIcon, ProfileIcon, CheckIcon,
-  PlusIcon, SettingsIcon, SignOutIcon, TabIconPortfolio, TabIconResults, TabIconNepse,
-  TabIconDashboard, TabIconApply
-} from "./Icons";
+  PlusIcon, SettingsIcon, SignOutIcon
+} from "../Icons";
 import "./Navbar.css";
 
 const authLinks = [
-  { path: "/dashboard",  label: "Dashboard", mobileLabel: "Home",      MobileIcon: TabIconDashboard },
-  { path: "/nepse",      label: "Nepse",      mobileLabel: "Nepse",     MobileIcon: TabIconNepse     },
-  { path: "/ipo/apply",  label: "Apply IPO",  mobileLabel: "Apply",     MobileIcon: TabIconApply     },
-  { path: "/ipo/result", label: "Results",    mobileLabel: "Results",   MobileIcon: TabIconResults   },
-  { path: "/portfolio",  label: "Portfolio",  mobileLabel: "Portfolio", MobileIcon: TabIconPortfolio },
+  { path: "/dashboard",  label: "Dashboard" },
+  { path: "/nepse",      label: "Nepse"      },
+  { path: "/ipo/apply",  label: "Apply IPO"  },
+  { path: "/ipo/result", label: "Results"    },
+  { path: "/portfolio",  label: "Portfolio"  },
 ];
 
 const secondaryLinks = [
@@ -177,80 +176,62 @@ const Navbar = () => {
   }, [profileOpen]);
 
   return (
-      <>
-        <nav className="navbar" aria-label="Main navigation">
-          <div className="navbar-inner">
-            <Link to="/" className="navbar-brand">
-              <img src="/favicon.png" className="navbar-logo" alt="DasKitta" />
-              <span className="navbar-name">DasKitta</span>
-            </Link>
+      <nav className="navbar" aria-label="Main navigation">
+        <div className="navbar-inner">
+          <Link to="/" className="navbar-brand">
+            <img src="/favicon.png" className="navbar-logo" alt="DasKitta" />
+            <span className="navbar-name">DasKitta</span>
+          </Link>
 
-            <div className="navbar-links">
-              {desktopLinks.map((l) => (
-                  <Link
-                      key={l.path}
-                      to={l.path}
-                      className={`navbar-link${pathname === l.path ? " active" : ""}`}
-                      aria-current={pathname === l.path ? "page" : undefined}
-                  >
-                    {l.label}
-                  </Link>
-              ))}
-            </div>
-
-            <div className="navbar-right">
-              {user && <BellButton />}
-
-              <button
-                  className="navbar-theme-btn"
-                  onClick={toggle}
-                  aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-                  title={theme === "dark" ? "Light mode" : "Dark mode"}
-              >
-                {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-              </button>
-
-              {user ? (
-                  <div className="profile-btn-wrap" ref={profileRef}>
-                    <button
-                        className={`navbar-profile-btn${profileOpen ? " active" : ""}`}
-                        onClick={() => setProfileOpen((v) => !v)}
-                        aria-label="Profile menu"
-                        aria-expanded={profileOpen}
-                        aria-haspopup="true"
-                    >
-                      <ProfileIcon />
-                    </button>
-                    {profileOpen && (
-                        <ProfileDropdown onClose={() => setProfileOpen(false)} />
-                    )}
-                  </div>
-              ) : (
-                  <>
-                    <Link to="/login" className="navbar-link navbar-link-ghost">Sign in</Link>
-                    <Link to="/register" className="btn btn-primary btn-sm">Get started</Link>
-                  </>
-              )}
-            </div>
+          <div className="navbar-links">
+            {desktopLinks.map((l) => (
+                <Link
+                    key={l.path}
+                    to={l.path}
+                    className={`navbar-link${pathname === l.path ? " active" : ""}`}
+                    aria-current={pathname === l.path ? "page" : undefined}
+                >
+                  {l.label}
+                </Link>
+            ))}
           </div>
-        </nav>
 
-        {user && (
-            <nav className="mobile-tab-bar" aria-label="Mobile navigation">
-              {authLinks.map(({ path, mobileLabel, MobileIcon }) => (
-                  <Link
-                      key={path}
-                      to={path}
-                      className={`tab-item${pathname === path ? " active" : ""}`}
-                      aria-current={pathname === path ? "page" : undefined}
+          <div className="navbar-right">
+            {user && <BellButton />}
+
+            <button
+                className="navbar-theme-btn"
+                onClick={toggle}
+                aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                title={theme === "dark" ? "Light mode" : "Dark mode"}
+            >
+              {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+            </button>
+
+            {user ? (
+                <div className="profile-btn-wrap" ref={profileRef}>
+                  <button
+                      className={`navbar-profile-btn${profileOpen ? " active" : ""}`}
+                      onClick={() => setProfileOpen((v) => !v)}
+                      aria-label="Profile menu"
+                      aria-expanded={profileOpen}
+                      aria-haspopup="true"
                   >
-                    <MobileIcon />
-                    <span className="tab-label">{mobileLabel}</span>
-                  </Link>
-              ))}
-            </nav>
-        )}
-      </>
+                    <ProfileIcon />
+                  </button>
+                  {profileOpen && (
+                      <ProfileDropdown onClose={() => setProfileOpen(false)} />
+                  )}
+                </div>
+            ) : (
+                <>
+                  <Link to="/login" className="navbar-link navbar-link-ghost">Sign in</Link>
+                  <Link to="/register" className="btn btn-primary btn-sm">Get started</Link>
+                </>
+            )}
+          </div>
+        </div>
+      </nav>
   );
 };
 

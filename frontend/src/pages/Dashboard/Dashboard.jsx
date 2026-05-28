@@ -3,8 +3,8 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useAccount } from "../../context/AccountContext";
 import { getHistoryApi, getCdscSummaryApi } from "../../api/ipo";
-import Layout from "../../components/Layout";
-import AccountSwitcher from "../../components/AccountSwitcher";
+import Layout from "../../components/Layout/Layout.jsx";
+import AccountSwitcher from "../../components/AccountSwitcher/AccountSwitcher.jsx";
 import { IconUser, IconPlus, IconFile, IconRefresh, IconStack, IconCheck, IconX, IconClock } from "../../components/Icons";
 import {
   AreaChart, Area, PieChart, Pie, Cell,

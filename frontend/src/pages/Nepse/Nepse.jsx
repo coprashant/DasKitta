@@ -9,7 +9,7 @@ import {
   getFloorsheet,
   getPriceVolume,
 } from "../../api/nepse";
-import Layout from "../../components/Layout";
+import Layout from "../../components/Layout/Layout.jsx";
 import "./Nepse.css";
 
 const REFRESH_INTERVAL = 30000;

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { getAccountsApi } from "../../api/accounts";
 import { getOpenIposApi, applyIpoApi } from "../../api/ipo";
 import { CheckIcon, ChevronIcon, ClearIcon, MinusIcon, PlusIcon, SearchIcon, SpinnerIcon } from "../../components/Icons";
-import Layout from "../../components/Layout";
+import Layout from "../../components/Layout/Layout.jsx";
 import toast from "react-hot-toast";
 import "./IPOApply.css";
 

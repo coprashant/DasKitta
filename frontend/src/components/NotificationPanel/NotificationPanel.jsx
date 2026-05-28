@@ -1,9 +1,9 @@
-import { useNotifications } from "../context/NotificationContext";
+import { useNotifications } from "../../context/NotificationContext.jsx";
 import {
   IconBell, IconBellOff, IconRefresh, IconTrash,
   IconTrendUp, IconTrendDown, IconAlertCircle,
   IconCalendarClock, IconSparkle,
-} from "./Icons";
+} from "../Icons.jsx";
 import "./NotificationPanel.css";
 
 const TYPE_META = {

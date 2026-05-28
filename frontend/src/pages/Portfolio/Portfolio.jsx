@@ -2,8 +2,8 @@ import { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { getPortfolioApi } from "../../api/accounts";
 import { useAccount } from "../../context/AccountContext";
-import Layout from "../../components/Layout";
-import AccountSwitcher from "../../components/AccountSwitcher";
+import Layout from "../../components/Layout/Layout.jsx";
+import AccountSwitcher from "../../components/AccountSwitcher/AccountSwitcher.jsx";
 import "./Portfolio.css";
 
 const fmt = (n) =>

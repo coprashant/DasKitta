@@ -5,7 +5,7 @@ import {
   deleteAccountApi, getDpListApi, getBankByDpApi,
 } from "../../api/accounts";
 import { useAccount } from "../../context/AccountContext";
-import Layout from "../../components/Layout";
+import Layout from "../../components/Layout/Layout.jsx";
 import { InfoIcon, SpinnerIcon, DragHandleIcon , EyeIcon, EyeOffIcon} from "../../components/Icons";
 import toast from "react-hot-toast";
 import "./AddAccount.css";

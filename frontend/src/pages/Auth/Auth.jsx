@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import Navbar from "../../components/Navbar";
+import Navbar from "../../components/Navbar/Navbar.jsx";
 import { EyeIcon, EyeOffIcon, CloseIcon, SpinnerIcon } from "../../components/Icons";
 import "./Auth.css";
 

@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { useAccount } from "../context/AccountContext";
+import { useAccount } from "../../context/AccountContext.jsx";
 import {
     IconUser, IconPlus, IconFile, IconRefresh, 
     IconStack, IconCheck, IconX, IconClock, 
     IconChevronDown, IconCheckSmall
-} from "./Icons";
+} from "../Icons.jsx";
 import "./AccountSwitcher.css";
 
 export default function AccountSwitcher() {

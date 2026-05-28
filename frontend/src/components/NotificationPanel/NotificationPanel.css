@@ -16,14 +16,19 @@
 /* on very small screens shift panel left so it stays in viewport */
 @media (max-width: 400px) {
   .notif-panel {
-    right: -8px;
-    max-width : 250px;
+    right: -20px;
   }
 }
 
+  @media (max-width: 345px) {
+    .notif-panel {
+      right: -45px;
+    }
+  }
+
 @media (max-width: 450px){
   .notif-panel {
-    max-width: 300px;
+    max-width: 800%;
   }
 }
 
