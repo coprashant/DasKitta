@@ -290,3 +290,49 @@ export const EyeOffIcon = () => (
         <line x1="1" y1="1" x2="23" y2="23"/>
     </svg>
 );
+
+export const TabIconDashboard = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="3" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="3" width="7" height="7" rx="1" />
+        <rect x="3" y="14" width="7" height="7" rx="1" />
+        <rect x="14" y="14" width="7" height="7" rx="1" />
+    </svg>
+);
+
+export const TabIconNepse = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <line x1="5" y1="3" x2="5" y2="6" />
+        <rect x="3" y="6" width="4" height="6" rx="0.5" />
+        <line x1="5" y1="12" x2="5" y2="15" />
+        <line x1="12" y1="5" x2="12" y2="8" />
+        <rect x="10" y="8" width="4" height="8" rx="0.5" />
+        <line x1="12" y1="16" x2="12" y2="19" />
+        <line x1="19" y1="4" x2="19" y2="7" />
+        <rect x="17" y="7" width="4" height="5" rx="0.5" />
+        <line x1="19" y1="12" x2="19" y2="16" />
+    </svg>
+);
+
+export const TabIconApply = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+        <line x1="12" y1="12" x2="12" y2="18" />
+        <line x1="9" y1="15" x2="15" y2="15" />
+    </svg>
+);
+
+export const TabIconResults = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 22h6a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v10" />
+        <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+        <path d="m3 17 2 2 4-4" />
+    </svg>
+);
+export const TabIconPortfolio = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="2" y="7" width="20" height="14" rx="2" />
+        <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
+    </svg>
+);

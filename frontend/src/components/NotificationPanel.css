@@ -2,20 +2,28 @@
   position: absolute;
   top: calc(100% + 10px);
   right: 0;
-  width: 340px;
+  /* clamp width so it never exceeds viewport */
+  width: min(340px, calc(100vw - 24px));
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-lg);
-  z-index: 300;
+  z-index: 400;
   animation: fade-up var(--t-slow) var(--ease) both;
   overflow: hidden;
 }
 
+/* on very small screens shift panel left so it stays in viewport */
 @media (max-width: 400px) {
   .notif-panel {
-    width: calc(100vw - 24px);
     right: -8px;
+    max-width : 250px;
+  }
+}
+
+@media (max-width: 450px){
+  .notif-panel {
+    max-width: 300px;
   }
 }
 
@@ -53,24 +61,19 @@
   cursor: pointer;
   transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
-
 .notif-action-btn:hover:not(:disabled) {
   background: var(--surface-2);
   color: var(--text);
 }
-
-.notif-action-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
+.notif-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .notif-action-danger:hover:not(:disabled) {
   background: var(--danger-dim);
   color: var(--danger);
 }
 
 .notif-list {
-  max-height: 420px;
+  /* cap height and allow scrolling within the panel */
+  max-height: min(420px, 60vh);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -83,11 +86,7 @@
   padding: 48px 24px;
   color: var(--text-3);
 }
-
-.notif-empty p {
-  font-size: 13px;
-  color: var(--text-3);
-}
+.notif-empty p { font-size: 13px; color: var(--text-3); }
 
 .notif-item {
   display: flex;
@@ -98,22 +97,10 @@
   position: relative;
   transition: background var(--t-fast) var(--ease);
 }
-
-.notif-item:last-child {
-  border-bottom: none;
-}
-
-.notif-item:hover {
-  background: var(--surface-2);
-}
-
-.notif-item-unread {
-  background: var(--accent-dim);
-}
-
-.notif-item-unread:hover {
-  background: var(--accent-muted);
-}
+.notif-item:last-child { border-bottom: none; }
+.notif-item:hover { background: var(--surface-2); }
+.notif-item-unread { background: var(--accent-dim); }
+.notif-item-unread:hover { background: var(--accent-muted); }
 
 .notif-icon-wrap {
   display: flex;
