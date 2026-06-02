@@ -1,6 +1,7 @@
 /* Layout */
 .ipo-page {
-  padding-bottom: calc(60px + 72px + env(safe-area-inset-bottom) + 16px);
+  /* tab bar plus sticky bar plus safe area */
+  padding-bottom: calc(60px + 64px + env(safe-area-inset-bottom) + 16px);
 }
 @media (min-width: 768px) {
   .ipo-page { padding-bottom: 64px; }
@@ -28,6 +29,14 @@
     max-height: calc(5 * (55px + 12px));
     overflow-y: auto;
   }
+}
+
+/* mobile only and desktop only visibility helpers */
+.ipo-mobile-only { display: block; }
+.ipo-desktop-only { display: none; }
+@media (min-width: 768px) {
+  .ipo-mobile-only { display: none; }
+  .ipo-desktop-only { display: block; }
 }
 
 .ipo-col {
@@ -88,9 +97,9 @@
   border-radius: var(--r-lg);
   cursor: pointer;
   transition:
-    border-color var(--t-fast) var(--ease),
-    background var(--t-fast) var(--ease),
-    transform var(--t-fast) var(--ease);
+          border-color var(--t-fast) var(--ease),
+          background var(--t-fast) var(--ease),
+          transform var(--t-fast) var(--ease);
   box-sizing: border-box;
 }
 .ipo-item:hover { border-left-color: var(--border-strong); background: var(--surface-3); }
@@ -166,16 +175,23 @@
 .ipo-others-content { margin-top: 6px; }
 
 /* KITTA STEPPER */
+.ipo-kitta-card {
+  padding: 12px 14px;
+}
+@media (min-width: 768px) {
+  .ipo-kitta-card { padding: 20px; }
+}
+
 .kitta-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
-@media (min-width: 360px) { .kitta-row { gap: 12px; } }
+@media (min-width: 768px) { .kitta-row { gap: 12px; } }
 
 .kitta-btn {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border: 1px solid var(--border-strong);
   border-radius: var(--r);
   background: var(--surface-2);
@@ -186,12 +202,12 @@
   justify-content: center;
   flex-shrink: 0;
   transition:
-    border-color var(--t-fast) var(--ease),
-    color var(--t-fast) var(--ease),
-    background var(--t-fast) var(--ease),
-    transform var(--t-fast) var(--ease);
+          border-color var(--t-fast) var(--ease),
+          color var(--t-fast) var(--ease),
+          background var(--t-fast) var(--ease),
+          transform var(--t-fast) var(--ease);
 }
-@media (min-width: 360px) { .kitta-btn { width: 44px; height: 44px; } }
+@media (min-width: 768px) { .kitta-btn { width: 44px; height: 44px; } }
 .kitta-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
 .kitta-btn:active { transform: scale(0.94); }
 
@@ -199,18 +215,18 @@
   flex: 1;
   display: flex;
   align-items: baseline;
-  gap: 7px;
+  gap: 6px;
   justify-content: center;
 }
 
 .kitta-input {
-  width: 64px;
+  width: 58px;
   text-align: center;
   background: var(--surface);
   border: 1px solid var(--border-strong);
   border-radius: var(--r);
-  padding: 8px 4px;
-  font-size: 20px;
+  padding: 6px 4px;
+  font-size: 18px;
   font-weight: 700;
   color: var(--text);
   font-family: var(--font);
@@ -219,20 +235,20 @@
   appearance: textfield;
   -moz-appearance: textfield;
 }
-@media (min-width: 360px) { .kitta-input { width: 76px; font-size: 22px; padding: 8px 6px; } }
+@media (min-width: 768px) { .kitta-input { width: 76px; font-size: 22px; padding: 8px 6px; } }
 .kitta-input::-webkit-outer-spin-button,
 .kitta-input::-webkit-inner-spin-button { -webkit-appearance: none; }
 .kitta-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
 
 .kitta-unit {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-3);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
-/* ACCOUNTS */
+/* ACCOUNTS HEAD */
 .ipo-accounts-head {
   display: flex;
   align-items: center;
@@ -240,8 +256,8 @@
   margin-bottom: 12px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--border);
-  flex-wrap: wrap;
   gap: 6px;
+  position: relative;
 }
 
 .ipo-sel-all {
@@ -255,46 +271,74 @@
   font-family: var(--font);
   transition: color var(--t-fast) var(--ease);
   white-space: nowrap;
+  margin-left: auto;
 }
 .ipo-sel-all:hover { color: var(--accent-hover); text-decoration: underline; }
 
-/* ACCOUNT SEARCH */
-.ipo-search-wrap {
-  position: relative;
+/* INLINE EXPANDABLE SEARCH */
+.ipo-search-inline {
   display: flex;
   align-items: center;
-  margin-bottom: 10px;
+  flex-shrink: 0;
 }
 
-.ipo-search-icon {
-  position: absolute;
-  left: 11px;
-  display: flex;
-  align-items: center;
-  color: var(--text-3);
-  pointer-events: none;
-}
-
-.ipo-search-input {
-  padding-left: 34px;
-  padding-right: 36px;
-}
-
-.ipo-search-clear {
-  position: absolute;
-  right: 7px;
+.ipo-search-inline-trigger {
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--text-3);
-  padding: 5px;
+  padding: 4px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  border-radius: 50%;
+  color: var(--text-2);
+  border-radius: var(--r);
   transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
 }
-.ipo-search-clear:hover { color: var(--text); background: var(--surface-3); }
+.ipo-search-inline-trigger:hover { color: var(--accent); background: var(--accent-dim); }
+
+.ipo-search-inline.open {
+  flex: 1;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r);
+  padding: 4px 8px;
+  gap: 4px;
+}
+
+.ipo-search-inline-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 12px;
+  color: var(--text);
+  font-family: var(--font);
+  min-width: 0;
+}
+.ipo-search-inline-input::placeholder { color: var(--text-3); }
+
+.ipo-search-inline-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 3px;
+  display: flex;
+  align-items: center;
+  color: var(--text-3);
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+}
+.ipo-search-inline-close:hover { color: var(--text); background: var(--surface-3); }
+
+/* on desktop keep the old full search bar behavior */
+@media (min-width: 768px) {
+  .ipo-search-inline { display: none; }
+  .ipo-search-inline.open { display: none; }
+
+  .ipo-accounts-head::after {
+    content: none;
+  }
+}
 
 /* ACCOUNT ROWS */
 .ipo-acc-list {
@@ -310,20 +354,20 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 14px;
-  min-height: 52px;
+  padding: 11px 12px;
+  min-height: 48px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-left: 3px solid transparent;
   border-radius: var(--r-lg);
   cursor: pointer;
   transition:
-    border-color var(--t-fast) var(--ease),
-    background var(--t-fast) var(--ease),
-    transform var(--t-fast) var(--ease);
+          border-color var(--t-fast) var(--ease),
+          background var(--t-fast) var(--ease),
+          transform var(--t-fast) var(--ease);
   box-sizing: border-box;
 }
-@media (min-width: 360px) { .ipo-acc-row { padding: 14px 16px; min-height: 55px; gap: 11px; } }
+@media (min-width: 768px) { .ipo-acc-row { padding: 14px 16px; min-height: 55px; gap: 11px; } }
 .ipo-acc-row:hover { border-left-color: var(--border-strong); background: var(--surface-3); }
 .ipo-acc-row:active { transform: scale(0.99); }
 .ipo-acc-row.on { border-left-color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
@@ -364,6 +408,49 @@
   text-overflow: ellipsis;
 }
 
+/* desktop search bar kept for wider screens */
+.ipo-search-wrap {
+  display: none;
+}
+@media (min-width: 768px) {
+  .ipo-search-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+}
+
+.ipo-search-icon {
+  position: absolute;
+  left: 11px;
+  display: flex;
+  align-items: center;
+  color: var(--text-3);
+  pointer-events: none;
+}
+
+.ipo-search-input {
+  padding-left: 34px;
+  padding-right: 36px;
+}
+
+.ipo-search-clear {
+  position: absolute;
+  right: 7px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-3);
+  padding: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+}
+.ipo-search-clear:hover { color: var(--text); background: var(--surface-3); }
+
 /* APPLY BUTTON */
 .ipo-apply-btn {
   width: 100%;
@@ -383,10 +470,10 @@
   gap: 8px;
   letter-spacing: 0.01em;
   transition:
-    background var(--t-fast) var(--ease),
-    box-shadow var(--t-fast) var(--ease),
-    transform var(--t-fast) var(--ease),
-    opacity var(--t-fast) var(--ease);
+          background var(--t-fast) var(--ease),
+          box-shadow var(--t-fast) var(--ease),
+          transform var(--t-fast) var(--ease),
+          opacity var(--t-fast) var(--ease);
 }
 .ipo-apply-btn:hover:not(.disabled) {
   background: var(--accent-hover);
@@ -401,11 +488,10 @@
   opacity: 0.6;
 }
 
-/* Desktop apply, hidden on mobile */
 .ipo-desktop-apply { display: none; }
 @media (min-width: 768px) { .ipo-desktop-apply { display: block; } }
 
-/* STICKY BAR */
+/* STICKY BAR mobile only */
 .ipo-sticky-bar {
   position: fixed;
   bottom: calc(60px + env(safe-area-inset-bottom));
