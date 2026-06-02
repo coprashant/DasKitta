@@ -514,7 +514,7 @@
   color: var(--text-3);
 }
 
-/* See all / show less button — mobile only, below the CDSC table */
+/* See all / show less button */
 .cdsc-see-all-btn {
   display: flex;
   align-items: center;

@@ -12,6 +12,9 @@ import {
 } from "recharts";
 import "./Dashboard.css";
 
+const CDSC_MOBILE_LIMIT = 5;
+
+/** @type {{ h?: number | string, w?: number | string, style?: React.CSSProperties }} */
 const Skeleton = ({ h = 16, w = "100%", style = {} }) => (
     <div className="skeleton" style={{ height: h, width: w, ...style }} />
 );
@@ -57,12 +60,68 @@ const StatCard = ({ icon, label, value, color, loading, delay }) => (
       <div className="stat-body">
         <p className="stat-label">{label}</p>
         {loading
-            ? <Skeleton h={36} w={52} style={{ marginTop: 6, borderRadius: 6 }} />
+            ? <Skeleton h={36} w="52px" style={{ marginTop: 6, borderRadius: 6 }} />
             : <p className={`stat-value stat-value-${color}`}>{value ?? "—"}</p>
         }
       </div>
     </div>
 );
+
+/* CDSC table with mobile expand/collapse */
+const CdscTable = ({ items, isMobile, expanded, onExpand, onCollapse }) => {
+  const visible = isMobile && !expanded ? items.slice(0, CDSC_MOBILE_LIMIT) : items;
+  const showSeeAll = isMobile && !expanded && items.length > CDSC_MOBILE_LIMIT;
+  const showLess   = isMobile && expanded  && items.length > CDSC_MOBILE_LIMIT;
+
+  return (
+      <>
+        <div className="table-scroll">
+          <table className="dash-table">
+            <thead>
+            <tr>
+              <th>Company</th>
+              {/* hidden on mobile via col-type */}
+              <th className="col-type">Type</th>
+              <th>Result</th>
+            </tr>
+            </thead>
+            <tbody>
+            {visible.map((item, i) => (
+                <tr key={item.applicantFormId ?? i}>
+                  <td>
+                    <span className="cell-primary">{item.companyName}</span>
+                    {item.scrip && <span className="cell-scrip">{item.scrip}</span>}
+                  </td>
+                  <td className="col-type">
+                    <span className="cell-type">{item.shareTypeName || "—"}</span>
+                  </td>
+                  <td>
+                      <span className={`badge ${cdscResultBadgeClass(item.resultStatus)}`}>
+                        {item.resultStatus === "ALLOTTED"     && <span className="badge-dot badge-dot-success" />}
+                        {item.resultStatus === "NOT_ALLOTTED" && <span className="badge-dot badge-dot-danger"  />}
+                        {item.resultStatus?.replace(/_/g, " ") ?? "—"}
+                      </span>
+                  </td>
+                </tr>
+            ))}
+            </tbody>
+          </table>
+        </div>
+        {showSeeAll && (
+            <button className="cdsc-see-all-btn" onClick={onExpand}>
+              See all {items.length} applications
+            </button>
+        )}
+        {showLess && (
+            <button className="cdsc-see-all-btn" onClick={onCollapse}>
+              Show less
+            </button>
+        )}
+      </>
+  );
+};
+
+const PIE_COLORS = ["var(--success)", "var(--danger)", "var(--border-strong)"];
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -106,8 +165,12 @@ const Dashboard = () => {
   }, []);
 
   const fetchCdscSummary = useCallback(async (accountId, isRefresh = false) => {
-    if (isRefresh) setCdscRefreshing(true);
-    else { setCdscLoading(true); setCdscSummary(null); }
+    if (isRefresh) {
+      setCdscRefreshing(true);
+    } else {
+      setCdscLoading(true);
+      setCdscSummary(null);
+    }
     setCdscError(null);
     try {
       const res = await getCdscSummaryApi(accountId);
@@ -122,10 +185,14 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (accountLoading) return;
-    if (!activeAccount) { setCdscSummary(null); setCdscError(null); return; }
+    if (!activeAccount) {
+      setCdscSummary(null);
+      setCdscError(null);
+      return;
+    }
     setCdscExpanded(false);
     fetchCdscSummary(activeAccount.id, false);
-  }, [activeAccount?.id, accountLoading]);
+  }, [activeAccount, accountLoading, fetchCdscSummary]);
 
   const history = useMemo(() => {
     if (!activeAccount) return [];
@@ -199,10 +266,10 @@ const Dashboard = () => {
                 )}
 
                 <div className="dash-stats">
-                  <StatCard icon={<IconStack />}  label="Total Applied"  value={cdscSummary?.total}        color="accent"   loading={statsLoading} delay="0ms"   />
-                  <StatCard icon={<IconCheck />}  label="Allotted"       value={cdscSummary?.allotted}     color="success"  loading={statsLoading} delay="60ms"  />
-                  <StatCard icon={<IconX />}      label="Not Allotted"   value={cdscSummary?.failed}       color="danger"   loading={statsLoading} delay="120ms" />
-                  <StatCard icon={<IconClock />}  label="Pending"        value={cdscSummary?.notPublished} color="muted"    loading={statsLoading} delay="180ms" />
+                  <StatCard icon={<IconStack />} label="Total Applied"  value={cdscSummary?.total}        color="accent"  loading={statsLoading} delay="0ms"   />
+                  <StatCard icon={<IconCheck />} label="Allotted"       value={cdscSummary?.allotted}     color="success" loading={statsLoading} delay="60ms"  />
+                  <StatCard icon={<IconX />}     label="Not Allotted"   value={cdscSummary?.failed}       color="danger"  loading={statsLoading} delay="120ms" />
+                  <StatCard icon={<IconClock />} label="Pending"        value={cdscSummary?.notPublished} color="muted"   loading={statsLoading} delay="180ms" />
                 </div>
 
                 {cdscSummary && cdscSummary.total > 0 && (
@@ -231,10 +298,16 @@ const Dashboard = () => {
                             <>
                               <ResponsiveContainer width="100%" height={100}>
                                 <PieChart>
-                                  <Pie data={pieData} dataKey="value" outerRadius={44} innerRadius={26} paddingAngle={2}>
-                                    <Cell fill="var(--success)" />
-                                    <Cell fill="var(--danger)"  />
-                                    <Cell fill="var(--border-strong)" />
+                                  <Pie
+                                      data={pieData}
+                                      dataKey="value"
+                                      outerRadius={44}
+                                      innerRadius={26}
+                                      paddingAngle={2}
+                                  >
+                                    {pieData.map((entry, index) => (
+                                        <Cell key={entry.name} fill={PIE_COLORS[index]} />
+                                    ))}
                                   </Pie>
                                   <Tooltip contentStyle={TOOLTIP_STYLE} />
                                 </PieChart>
@@ -253,10 +326,10 @@ const Dashboard = () => {
                 <div className="dash-main">
                   <div className="dash-main-primary">
                     <div className="section-head">
-                  <span className="section-title-sm">
-                    CDSC history
-                    {cdscSummary && <span className="section-count">{cdscSummary.total}</span>}
-                  </span>
+                      <span className="section-title-sm">
+                        CDSC history
+                        {cdscSummary && <span className="section-count">{cdscSummary.total}</span>}
+                      </span>
                     </div>
                     <div className="card">
                       {cdscLoading ? (
@@ -267,8 +340,8 @@ const Dashboard = () => {
                                     <Skeleton h={12} w="60%" />
                                     <Skeleton h={10} w="30%" style={{ marginTop: 5 }} />
                                   </div>
-                                  <Skeleton h={12} w={50} />
-                                  <Skeleton h={22} w={90} style={{ borderRadius: 20 }} />
+                                  <Skeleton h={12} w="50px" />
+                                  <Skeleton h={22} w="90px" style={{ borderRadius: 20 }} />
                                 </div>
                             ))}
                           </div>
@@ -282,66 +355,15 @@ const Dashboard = () => {
                             No applications in CDSC.{" "}
                             <Link to="/ipo/apply" className="inline-link-btn">Apply now</Link>
                           </div>
-                      ) : cdscSummary ? (() => {
-                        const MOBILE_LIMIT = 5;
-                        const items = cdscSummary.items;
-                        const hasMore = isMobile && items.length > MOBILE_LIMIT;
-                        const visible = (isMobile && !cdscExpanded)
-                            ? items.slice(0, MOBILE_LIMIT)
-                            : items;
-                        return (
-                            <>
-                              <div className="table-scroll">
-                                <table className="dash-table">
-                                  <thead>
-                                  <tr>
-                                    <th>Company</th>
-                                    {/* hidden on mobile via col-type */}
-                                    <th className="col-type">Type</th>
-                                    <th>Result</th>
-                                  </tr>
-                                  </thead>
-                                  <tbody>
-                                  {visible.map((item, i) => (
-                                      <tr key={item.applicantFormId ?? i}>
-                                        <td>
-                                          <span className="cell-primary">{item.companyName}</span>
-                                          {item.scrip && <span className="cell-scrip">{item.scrip}</span>}
-                                        </td>
-                                        <td className="col-type">
-                                          <span className="cell-type">{item.shareTypeName || "—"}</span>
-                                        </td>
-                                        <td>
-                                    <span className={`badge ${cdscResultBadgeClass(item.resultStatus)}`}>
-                                      {item.resultStatus === "ALLOTTED"     && <span className="badge-dot badge-dot-success" />}
-                                      {item.resultStatus === "NOT_ALLOTTED" && <span className="badge-dot badge-dot-danger"  />}
-                                      {item.resultStatus?.replace(/_/g, " ") ?? "—"}
-                                    </span>
-                                        </td>
-                                      </tr>
-                                  ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                              {hasMore && (
-                                  <button
-                                      className="cdsc-see-all-btn"
-                                      onClick={() => setCdscExpanded(true)}
-                                  >
-                                    See all {items.length} applications
-                                  </button>
-                              )}
-                              {isMobile && cdscExpanded && items.length > MOBILE_LIMIT && (
-                                  <button
-                                      className="cdsc-see-all-btn"
-                                      onClick={() => setCdscExpanded(false)}
-                                  >
-                                    Show less
-                                  </button>
-                              )}
-                            </>
-                        );
-                      })() : null}
+                      ) : cdscSummary ? (
+                          <CdscTable
+                              items={cdscSummary.items}
+                              isMobile={isMobile}
+                              expanded={cdscExpanded}
+                              onExpand={() => setCdscExpanded(true)}
+                              onCollapse={() => setCdscExpanded(false)}
+                          />
+                      ) : null}
                     </div>
                   </div>
 
@@ -357,7 +379,7 @@ const Dashboard = () => {
                               {[1,2,3].map(k => (
                                   <div key={k} className="table-skeleton-row">
                                     <Skeleton h={12} w="55%" />
-                                    <Skeleton h={22} w={100} style={{ borderRadius: 20 }} />
+                                    <Skeleton h={22} w="100px" style={{ borderRadius: 20 }} />
                                   </div>
                               ))}
                             </div>
@@ -379,9 +401,9 @@ const Dashboard = () => {
                                       <tr key={item.id}>
                                         <td><span className="cell-primary">{item.companyName}</span></td>
                                         <td>
-                                    <span className={`h-status-badge h-status-${derived.variant}`}>
-                                      {derived.label}
-                                    </span>
+                                            <span className={`h-status-badge h-status-${derived.variant}`}>
+                                              {derived.label}
+                                            </span>
                                         </td>
                                       </tr>
                                   );
