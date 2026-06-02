@@ -1,6 +1,6 @@
 /* Layout */
 .ipo-page {
-  padding-bottom: calc(72px + 24px);
+  padding-bottom: calc(60px + 72px + env(safe-area-inset-bottom) + 16px);
 }
 @media (min-width: 768px) {
   .ipo-page { padding-bottom: 64px; }
@@ -405,13 +405,13 @@
 .ipo-desktop-apply { display: none; }
 @media (min-width: 768px) { .ipo-desktop-apply { display: block; } }
 
-/* STICKY BAR mobile only */
+/* STICKY BAR */
 .ipo-sticky-bar {
   position: fixed;
-  bottom: 0;
+  bottom: calc(60px + env(safe-area-inset-bottom));
   left: 0;
   right: 0;
-  height: 72px;
+  height: 64px;
   background: var(--surface);
   border-top: 1px solid var(--border);
   box-shadow: var(--shadow-lg);
