@@ -79,7 +79,7 @@ const ProfileDropdown = ({ onClose }) => {
           <Link to="/accounts/add" className="profile-action-btn" onClick={onClose} role="menuitem">
             <PlusIcon /><span>Add account</span>
           </Link>
-          <Link to="/accounts/manage" className="profile-action-btn" onClick={onClose} role="menuitem">
+          <Link to="/accounts/add" className="profile-action-btn" onClick={onClose} role="menuitem">
             <SettingsIcon /><span>Manage accounts</span>
           </Link>
         </div>
