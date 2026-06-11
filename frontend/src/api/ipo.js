@@ -16,8 +16,8 @@ export const applyIpoApi = (data) => client.post("/ipo/apply", {
 export const checkResultApi = (shareId) =>
   client.get(`/ipo/result/${shareId}`);
 
-export const checkResultGuestApi = (shareId, boid) =>
-  client.get(`/ipo/result/${shareId}`, { params: { boid } });
+// export const checkResultGuestApi = (shareId, boid) =>
+//   client.get(`/ipo/result/${shareId}`, { params: { boid } });
 
 export const getHistoryApi = () => client.get("/ipo/history");
 

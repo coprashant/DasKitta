@@ -1,11 +1,14 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { useAccount } from "./AccountContext";
-import { getHistoryApi, getCdscSummaryApi } from "../api/ipo";
+import { getHistoryApi } from "../api/ipo";
+import ipoData from "../ipo_data.json";
+import { bsToAd, nowNepal } from "../dateUtils";
 
 const NotificationContext = createContext(null);
 
-const NOTIF_KEY = (id) => `dk-notifs-${id}`;
-const READ_KEY  = (id) => `dk-notifs-read-${id}`;
+const NOTIF_KEY   = (id) => `dk-notifs-${id}`;
+const READ_KEY    = (id) => `dk-notifs-read-${id}`;
+const DELETED_KEY = (id) => `dk-notifs-deleted-${id}`;
 
 const readStored = (key) => {
   try {
@@ -22,106 +25,114 @@ const writeStored = (key, value) => {
   } catch {}
 };
 
-const TYPE = {
-  ALLOTTED:        "ALLOTTED",
-  NOT_ALLOTTED:    "NOT_ALLOTTED",
-  RESULT_PUBLISHED:"RESULT_PUBLISHED",
-  APP_FAILED:      "APP_FAILED",
-  IPO_CLOSING_SOON:"IPO_CLOSING_SOON",
-  NEW_IPO:         "NEW_IPO",
-};
-
 const buildId = (...parts) => parts.join("-");
 
-const deriveFromHistory = (items) => {
+const msToDhm = (ms) => {
+  const totalMins = Math.floor(ms / 60000);
+  return {
+    days: Math.floor(totalMins / 1440),
+    hrs:  Math.floor((totalMins % 1440) / 60),
+    mins: totalMins % 60,
+  };
+};
+
+const closingDetail = (closeDateBs) => {
+  try {
+    const closeAd = bsToAd(closeDateBs);
+    const diff    = closeAd - nowNepal();
+    if (diff <= 0) return "Closed";
+    const { days, hrs, mins } = msToDhm(diff);
+    if (days > 0) return `Closes in ${days}d`;
+    if (hrs  > 0) return `Closes in ${hrs}h`;
+    if (mins > 0) return `Closes in ${mins}m`;
+    return "Closing soon";
+  } catch {
+    return null;
+  }
+};
+
+const openingDetail = (openDateBs) => {
+  try {
+    const openAd = bsToAd(openDateBs);
+    const diff   = openAd - nowNepal();
+    if (diff <= 0) return "Opens today";
+    const { days, hrs } = msToDhm(diff);
+    if (days > 0) return `Opens in ${days}d`;
+    if (hrs  > 0) return `Opens in ${hrs}h`;
+    return "Opening soon";
+  } catch {
+    return null;
+  }
+};
+
+const deriveIpoNotifs = (deletedIds) => {
   const notifs = [];
-  for (const item of items) {
-    if (item.status === "FAILED") {
-      notifs.push({
-        id:        buildId("fail", item.id),
-        type:      TYPE.APP_FAILED,
-        title:     "Application failed",
-        body:      item.companyName || "Unknown company",
-        detail:    item.statusMessage || null,
-        timestamp: item.appliedAt,
-        shareId:   item.shareId,
-      });
+  const now    = nowNepal();
+
+  for (const ipo of ipoData) {
+    let closeAd, openAd;
+    try {
+      closeAd = bsToAd(ipo.closeDate);
+      openAd  = bsToAd(ipo.openDate);
+    } catch (e) {
+      console.error(`dateUtils: ${e.message}`);
+      continue;
     }
-    if (item.resultStatus === "ALLOTTED") {
-      notifs.push({
-        id:        buildId("allot", item.id),
-        type:      TYPE.ALLOTTED,
-        title:     "Shares allotted",
-        body:      item.companyName || "Unknown company",
-        detail:    item.allottedKitta ? `${item.allottedKitta} kitta allotted` : null,
-        timestamp: item.resultCheckedAt || item.appliedAt,
-        shareId:   item.shareId,
-      });
+
+    if (ipo.status === "open") {
+      if (closeAd < now) continue;
+      const diffClose  = closeAd - now;
+      const { days }   = msToDhm(diffClose);
+      if (days <= 3) {
+        const id = buildId("ipo-closing", ipo.id);
+        if (!deletedIds.has(id)) {
+          notifs.push({
+            id,
+            type:      "IPO_CLOSING_SOON",
+            title:     "Closing soon",
+            body:      ipo.companyName,
+            detail:    closingDetail(ipo.closeDate),
+            timestamp: new Date(closeAd.getTime() - 3 * 86400000).toISOString(),
+            ipoId:     ipo.id,
+          });
+        }
+      }
     }
-    if (item.resultStatus === "NOT_ALLOTTED") {
-      notifs.push({
-        id:        buildId("notallot", item.id),
-        type:      TYPE.NOT_ALLOTTED,
-        title:     "Not allotted",
-        body:      item.companyName || "Unknown company",
-        detail:    null,
-        timestamp: item.resultCheckedAt || item.appliedAt,
-        shareId:   item.shareId,
-      });
+
+    if (ipo.status === "upcoming") {
+      if (openAd < now) continue;
+      const id = buildId("ipo-upcoming", ipo.id);
+      if (!deletedIds.has(id)) {
+        notifs.push({
+          id,
+          type:      "NEW_IPO",
+          title:     "Upcoming IPO",
+          body:      ipo.companyName,
+          detail:    openingDetail(ipo.openDate),
+          timestamp: new Date(openAd.getTime() - 7 * 86400000).toISOString(),
+          ipoId:     ipo.id,
+        });
+      }
     }
   }
+
   return notifs;
 };
 
-const deriveFromCdsc = (cdscItems, existingIds) => {
+const deriveFromHistory = (items, deletedIds) => {
   const notifs = [];
-  for (const item of cdscItems) {
-    const formId = item.applicantFormId || item.companyShareId;
-    if (!formId) continue;
-
-    if (item.resultStatus === "ALLOTTED") {
-      const id = buildId("cdsc-allot", formId);
-      if (!existingIds.has(id)) {
+  for (const item of items) {
+    if (item.status === "FAILED") {
+      const id = buildId("fail", item.id);
+      if (!deletedIds.has(id)) {
         notifs.push({
           id,
-          type:      TYPE.ALLOTTED,
-          title:     "Shares allotted",
-          body:      item.companyName || item.scrip || "Unknown company",
-          detail:    item.allottedKitta ? `${item.allottedKitta} kitta allotted` : null,
-          timestamp: new Date().toISOString(),
-          shareId:   item.companyShareId || null,
-        });
-      }
-    }
-    if (item.resultStatus === "NOT_ALLOTTED") {
-      const id = buildId("cdsc-notallot", formId);
-      if (!existingIds.has(id)) {
-        notifs.push({
-          id,
-          type:      TYPE.NOT_ALLOTTED,
-          title:     "Not allotted",
-          body:      item.companyName || item.scrip || "Unknown company",
-          detail:    null,
-          timestamp: new Date().toISOString(),
-          shareId:   item.companyShareId || null,
-        });
-      }
-    }
-    if (
-      item.resultStatus !== "NOT_PUBLISHED" &&
-      item.resultStatus !== "ALLOTTED" &&
-      item.resultStatus !== "NOT_ALLOTTED"
-    ) {
-      const id = buildId("cdsc-pub", formId);
-      if (!existingIds.has(id)) {
-        notifs.push({
-          id,
-          type:      TYPE.RESULT_PUBLISHED,
-          title:     "Result published",
-          body:      item.companyName || item.scrip || "Unknown company",
-          detail:    null,
-          timestamp: new Date().toISOString(),
-          shareId:   item.companyShareId || null,
+          type:      "APP_FAILED",
+          title:     "Application failed",
+          body:      item.companyName || "Unknown company",
+          detail:    item.statusMessage || null,
+          timestamp: item.appliedAt,
+          shareId:   item.shareId,
         });
       }
     }
@@ -140,7 +151,7 @@ const mergeNotifs = (existing, incoming) => {
 };
 
 export const NotificationProvider = ({ children }) => {
-  const { activeAccount, accounts } = useAccount();
+  const { activeAccount } = useAccount();
 
   const [notifsByAccount, setNotifsByAccount] = useState({});
   const [readByAccount,   setReadByAccount]   = useState({});
@@ -150,13 +161,8 @@ export const NotificationProvider = ({ children }) => {
 
   const accountId = activeAccount?.id;
 
-  const notifications = accountId
-    ? (notifsByAccount[accountId] || [])
-    : [];
-
-  const readTimestamp = accountId
-    ? (readByAccount[accountId] || 0)
-    : 0;
+  const notifications = accountId ? (notifsByAccount[accountId] || []) : [];
+  const readTimestamp = accountId ? (readByAccount[accountId] || 0) : 0;
 
   const unreadCount = notifications.filter(
     (n) => new Date(n.timestamp).getTime() > readTimestamp
@@ -166,36 +172,30 @@ export const NotificationProvider = ({ children }) => {
     if (!acc) return;
     const id = acc.id;
 
-    const storedNotifs = readStored(NOTIF_KEY(id)) || [];
-    const storedRead   = readStored(READ_KEY(id))  || 0;
+    const storedNotifs  = readStored(NOTIF_KEY(id))   || [];
+    const storedRead    = readStored(READ_KEY(id))     || 0;
+    const storedDeleted = readStored(DELETED_KEY(id))  || [];
+    const deletedIds    = new Set(storedDeleted);
 
-    setNotifsByAccount((prev) => ({ ...prev, [id]: storedNotifs }));
+    const ipoNotifs = deriveIpoNotifs(deletedIds);
+    const merged    = mergeNotifs(storedNotifs, ipoNotifs);
+
+    setNotifsByAccount((prev) => ({ ...prev, [id]: merged }));
     setReadByAccount((prev)   => ({ ...prev, [id]: storedRead }));
+    writeStored(NOTIF_KEY(id), merged);
 
     if (fetchedRef.current.has(id)) return;
     fetchedRef.current.add(id);
 
     setLoading(true);
     try {
-      const existingIds = new Set(storedNotifs.map((n) => n.id));
-      const fresh = [];
-
-      try {
-        const histRes = await getHistoryApi();
-        const histItems = (Array.isArray(histRes?.data) ? histRes.data : [])
-          .filter((h) => h.accountUsername === acc.username);
-        fresh.push(...deriveFromHistory(histItems));
-      } catch {}
-
-      try {
-        const cdscRes = await getCdscSummaryApi(id);
-        const cdscItems = cdscRes?.data?.items || [];
-        fresh.push(...deriveFromCdsc(cdscItems, existingIds));
-      } catch {}
-
-      const merged = mergeNotifs(storedNotifs, fresh);
-      setNotifsByAccount((prev) => ({ ...prev, [id]: merged }));
-      writeStored(NOTIF_KEY(id), merged);
+      const histRes   = await getHistoryApi();
+      const histItems = (Array.isArray(histRes?.data) ? histRes.data : [])
+        .filter((h) => h.accountUsername === acc.username);
+      const histNotifs = deriveFromHistory(histItems, deletedIds);
+      const mergedAll  = mergeNotifs(merged, histNotifs);
+      setNotifsByAccount((prev) => ({ ...prev, [id]: mergedAll }));
+      writeStored(NOTIF_KEY(id), mergedAll);
     } catch {}
     finally {
       setLoading(false);
@@ -215,9 +215,14 @@ export const NotificationProvider = ({ children }) => {
 
   const clearAll = useCallback(() => {
     if (!accountId) return;
+    const current    = notifsByAccount[accountId] || [];
+    const deletedIds = current.map((n) => n.id);
+    const existing   = readStored(DELETED_KEY(accountId)) || [];
+    const merged     = [...new Set([...existing, ...deletedIds])];
+    writeStored(DELETED_KEY(accountId), merged);
     setNotifsByAccount((prev) => ({ ...prev, [accountId]: [] }));
     writeStored(NOTIF_KEY(accountId), []);
-  }, [accountId]);
+  }, [accountId, notifsByAccount]);
 
   const refresh = useCallback(() => {
     if (!activeAccount) return;

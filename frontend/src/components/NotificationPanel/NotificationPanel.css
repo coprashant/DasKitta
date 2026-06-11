@@ -2,7 +2,6 @@
   position: absolute;
   top: calc(100% + 10px);
   right: 0;
-  /* clamp width so it never exceeds viewport */
   width: min(340px, calc(100vw - 24px));
   background: var(--surface);
   border: 1px solid var(--border);
@@ -12,24 +11,14 @@
   animation: fade-up var(--t-slow) var(--ease) both;
   overflow: hidden;
 }
-
-/* on very small screens shift panel left so it stays in viewport */
 @media (max-width: 400px) {
-  .notif-panel {
-    right: -20px;
-  }
+  .notif-panel { right: -20px; }
 }
-
-  @media (max-width: 345px) {
-    .notif-panel {
-      right: -45px;
-    }
-  }
-
-@media (max-width: 450px){
-  .notif-panel {
-    max-width: 800%;
-  }
+@media (max-width: 345px) {
+  .notif-panel { right: -45px; }
+}
+@media (max-width: 450px) {
+  .notif-panel { max-width: 800%; }
 }
 
 .notif-panel-header {
@@ -71,13 +60,13 @@
   color: var(--text);
 }
 .notif-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
 .notif-action-danger:hover:not(:disabled) {
   background: var(--danger-dim);
   color: var(--danger);
 }
 
 .notif-list {
-  /* cap height and allow scrolling within the panel */
   max-height: min(420px, 60vh);
   overflow-y: auto;
   overscroll-behavior: contain;

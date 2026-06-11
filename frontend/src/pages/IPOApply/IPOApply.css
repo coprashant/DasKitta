@@ -1,6 +1,5 @@
 /* Layout */
 .ipo-page {
-  /* tab bar plus sticky bar plus safe area */
   padding-bottom: calc(60px + 64px + env(safe-area-inset-bottom) + 16px);
 }
 @media (min-width: 768px) {
@@ -31,7 +30,6 @@
   }
 }
 
-/* mobile only and desktop only visibility helpers */
 .ipo-mobile-only { display: block; }
 .ipo-desktop-only { display: none; }
 @media (min-width: 768px) {
@@ -97,9 +95,9 @@
   border-radius: var(--r-lg);
   cursor: pointer;
   transition:
-          border-color var(--t-fast) var(--ease),
-          background var(--t-fast) var(--ease),
-          transform var(--t-fast) var(--ease);
+    border-color var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease);
   box-sizing: border-box;
 }
 .ipo-item:hover { border-left-color: var(--border-strong); background: var(--surface-3); }
@@ -112,14 +110,38 @@
 
 .ipo-item-body { flex: 1; min-width: 0; }
 
+/* name row holds name + countdown badge inline */
+.ipo-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
 .ipo-name {
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
-  margin: 0 0 2px;
+  margin: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* closing countdown badge */
+.ipo-countdown-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--mono);
+  color: var(--text-3);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 1px 5px;
+  line-height: 1.5;
+  white-space: nowrap;
 }
 
 .ipo-meta {
@@ -144,7 +166,7 @@
 .ipo-radio.on { border-color: var(--accent); background: var(--accent); }
 .ipo-radio-dot { width: 6px; height: 6px; border-radius: 50%; background: #fff; }
 
-/* TOGGLE OTHERS */
+/* Toggle others */
 .ipo-others-wrap { margin-top: 4px; }
 
 .ipo-toggle-others {
@@ -174,7 +196,7 @@
 
 .ipo-others-content { margin-top: 6px; }
 
-/* KITTA STEPPER */
+/* Kitta stepper */
 .ipo-kitta-card {
   padding: 12px 14px;
 }
@@ -202,10 +224,10 @@
   justify-content: center;
   flex-shrink: 0;
   transition:
-          border-color var(--t-fast) var(--ease),
-          color var(--t-fast) var(--ease),
-          background var(--t-fast) var(--ease),
-          transform var(--t-fast) var(--ease);
+    border-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease);
 }
 @media (min-width: 768px) { .kitta-btn { width: 44px; height: 44px; } }
 .kitta-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
@@ -248,7 +270,7 @@
   letter-spacing: 0.05em;
 }
 
-/* ACCOUNTS HEAD */
+/* Accounts head */
 .ipo-accounts-head {
   display: flex;
   align-items: center;
@@ -275,7 +297,7 @@
 }
 .ipo-sel-all:hover { color: var(--accent-hover); text-decoration: underline; }
 
-/* INLINE EXPANDABLE SEARCH */
+/* Inline expandable search */
 .ipo-search-inline {
   display: flex;
   align-items: center;
@@ -330,17 +352,13 @@
 }
 .ipo-search-inline-close:hover { color: var(--text); background: var(--surface-3); }
 
-/* on desktop keep the old full search bar behavior */
 @media (min-width: 768px) {
   .ipo-search-inline { display: none; }
   .ipo-search-inline.open { display: none; }
-
-  .ipo-accounts-head::after {
-    content: none;
-  }
+  .ipo-accounts-head::after { content: none; }
 }
 
-/* ACCOUNT ROWS */
+/* Account rows */
 .ipo-acc-list {
   display: grid;
   grid-template-columns: 1fr;
@@ -362,9 +380,9 @@
   border-radius: var(--r-lg);
   cursor: pointer;
   transition:
-          border-color var(--t-fast) var(--ease),
-          background var(--t-fast) var(--ease),
-          transform var(--t-fast) var(--ease);
+    border-color var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease);
   box-sizing: border-box;
 }
 @media (min-width: 768px) { .ipo-acc-row { padding: 14px 16px; min-height: 55px; gap: 11px; } }
@@ -408,10 +426,8 @@
   text-overflow: ellipsis;
 }
 
-/* desktop search bar kept for wider screens */
-.ipo-search-wrap {
-  display: none;
-}
+/* Desktop search bar kept for wider screens */
+.ipo-search-wrap { display: none; }
 @media (min-width: 768px) {
   .ipo-search-wrap {
     position: relative;
@@ -451,7 +467,7 @@
 }
 .ipo-search-clear:hover { color: var(--text); background: var(--surface-3); }
 
-/* APPLY BUTTON */
+/* Apply button */
 .ipo-apply-btn {
   width: 100%;
   padding: 14px 20px;
@@ -470,10 +486,10 @@
   gap: 8px;
   letter-spacing: 0.01em;
   transition:
-          background var(--t-fast) var(--ease),
-          box-shadow var(--t-fast) var(--ease),
-          transform var(--t-fast) var(--ease),
-          opacity var(--t-fast) var(--ease);
+    background var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease),
+    opacity var(--t-fast) var(--ease);
 }
 .ipo-apply-btn:hover:not(.disabled) {
   background: var(--accent-hover);
@@ -491,7 +507,7 @@
 .ipo-desktop-apply { display: none; }
 @media (min-width: 768px) { .ipo-desktop-apply { display: block; } }
 
-/* STICKY BAR mobile only */
+/* Sticky bar mobile only */
 .ipo-sticky-bar {
   position: fixed;
   bottom: calc(60px + env(safe-area-inset-bottom));
@@ -541,7 +557,7 @@
   font-size: 13px;
 }
 
-/* RESULTS */
+/* Results */
 .ipo-results-list { display: flex; flex-direction: column; }
 
 .ipo-result-row {
@@ -558,11 +574,61 @@
 .ipo-result-name { font-size: 13px; font-weight: 600; color: var(--text); margin: 0 0 2px; }
 .ipo-result-msg { font-size: 11px; color: var(--text-2); margin: 0; }
 
-/* SKELETON ROWS */
+/* Skeleton rows */
 .ipo-skel-row { padding: 14px 0; border-bottom: 1px solid var(--border); }
 .ipo-skel-row:last-child { border-bottom: none; }
 
+/* Upcoming IPOs card */
+.ipo-upcoming-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.ipo-upcoming-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.ipo-upcoming-row:last-child { border-bottom: none; }
+
+.ipo-upcoming-info { flex: 1; min-width: 0; }
+
+.ipo-upcoming-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ipo-upcoming-meta {
+  font-size: 11px;
+  color: var(--text-2);
+  margin: 0;
+  font-family: var(--mono);
+}
+
+/* opening countdown badge */
+.ipo-opening-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--mono);
+  color: var(--text-3);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
 @keyframes spin {
   from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  to   { transform: rotate(360deg); }
 }

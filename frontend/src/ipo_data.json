@@ -1,0 +1,20 @@
+[
+  {
+    "id": "ipo-001",
+    "companyName": "Sarvottam Paints Industries Limited",
+    "scrip": "SARVOTTAM",
+    "companyShareId": 791,
+    "status": "open",
+    "openDate": "2083-02-28",
+    "closeDate": "2083-03-02"
+  },
+  {
+    "id": "ipo-002",
+    "companyName": "Mount Everest Power Development Limited",
+    "scrip": "MEPDL",
+    "companyShareId": 792,
+    "status": "upcoming",
+    "openDate": "2083-03-03",
+    "closeDate": "2083-03-08"
+  }
+]
