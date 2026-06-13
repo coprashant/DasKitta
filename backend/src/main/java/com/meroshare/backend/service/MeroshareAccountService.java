@@ -2,6 +2,7 @@ package com.meroshare.backend.service;
 
 import com.meroshare.backend.dto.MeroshareAccountRequest;
 import com.meroshare.backend.dto.MeroshareAccountResponse;
+import com.meroshare.backend.dto.MeroshareAccountUpdateRequest;
 import com.meroshare.backend.dto.PortfolioResponse;
 import com.meroshare.backend.entity.AppUser;
 import com.meroshare.backend.entity.MeroshareAccount;
@@ -33,7 +34,7 @@ public class MeroshareAccountService {
                 .orElseThrow(() -> new RuntimeException("User not found " + appUsername));
 
         if (accountRepository.existsByUsernameAndAppUserId(request.getUsername(), appUser.getId())) {
-            throw new RuntimeException("Account '" + request.getUsername() + "' already exists");
+            throw new RuntimeException("Account " + request.getUsername() + " already exists");
         }
 
         String dpId = String.valueOf(request.getDpId());
@@ -67,17 +68,17 @@ public class MeroshareAccountService {
                 .build();
 
         if (bankDetails != null) {
-            account.setBankId(bankDetails.getBankListId()); // renamed getter
+            account.setBankId(bankDetails.getBankListId());
             account.setAccountNumber(bankDetails.getAccountNumber());
             account.setAccountBranchId(bankDetails.getAccountBranchId());
             account.setCustomerId(bankDetails.getCustomerId());
-            account.setAccountTypeId(bankDetails.getAccountTypeId()); // was missing
+            account.setAccountTypeId(bankDetails.getAccountTypeId());
         } else if (request.getBankId() != null) {
             account.setBankId(String.valueOf(request.getBankId()));
         }
 
         accountRepository.save(account);
-        log.info("[ADD_ACCOUNT] Saved account for user {} boid {}", request.getUsername(), ownDetail.getBoid());
+        log.info("ADD ACCOUNT saved account for user {} boid {}", request.getUsername(), ownDetail.getBoid());
 
         return toResponse(account);
     }
@@ -88,6 +89,41 @@ public class MeroshareAccountService {
                 .orElseThrow(() -> new RuntimeException("User not found " + appUsername));
         return accountRepository.findByAppUserId(appUser.getId())
                 .stream().map(this::toResponse).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public MeroshareAccountResponse updateAccount(Long accountId, MeroshareAccountUpdateRequest request, String appUsername) {
+        AppUser appUser = appUserRepository.findByUsername(appUsername)
+                .orElseThrow(() -> new RuntimeException("User not found " + appUsername));
+
+        MeroshareAccount account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new RuntimeException("Account not found"));
+
+        if (!account.getAppUser().getId().equals(appUser.getId())) {
+            throw new RuntimeException("Unauthorized");
+        }
+
+        boolean passwordProvided = request.getPassword() != null && !request.getPassword().isBlank();
+        boolean pinProvided = request.getPin() != null && !request.getPin().isBlank();
+
+        if (!passwordProvided && !pinProvided) {
+            throw new RuntimeException("Nothing to update");
+        }
+
+        if (passwordProvided) {
+            String dpId = account.getDpId();
+            meroshareApiService.login(dpId, account.getUsername(), request.getPassword());
+            account.setPassword(encryptionUtil.encrypt(request.getPassword()));
+        }
+
+        if (pinProvided) {
+            account.setPin(encryptionUtil.encrypt(request.getPin()));
+        }
+
+        accountRepository.save(account);
+        log.info("UPDATE ACCOUNT updated account {} for user {}", accountId, appUsername);
+
+        return toResponse(account);
     }
 
     @Transactional
