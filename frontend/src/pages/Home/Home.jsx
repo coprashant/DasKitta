@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import Layout from "../../components/Layout/Layout.jsx";
 import NepseStrip, { NepseHeroCard } from "../../components/NepseStrip/NepseStrip.jsx";
+import { useNepaliDateTime } from "../../dateUtils";
 import "./Home.css";
 
 const features = [
@@ -55,6 +56,7 @@ const features = [
 
 const Home = ({ theme, onThemeToggle }) => {
   const { user } = useAuth();
+  const { dateShort, timeStr } = useNepaliDateTime();
 
   return (
     <Layout theme={theme} onThemeToggle={onThemeToggle}>
@@ -63,7 +65,16 @@ const Home = ({ theme, onThemeToggle }) => {
       <section className="hero">
         <div className="hero-inner">
           <div className="hero-left">
-            <span className="hero-eyebrow">NEPSE IPO Automation</span>
+
+            <div className="hero-eyebrow-row">
+              <span className="hero-eyebrow">NEPSE IPO Automation</span>
+              <span className="hero-np-datetime">
+                <span className="hero-np-date">{dateShort}</span>
+                <span className="hero-np-sep" aria-hidden="true">·</span>
+                <span className="hero-np-time">{timeStr}</span>
+              </span>
+            </div>
+
             <h1 className="hero-title">
               Apply for IPOs<br />
               <span className="hero-title-strong">in one click</span>

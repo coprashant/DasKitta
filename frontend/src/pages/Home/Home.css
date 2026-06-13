@@ -390,3 +390,52 @@
   transition: color var(--t-fast) var(--ease);
 }
 .cta-guest-link:hover { color: var(--accent); }
+
+/*Nepali date/time additions*/
+.hero-eyebrow-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.hero-eyebrow-row .hero-eyebrow {
+  margin-bottom: 0;
+}
+
+.hero-np-datetime {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-3);
+  letter-spacing: 0.02em;
+  animation: fade-up 0.45s 0.12s var(--ease) both;
+}
+
+.hero-np-date {
+  color: var(--text-2);
+  font-weight: 500;
+}
+
+.hero-np-sep {
+  color: var(--text-3);
+  font-size: 10px;
+  opacity: 0.5;
+}
+
+.hero-np-time {
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 768px) {
+  .hero-eyebrow-row {
+    margin-bottom: 22px;
+  }
+  .hero-np-datetime {
+    font-size: 12px;
+  }
+}
