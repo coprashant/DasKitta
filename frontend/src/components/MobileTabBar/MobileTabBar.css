@@ -1,7 +1,9 @@
 .mobile-tab-bar {
     display: flex;
     position: fixed;
-    inset: auto 0 0 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     z-index: 200;
 
     height: calc(60px + env(safe-area-inset-bottom));
@@ -13,8 +15,8 @@
 
     border-top: 1px solid color-mix(in srgb, var(--text-3) 12%, transparent);
 
-    transform: translateZ(0);
-    will-change: transform;
+    transform: translate3d(0, 0, 0);
+    -webkit-transform: translate3d(0, 0, 0);
 }
 
 @media (min-width: 768px) {
