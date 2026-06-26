@@ -1,11 +1,11 @@
 [
   {
     "id": "ipo-001",
-    "companyName": "Mount Everest Power Development Limited",
-    "scrip": "MEPDL",
+    "companyName": "Beni Hydropower Project Limited",
+    "scrip": "BHPL",
     "companyShareId": 790,
-    "status": "open",
-    "openDate": "2083-03-03",
-    "closeDate": "2083-03-08"
+    "status": "upcoming",
+    "openDate": null,
+    "closeDate": null,
   }
 ]
