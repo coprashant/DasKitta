@@ -83,8 +83,15 @@ function useNepseIndex() {
 
 function resolveNepseEntry(data) {
   if (!data) return null;
-  if (Array.isArray(data)) return data[0];
-  return data["NEPSE"] || Object.values(data)[0];
+
+  if (data["NEPSE Index"]) return data["NEPSE Index"];
+  if (data["NEPSE"]) return data["NEPSE"];
+
+  if (Array.isArray(data)) {
+    return data.find(item => item?.index === "NEPSE Index") || data[0];
+  }
+
+  return Object.values(data)[0];
 }
 
 export function NepseHeroCard() {
