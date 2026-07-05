@@ -6,194 +6,115 @@ import {
   getTopGainers,
   getTopLosers,
   getTopTurnover,
+  getTopTrade,
+  getTopTransaction,
+  getSupplyDemand,
+  getNepseSubIndices,
+  getTradeTurnoverSubindices,
   getFloorsheet,
-  getPriceVolume,
+  getDailyNepseIndexGraph,
+  getDailyBankSubindexGraph,
+  getDailyDevBankSubindexGraph,
+  getDailyFinanceSubindexGraph,
+  getDailyHotelTourismSubindexGraph,
+  getDailyHydroPowerSubindexGraph,
+  getDailyInvestmentSubindexGraph,
+  getDailyLifeInsuranceSubindexGraph,
+  getDailyManufacturingSubindexGraph,
+  getDailyMicrofinanceSubindexGraph,
+  getDailyMutualFundSubindexGraph,
+  getDailyNonLifeInsuranceSubindexGraph,
+  getDailyOthersSubindexGraph,
+  getDailyTradingSubindexGraph,
 } from "../../api/nepse";
 import Layout from "../../components/Layout/Layout.jsx";
+import { fmt, fmtCompact, dirClass, Arrow, useClock, resolveHeroKey, HeroChart, MiniSpark, TermSearch } from "./nepseShared.jsx";
 import "./Nepse.css";
 
 const REFRESH_INTERVAL = 30000;
 
-const IconClock = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-  </svg>
-);
+// matches a sector label to its daily graph endpoint
+const SECTOR_GRAPH_RULES = [
+  { test: /development|dev bank/i, fetch: getDailyDevBankSubindexGraph },
+  { test: /\bbank/i, fetch: getDailyBankSubindexGraph },
+  { test: /finance/i, fetch: getDailyFinanceSubindexGraph },
+  { test: /hotel|tourism/i, fetch: getDailyHotelTourismSubindexGraph },
+  { test: /hydro/i, fetch: getDailyHydroPowerSubindexGraph },
+  { test: /investment/i, fetch: getDailyInvestmentSubindexGraph },
+  { test: /non.?life/i, fetch: getDailyNonLifeInsuranceSubindexGraph },
+  { test: /life insurance/i, fetch: getDailyLifeInsuranceSubindexGraph },
+  { test: /manufactur/i, fetch: getDailyManufacturingSubindexGraph },
+  { test: /microfinance/i, fetch: getDailyMicrofinanceSubindexGraph },
+  { test: /mutual fund/i, fetch: getDailyMutualFundSubindexGraph },
+  { test: /trading/i, fetch: getDailyTradingSubindexGraph },
+];
 
-const IconSearch = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-  </svg>
-);
-
-const IconUp = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="18 15 12 9 6 15"/>
-  </svg>
-);
-
-const IconDown = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="6 9 12 15 18 9"/>
-  </svg>
-);
-
-const Skeleton = ({ h = 16, w = "100%" }) => (
-  <div className="skeleton" style={{ height: h, width: w }} />
-);
-
-const fmt = (n, dec = 2) =>
-  n == null ? "—" : Number(n).toLocaleString("en-NP", { minimumFractionDigits: dec, maximumFractionDigits: dec });
-
-const fmtCompact = (n) => {
-  if (n == null) return "—";
-  const num = Number(n);
-  if (num >= 1e12) return (num / 1e12).toFixed(2) + "T";
-  if (num >= 1e9)  return (num / 1e9).toFixed(2) + "B";
-  if (num >= 1e6)  return (num / 1e6).toFixed(2) + "M";
-  if (num >= 1e3)  return (num / 1e3).toFixed(2) + "K";
-  return String(num);
-};
-
-const getValClass = (n) => (n > 0 ? "text-success" : n < 0 ? "text-danger" : "");
-
-function MarketBadge({ isOpen }) {
-  if (isOpen === null) return <div className="badge badge-muted"><span className="badge-dot" />···</div>;
-  const open = typeof isOpen === "object"
-    ? isOpen?.isOpen === "OPEN"
-    : isOpen === true || isOpen === "OPEN";
-  return (
-    <div className={`badge ${open ? "badge-success" : "badge-muted"}`}>
-      <span className={`badge-dot ${open ? "badge-dot-success" : ""}`} />
-      {open ? "Market Open" : "Market Closed"}
-    </div>
-  );
+function matchSectorGraph(name = "") {
+  const rule = SECTOR_GRAPH_RULES.find((r) => r.test.test(name));
+  return rule ? rule.fetch : getDailyOthersSubindexGraph;
 }
 
-function IndexCard({ name, data }) {
-  if (!data) return null;
-  const val = data.currentValue ?? data.value;
-  const change = data.percentageChange ?? data.perChange ?? data.change ?? 0;
+// dense mover row for the movers tab
+function MoverRow({ item, tone }) {
+  const pct = item.percentageChange ?? 0;
   return (
-    <div className="stat-card anim-fade-up">
-      <p className="stat-label">
-        {change >= 0 ? <IconUp /> : <IconDown />} {name}
-      </p>
-      <p className="stat-value">{fmt(val)}</p>
-      <p className={`stat-meta ${getValClass(change)}`}>
-        {change >= 0 ? "+" : ""}{fmt(change)}%
-      </p>
-    </div>
-  );
-}
-
-function StockSearch() {
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState([]);
-  const [allStocks, setAllStocks] = useState([]);
-  const [selected, setSelected] = useState(null);
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    getPriceVolume().then(r => setAllStocks(r.data ?? [])).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (!query.trim()) { setResults([]); setOpen(false); return; }
-    const q = query.toUpperCase();
-    const filtered = allStocks
-      .filter(s => s.symbol?.toUpperCase().includes(q) || s.securityName?.toUpperCase().includes(q))
-      .slice(0, 8);
-    setResults(filtered);
-    setOpen(filtered.length > 0);
-  }, [query, allStocks]);
-
-  const select = (stock) => {
-    setSelected(stock);
-    setQuery(stock.symbol);
-    setOpen(false);
-  };
-
-  return (
-    <div className="stock-search-wrap">
-      <div className="stock-search-box">
-        <IconSearch />
-        <input
-          className="stock-search-input"
-          placeholder="Search symbol or company…"
-          value={query}
-          onChange={e => { setQuery(e.target.value); setSelected(null); }}
-          onFocus={() => results.length && setOpen(true)}
-        />
-        {query && (
-          <button className="stock-search-clear" onClick={() => { setQuery(""); setSelected(null); setOpen(false); }}>×</button>
-        )}
+      <div className="ledger-row">
+        <span className="ledger-sym">{item.symbol}</span>
+        <span className="ledger-row-right">
+        <span className="ledger-ltp">{fmt(item.ltp)}</span>
+        <span className={`ledger-pct ${tone}`}>
+          <Arrow up={tone === "up"} /> {pct >= 0 ? "+" : ""}{fmt(pct)}%
+        </span>
+      </span>
       </div>
-
-      {open && (
-        <div className="stock-search-dropdown">
-          {results.map(s => (
-            <div key={s.symbol} className="stock-search-item" onClick={() => select(s)}>
-              <span className="cell-primary">{s.symbol}</span>
-              <span className="cell-dim stock-search-name">{s.securityName}</span>
-              <span className={`stock-search-ltp ${getValClass(s.percentageChange)}`}>
-                {fmt(s.lastTradedPrice ?? s.closePrice)}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {selected && (
-        <div className="stock-detail-pill">
-          <div className="stock-detail-row">
-            <div>
-              <span className="cell-primary">{selected.symbol}</span>
-              <span className="cell-dim" style={{ marginLeft: 8, fontSize: 12 }}>{selected.securityName}</span>
-            </div>
-            <span className={getValClass(selected.percentageChange)}>
-              {selected.percentageChange >= 0 ? "+" : ""}{fmt(selected.percentageChange)}%
-            </span>
-          </div>
-          <div className="stock-detail-stats">
-            <div className="stock-stat"><span className="summary-key">LTP</span><span className="summary-val">{fmt(selected.lastTradedPrice ?? selected.closePrice)}</span></div>
-            <div className="stock-stat"><span className="summary-key">Prev Close</span><span className="summary-val">{fmt(selected.previousClose)}</span></div>
-            <div className="stock-stat"><span className="summary-key">Volume</span><span className="summary-val">{fmt(selected.totalTradeQuantity, 0)}</span></div>
-            <div className="stock-stat"><span className="summary-key">% Change</span><span className={`summary-val ${getValClass(selected.percentageChange)}`}>{fmt(selected.percentageChange)}%</span></div>
-          </div>
-        </div>
-      )}
-    </div>
   );
+}
+
+function EmptyRow({ label }) {
+  return <p className="ledger-empty">{label}</p>;
 }
 
 export default function Nepse() {
-  const [activeTab, setActiveTab] = useState("Overview");
+  const clock = useClock();
+
   const [marketOpen, setMarketOpen] = useState(null);
   const [indices, setIndices] = useState(null);
   const [summary, setSummary] = useState(null);
+  const [graphData, setGraphData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const [feed, setFeed] = useState("Movers");
   const [gainers, setGainers] = useState([]);
   const [losers, setLosers] = useState([]);
   const [turnover, setTurnover] = useState([]);
+  const [topTrade, setTopTrade] = useState([]);
+  const [topTransaction, setTopTransaction] = useState([]);
+  const [supplyDemand, setSupplyDemand] = useState([]);
+  const [sectors, setSectors] = useState([]);
+  const [sectorTurnover, setSectorTurnover] = useState([]);
   const [floorsheet, setFloorsheet] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [lastUpdated, setLastUpdated] = useState(null);
+  const [feedLoading, setFeedLoading] = useState(true);
+
+  const [expandedSector, setExpandedSector] = useState(null);
+  const [sectorGraphs, setSectorGraphs] = useState({});
 
   const fetchCore = useCallback(async () => {
     try {
-      const [openRes, indexRes, summaryRes] = await Promise.all([
+      const [openRes, indexRes, summaryRes, graphRes] = await Promise.all([
         isNepseOpen(),
         getNepseIndex(),
         getSummary(),
+        getDailyNepseIndexGraph(),
       ]);
       setMarketOpen(openRes.data);
       setIndices(indexRes.data);
       setSummary(summaryRes.data);
-      setLastUpdated(new Date());
+      const rawGraph = graphRes.data;
+      setGraphData(Array.isArray(rawGraph) ? rawGraph : (rawGraph?.data ?? Object.values(rawGraph ?? {})));
       setError(null);
     } catch (e) {
-      setError("Data service unavailable");
+      setError("data feed unavailable");
     } finally {
       setLoading(false);
     }
@@ -201,189 +122,330 @@ export default function Nepse() {
 
   useEffect(() => {
     fetchCore();
-    const itv = setInterval(fetchCore, REFRESH_INTERVAL);
-    return () => clearInterval(itv);
+    const id = setInterval(fetchCore, REFRESH_INTERVAL);
+    return () => clearInterval(id);
   }, [fetchCore]);
 
   useEffect(() => {
-    if (activeTab === "Gainers & Losers" && !gainers.length) {
-      getTopGainers().then(r => setGainers(r.data ?? []));
-      getTopLosers().then(r => setLosers(r.data ?? []));
-    }
-    if (activeTab === "Turnover" && !turnover.length) {
-      getTopTurnover().then(r => setTurnover(r.data ?? []));
-    }
-    if (activeTab === "Floorsheet" && !floorsheet) {
-      getFloorsheet().then(r => setFloorsheet(r.data));
-    }
-  }, [activeTab, gainers.length, turnover.length, floorsheet]);
+    let alive = true;
+    setFeedLoading(true);
+    const load = async () => {
+      try {
+        if (feed === "Movers" && !gainers.length) {
+          const [g, l] = await Promise.all([getTopGainers(), getTopLosers()]);
+          if (!alive) return;
+          setGainers(g.data ?? []);
+          setLosers(l.data ?? []);
+        }
+        if (feed === "Turnover" && !turnover.length) {
+          const t = await getTopTurnover();
+          if (!alive) return;
+          setTurnover(t.data ?? []);
+        }
+        if (feed === "Activity" && !topTrade.length) {
+          const [t, tr] = await Promise.all([getTopTrade(), getTopTransaction()]);
+          if (!alive) return;
+          setTopTrade(t.data ?? []);
+          setTopTransaction(tr.data ?? []);
+          try {
+            const sd = await getSupplyDemand();
+            if (!alive) return;
+            setSupplyDemand(Array.isArray(sd.data) ? sd.data : (sd.data?.data ?? []));
+          } catch {
+            // imbalance list is a bonus section, missing it should not break trade and transaction data
+          }
+        }
+        if (feed === "Sectors" && !sectors.length) {
+          const s = await getNepseSubIndices();
+          if (!alive) return;
+          const list = Array.isArray(s.data) ? s.data : Object.entries(s.data ?? {}).map(([name, v]) => ({ name, ...v }));
+          setSectors(list);
+          try {
+            const st = await getTradeTurnoverSubindices();
+            if (!alive) return;
+            setSectorTurnover(Array.isArray(st.data) ? st.data : Object.entries(st.data ?? {}).map(([name, v]) => ({ name, ...v })));
+          } catch {
+            // turnover per sector is a bonus column, missing it should not break the sector list
+          }
+        }
+        if (feed === "Floorsheet" && !floorsheet) {
+          const f = await getFloorsheet();
+          if (!alive) return;
+          setFloorsheet(f.data);
+        }
+      } finally {
+        if (alive) setFeedLoading(false);
+      }
+    };
+    load();
+    return () => { alive = false; };
+  }, [feed]);
 
-  const KEY_INDICES = ["NEPSE", "Sensitive", "Float", "Sensitive Float"];
+  const heroKey = resolveHeroKey(indices);
+  const heroEntry = heroKey ? indices?.[heroKey] : null;
+  const heroValue = heroEntry?.currentValue ?? heroEntry?.value ?? 0;
+  const heroChange = heroEntry?.change ?? 0;
+  const heroPct = heroEntry?.percentageChange ?? heroEntry?.perChange ?? 0;
+
+  const secondaryIndices = indices
+      ? Object.entries(indices).filter(([name]) => name !== heroKey)
+      : [];
+
+  const openBool = typeof marketOpen === "object"
+      ? marketOpen?.isOpen === "OPEN"
+      : marketOpen === true || marketOpen === "OPEN";
+
+  const floorRows = Array.isArray(floorsheet) ? floorsheet : (floorsheet?.floorsheets?.content ?? []);
+
+  // the subindex endpoint returns every index including the main ones already
+  // shown up top, so drop anything whose name is already in the index strip
+  const sectorRows = sectors.filter((s) => !indices || !Object.prototype.hasOwnProperty.call(indices, s.name ?? s.index ?? ""));
+
+  const sectorTurnoverFor = (name) => {
+    const hit = sectorTurnover.find((t) => (t.name ?? "").toLowerCase().includes(name.toLowerCase().split(" ")[0]));
+    return hit?.turnover ?? hit?.totalTurnover ?? null;
+  };
+
+  const toggleSector = async (name) => {
+    if (expandedSector === name) {
+      setExpandedSector(null);
+      return;
+    }
+    setExpandedSector(name);
+    if (!sectorGraphs[name]) {
+      try {
+        const fetcher = matchSectorGraph(name);
+        const res = await fetcher();
+        const raw = res.data;
+        const points = Array.isArray(raw) ? raw : (raw?.data ?? Object.values(raw ?? {}));
+        setSectorGraphs((prev) => ({ ...prev, [name]: points }));
+      } catch {
+        setSectorGraphs((prev) => ({ ...prev, [name]: [] }));
+      }
+    }
+  };
 
   return (
-    <Layout>
-      <div className="page">
-        {/* Header */}
-        <div className="dash-header nepse-header-row">
-          <div>
-            <h1 className="page-title">Market Overview</h1>
-            {lastUpdated && (
-              <p className="page-subtitle nepse-update-text">
-                <IconClock /> Updated {lastUpdated.toLocaleTimeString()}
-              </p>
-            )}
-          </div>
-          <div className="nepse-header-right">
-            <StockSearch />
-            <MarketBadge isOpen={marketOpen} />
-          </div>
-        </div>
+      <Layout>
+        <div className="term-shell">
+          {/* header */}
+          <header className="term-header">
+            <div className="term-brand">
+              <span className="term-brand-name">NEPSE</span>
+              <span className="term-brand-tag">live market feed</span>
+            </div>
 
-        {error && <div className="badge badge-danger nepse-err-banner">{error}</div>}
+            <TermSearch />
 
-        {/* Index stat cards */}
-        <div className="dash-stats">
-          {loading ? (
-            [1, 2, 3, 4].map(i => (
-              <div key={i} className="stat-card">
-                <Skeleton h={10} w="40%" />
-                <Skeleton h={24} w="70%" />
+            <div className="term-header-right">
+            <span className={`term-status ${openBool ? "open" : "closed"}`}>
+              <span className="term-status-dot" />
+              {marketOpen === null ? "connecting" : openBool ? "market open" : "market closed"}
+            </span>
+              <span className="term-clock">
+              {clock.toLocaleTimeString("en-NP", { hour12: false })}
+            </span>
+            </div>
+          </header>
+
+          {error && <div className="term-alert">{error}</div>}
+
+          {/* asymmetrical canvas */}
+          <div className="term-grid">
+            <div className="term-primary">
+              <HeroChart
+                  loading={loading}
+                  data={graphData}
+                  value={heroValue}
+                  changeVal={heroChange}
+                  changePct={heroPct}
+              />
+
+              {summary && !loading && (
+                  <div className="term-ticker">
+                    {Object.entries(summary).map(([k, v]) => (
+                        <span key={k} className="term-ticker-item">
+                    <span className="ledger-label">{k}</span>
+                    <span>{fmtCompact(typeof v === "object" ? JSON.stringify(v) : v)}</span>
+                  </span>
+                    ))}
+                  </div>
+              )}
+
+              <div className="index-strip">
+                {loading
+                    ? [1, 2, 3, 4].map((i) => <div key={i} className="skel index-skel" />)
+                    : secondaryIndices.map(([name, d]) => {
+                      const change = d.percentageChange ?? d.perChange ?? 0;
+                      return (
+                          <div key={name} className="index-item">
+                            <span className="index-name">{name}</span>
+                            <span className="index-value">{fmt(d.currentValue ?? d.value)}</span>
+                            <span className={`index-change ${dirClass(change)}`}>
+                          <Arrow up={change >= 0} flat={change === 0} />
+                              {change >= 0 ? "+" : ""}{fmt(change)}%
+                        </span>
+                          </div>
+                      );
+                    })}
               </div>
-            ))
-          ) : (
-            KEY_INDICES.map(name =>
-              indices?.[name] ? <IndexCard key={name} name={name} data={indices[name]} /> : null
-            )
-          )}
-        </div>
+            </div>
 
-        {/* Summary bar */}
-        {summary && !loading && (
-          <div className="dash-account-pill nepse-summary-bar">
-            {Object.entries(summary).map(([k, v]) => (
-              <div key={k} className="summary-col">
-                <span className="summary-key">{k}</span>
-                <span className="summary-val">
-                  {fmtCompact(typeof v === "object" ? JSON.stringify(v) : v)}
-                </span>
+            {/* borderless ledger */}
+            <aside className="term-ledger">
+              <div className="ledger-tabs">
+                {["Movers", "Turnover", "Activity", "Sectors", "Floorsheet"].map((tab) => (
+                    <button
+                        key={tab}
+                        className={`ledger-tab ${feed === tab ? "active" : ""}`}
+                        onClick={() => setFeed(tab)}
+                    >
+                      {tab}
+                    </button>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
 
-        {/* Tabs */}
-        <div className="nepse-tabs">
-          {["Overview", "Gainers & Losers", "Turnover", "Floorsheet"].map(tab => (
-            <button
-              key={tab}
-              className={`tab-item ${activeTab === tab ? "active" : ""}`}
-              onClick={() => setActiveTab(tab)}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
+              <div className="ledger-body">
+                {feed === "Movers" && (
+                    <>
+                      <p className="ledger-heading up">gainers</p>
+                      {feedLoading && !gainers.length
+                          ? [1, 2, 3].map((i) => <div key={i} className="skel ledger-skel" />)
+                          : gainers.length
+                              ? gainers.slice(0, 6).map((r) => <MoverRow key={r.symbol} item={r} tone="up" />)
+                              : <EmptyRow label="no gainers yet" />}
 
-        {/* Tab content */}
-        <div className="card anim-fade-up">
-          <div className="table-scroll">
-            {activeTab === "Overview" && indices && (
-              <table className="dash-table">
-                <thead>
-                  <tr><th>Index</th><th>Value</th><th>Change</th><th>% Change</th></tr>
-                </thead>
-                <tbody>
-                  {Object.entries(indices).map(([name, d]) => (
-                    <tr key={name}>
-                      <td><span className="cell-primary">{name}</span></td>
-                      <td>{fmt(d.currentValue ?? d.value)}</td>
-                      <td className={getValClass(d.change)}>{fmt(d.change)}</td>
-                      <td className={getValClass(d.percentageChange ?? d.perChange)}>
-                        {fmt(d.percentageChange ?? d.perChange)}%
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+                      <p className="ledger-heading down">losers</p>
+                      {feedLoading && !losers.length
+                          ? [1, 2, 3].map((i) => <div key={i} className="skel ledger-skel" />)
+                          : losers.length
+                              ? losers.slice(0, 6).map((r) => <MoverRow key={r.symbol} item={r} tone="down" />)
+                              : <EmptyRow label="no losers yet" />}
+                    </>
+                )}
 
-            {activeTab === "Gainers & Losers" && (
-              <div className="nepse-grid-2">
-                <div className="table-wrapper">
-                  <p className="table-heading-sm text-success">Top Gainers</p>
-                  <table className="dash-table">
-                    <thead><tr><th>Symbol</th><th>LTP</th><th>%</th></tr></thead>
-                    <tbody>
-                      {gainers.map(r => (
-                        <tr key={r.symbol}>
-                          <td><span className="cell-primary">{r.symbol}</span></td>
-                          <td>{fmt(r.ltp)}</td>
-                          <td className="text-success">+{fmt(r.percentageChange)}%</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="table-wrapper">
-                  <p className="table-heading-sm text-danger">Top Losers</p>
-                  <table className="dash-table">
-                    <thead><tr><th>Symbol</th><th>LTP</th><th>%</th></tr></thead>
-                    <tbody>
-                      {losers.map(r => (
-                        <tr key={r.symbol}>
-                          <td><span className="cell-primary">{r.symbol}</span></td>
-                          <td>{fmt(r.ltp)}</td>
-                          <td className="text-danger">{fmt(r.percentageChange)}%</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                {feed === "Turnover" && (
+                    <>
+                      <p className="ledger-heading">top turnover</p>
+                      {feedLoading && !turnover.length ? (
+                          [1, 2, 3, 4].map((i) => <div key={i} className="skel ledger-skel" />)
+                      ) : turnover.length ? (
+                          turnover.slice(0, 10).map((r) => (
+                              <div className="ledger-row ledger-row-4" key={r.symbol}>
+                                <span className="ledger-sym">{r.symbol}</span>
+                                <span className="ledger-num">{fmtCompact(r.turnover)}</span>
+                                <span className="ledger-num">{fmtCompact(r.shareTraded)}</span>
+                                <span className="ledger-ltp">{fmt(r.ltp)}</span>
+                              </div>
+                          ))
+                      ) : <EmptyRow label="no turnover data yet" />}
+                    </>
+                )}
+
+                {feed === "Activity" && (
+                    <>
+                      <p className="ledger-heading">top trade by volume</p>
+                      {feedLoading && !topTrade.length ? (
+                          [1, 2, 3].map((i) => <div key={i} className="skel ledger-skel" />)
+                      ) : topTrade.length ? (
+                          topTrade.slice(0, 6).map((r) => (
+                              <div className="ledger-row" key={r.symbol}>
+                                <span className="ledger-sym">{r.symbol}</span>
+                                <span className="ledger-num">{fmtCompact(r.shareTraded ?? r.totalTradeQuantity)}</span>
+                              </div>
+                          ))
+                      ) : <EmptyRow label="no trade data yet" />}
+
+                      <p className="ledger-heading">top by transactions</p>
+                      {feedLoading && !topTransaction.length ? (
+                          [1, 2, 3].map((i) => <div key={i} className="skel ledger-skel" />)
+                      ) : topTransaction.length ? (
+                          topTransaction.slice(0, 6).map((r) => (
+                              <div className="ledger-row" key={r.symbol}>
+                                <span className="ledger-sym">{r.symbol}</span>
+                                <span className="ledger-num">{fmtCompact(r.totalTrades ?? r.transactionCount)}</span>
+                              </div>
+                          ))
+                      ) : <EmptyRow label="no transaction data yet" />}
+
+                      <p className="ledger-heading">supply demand imbalance</p>
+                      {feedLoading && !supplyDemand.length ? (
+                          [1, 2, 3].map((i) => <div key={i} className="skel ledger-skel" />)
+                      ) : supplyDemand.length ? (
+                          supplyDemand.slice(0, 6).map((r, i) => {
+                            const buy = r.buyQuantity ?? r.totalBuyQty ?? r.buyQty ?? null;
+                            const sell = r.sellQuantity ?? r.totalSellQty ?? r.sellQty ?? null;
+                            return (
+                                <div className="ledger-row ledger-row-3" key={r.symbol ?? i}>
+                                  <span className="ledger-sym">{r.symbol ?? r.securityName}</span>
+                                  <span className="ledger-num">{buy != null ? fmtCompact(buy) : "--"}</span>
+                                  <span className="ledger-num">{sell != null ? fmtCompact(sell) : "--"}</span>
+                                </div>
+                            );
+                          })
+                      ) : <EmptyRow label="no imbalance data yet" />}
+                    </>
+                )}
+
+                {feed === "Sectors" && (
+                    <>
+                      <p className="ledger-heading">sector sub indices</p>
+                      {feedLoading && !sectorRows.length ? (
+                          [1, 2, 3, 4].map((i) => <div key={i} className="skel ledger-skel" />)
+                      ) : sectorRows.length ? (
+                          sectorRows.map((s) => {
+                            const name = s.name ?? s.index ?? "sector";
+                            const change = s.percentageChange ?? s.perChange ?? s.change ?? 0;
+                            const turn = sectorTurnoverFor(name);
+                            const expanded = expandedSector === name;
+                            return (
+                                <div key={name} className="sector-block">
+                                  <div
+                                      className="ledger-row ledger-row-3 sector-row"
+                                      role="button"
+                                      tabIndex={0}
+                                      onClick={() => toggleSector(name)}
+                                      onKeyDown={(e) => { if (e.key === "Enter") toggleSector(name); }}
+                                  >
+                                    <span className="ledger-sym">{name}</span>
+                                    <span className={`ledger-pct ${dirClass(change)}`}>
+                              <Arrow up={change >= 0} flat={change === 0} />
+                                      {change >= 0 ? "+" : ""}{fmt(change)}%
+                            </span>
+                                    <span className="ledger-num">{turn ? fmtCompact(turn) : "--"}</span>
+                                  </div>
+                                  {expanded && (
+                                      <div className="sector-expand">
+                                        <MiniSpark data={sectorGraphs[name]} />
+                                      </div>
+                                  )}
+                                </div>
+                            );
+                          })
+                      ) : <EmptyRow label="no sector data yet" />}
+                    </>
+                )}
+
+                {feed === "Floorsheet" && (
+                    <>
+                      <p className="ledger-heading">live contracts</p>
+                      {feedLoading && !floorRows.length ? (
+                          [1, 2, 3, 4].map((i) => <div key={i} className="skel ledger-skel" />)
+                      ) : floorRows.length ? (
+                          floorRows.slice(0, 14).map((r, i) => (
+                              <div className="ledger-row ledger-row-3" key={i}>
+                                <span className="ledger-sym">{r.stockSymbol}</span>
+                                <span className="ledger-num">{fmt(r.contractQuantity, 0)}</span>
+                                <span className="ledger-ltp">{fmt(r.contractRate)}</span>
+                              </div>
+                          ))
+                      ) : <EmptyRow label="no contracts yet" />}
+                    </>
+                )}
               </div>
-            )}
-
-            {activeTab === "Turnover" && (
-              <table className="dash-table">
-                <thead>
-                  <tr><th>Symbol</th><th>Turnover (Rs)</th><th>Shares</th><th>LTP</th></tr>
-                </thead>
-                <tbody>
-                  {turnover.map(r => (
-                    <tr key={r.symbol}>
-                      <td><span className="cell-primary">{r.symbol}</span></td>
-                      <td>{fmt(r.turnover, 0)}</td>
-                      <td>{fmt(r.shareTraded, 0)}</td>
-                      <td>{fmt(r.ltp)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-
-            {activeTab === "Floorsheet" && (
-              <table className="dash-table">
-                <thead>
-                  <tr><th>Symbol</th><th>Qty</th><th>Rate</th><th>Buyer</th><th>Seller</th></tr>
-                </thead>
-                <tbody>
-                  {(Array.isArray(floorsheet)
-                    ? floorsheet
-                    : floorsheet?.floorsheets?.content ?? []
-                  ).slice(0, 20).map((r, i) => (
-                    <tr key={i}>
-                      <td><span className="cell-primary">{r.stockSymbol}</span></td>
-                      <td>{fmt(r.contractQuantity, 0)}</td>
-                      <td>{fmt(r.contractRate)}</td>
-                      <td><span className="cell-dim">{r.buyerMemberId}</span></td>
-                      <td><span className="cell-dim">{r.sellerMemberId}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+            </aside>
           </div>
         </div>
-      </div>
-    </Layout>
+      </Layout>
   );
 }

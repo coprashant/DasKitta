@@ -1,11 +1,11 @@
 [
   {
     "id": "ipo-001",
-    "companyName": "Beni Hydropower Project Limited",
-    "scrip": "BHPL",
-    "companyShareId": 790,
-    "status": "upcoming",
-    "openDate": null,
-    "closeDate": null
+    "companyName": "6.25% Prime Bank Debenture 2093",
+    "scrip": "PDB2093",
+    "companyShareId": 792,
+    "status": "open",
+    "openDate": "2083-03-16",
+    "closeDate": "2083-03-30"
   }
 ]
