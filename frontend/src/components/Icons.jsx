@@ -369,3 +369,19 @@ export const MoreIcon = () => (
         <circle cx="12" cy="19" r="1.5" />
     </svg>
 );
+
+/* code bracket SVG */
+export const CodeIcon = () => (
+    <svg className="dev-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="16 18 22 12 16 6" />
+        <polyline points="8 6 2 12 8 18" />
+    </svg>
+);
+
+/* external link arrow SVG */
+export const ArrowIcon = () => (
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 2, flexShrink: 0, transition: "transform 0.22s", opacity: 0.6 }}>
+        <line x1="7" y1="17" x2="17" y2="7" />
+        <polyline points="7 7 17 7 17 17" />
+    </svg>
+);

@@ -206,6 +206,13 @@
 .footer-link--dev:hover .dev-icon {
   transform: rotate(15deg) scale(1.15);
 }
+.footer-pwa-btn {
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+}
 
 /* dev name label */
 .dev-name {
