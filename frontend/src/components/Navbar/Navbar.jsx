@@ -140,6 +140,7 @@ const BellButton = () => {
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
           )}
+          {open && <span className="navbar-indicator-dot" aria-hidden="true" />}
         </button>
         {open && (
             <NotificationPanel readTimestamp={readTimestamp} onClose={() => setOpen(false)} />
@@ -199,6 +200,8 @@ const Navbar = () => {
           <div className="navbar-right">
             {user && <BellButton />}
 
+            <span className="navbar-divider" aria-hidden="true" />
+
             <button
                 className="navbar-theme-btn"
                 onClick={toggle}
@@ -218,6 +221,7 @@ const Navbar = () => {
                       aria-haspopup="true"
                   >
                     <ProfileIcon />
+                    {profileOpen && <span className="navbar-indicator-dot" aria-hidden="true" />}
                   </button>
                   {profileOpen && (
                       <ProfileDropdown onClose={() => setProfileOpen(false)} />
