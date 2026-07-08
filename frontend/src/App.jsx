@@ -9,6 +9,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Home          from "./pages/Home/Home";
 import Auth          from "./pages/Auth/Auth";
 import Dashboard     from "./pages/Dashboard/Dashboard";
+import Accounts      from "./pages/AddAccount/Accounts";
 import AddAccount    from "./pages/AddAccount/AddAccount";
 import IPOApply      from "./pages/IPOApply/IPOApply";
 import ResultChecker from "./pages/ResultChecker/ResultChecker";
@@ -51,6 +52,9 @@ const App = () => {
                   <Route path="/nepse/company/:symbol" element={<CompanyDetail />} />
                   <Route path="/dashboard" element={
                     <ProtectedRoute><Dashboard /></ProtectedRoute>
+                  } />
+                  <Route path="/accounts" element={
+                    <ProtectedRoute><Accounts /></ProtectedRoute>
                   } />
                   <Route path="/accounts/add" element={
                     <ProtectedRoute><AddAccount /></ProtectedRoute>

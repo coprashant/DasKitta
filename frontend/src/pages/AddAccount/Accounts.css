@@ -1,0 +1,246 @@
+/* --- Core Layout & Animations --- */
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.accounts-header-row {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 12px;
+    gap: 4px;
+}
+
+.accounts-title-group {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+}
+
+.page-title {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.page-subtitle {
+    margin: 0;
+    font-size: 14px;
+    color: var(--text-2);
+}
+
+/* --- Buttons & Inputs --- */
+.btn-header-add {
+    flex-shrink: 0;
+    white-space: nowrap;
+    padding: 6px 12px !important;
+    font-size: 13px !important;
+    height: fit-content;
+    width: auto !important;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.acc-click-hint {
+    font-size: 11px;
+    color: var(--text-3);
+}
+
+.acc-click-hint-top {
+    margin-bottom: 14px;
+}
+
+.input-with-icon {
+    position: relative;
+}
+
+.input-with-icon .input {
+    padding-right: 40px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.input-icon-btn {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-3);
+    display: flex;
+    align-items: center;
+    padding: 0;
+}
+
+/* --- Account Cards --- */
+.saved-accounts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.saved-account-card {
+    display: flex;
+    flex-direction: column;
+    padding: 14px 16px;
+    position: relative;
+    z-index: 1;
+    transition: box-shadow var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+.saved-account-card:hover { box-shadow: var(--shadow); }
+.saved-account-card-menu-open { z-index: 30; }
+
+.saved-account-card-active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent-muted), var(--shadow-sm);
+}
+
+.saved-account-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+}
+
+.reorder-arrows {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.reorder-arrow-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 18px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--text-3);
+    cursor: pointer;
+    border-radius: var(--r-sm);
+}
+.reorder-arrow-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+
+.saved-account-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: var(--r);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-2);
+    flex-shrink: 0;
+}
+.saved-account-avatar-active { color: var(--accent); background: var(--accent-dim); }
+
+.saved-account-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.saved-account-name, .saved-account-meta, .saved-account-boid {
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.saved-account-name { font-size: 14px; font-weight: 500; color: var(--text); }
+.saved-account-meta { font-size: 12px; color: var(--text-2); }
+.saved-account-boid { font-size: 11px; color: var(--text-3); font-family: var(--mono); }
+
+.saved-account-active-badge {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: var(--accent-dim);
+    border: 1px solid var(--accent-muted);
+    border-radius: var(--r-sm);
+    padding: 3px 8px;
+    flex-shrink: 0;
+}
+
+/* --- Menus & Panels --- */
+.saved-account-menu-wrap { position: relative; flex-shrink: 0; }
+.icon-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; border: none; background: none; cursor: pointer;
+}
+
+.account-menu {
+    position: absolute; right: 0; top: calc(100% + 6px); z-index: 40;
+    width: 190px; background: var(--surface); border: 1px solid var(--border);
+    padding: 6px; display: flex; flex-direction: column; gap: 2px;
+}
+
+.account-menu-head { display: flex; align-items: center; justify-content: space-between; }
+.account-menu-item { text-align: left; font-size: 13px; background: none; border: none; padding: 8px 10px; cursor: pointer; width: 100%; }
+.account-menu-item-danger { color: #e53e3e; }
+
+.form-note {
+    display: flex; gap: 8px; font-size: 12px; background: var(--surface-2);
+    border: 1px solid var(--border); padding: 10px 12px; margin-bottom: 16px;
+}
+
+.edit-account-panel, .confirm-panel { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+.edit-panel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.edit-panel-actions, .confirm-panel-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+.empty-state { text-align: center; padding: 32px 16px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+
+/* --- Responsive Adjustments (< 640px) --- */
+@media (max-width: 640px) {
+    .page-title { font-size: 20px; }
+    .page-subtitle { font-size: 13px; }
+
+    .acc-click-hint { display: none; }
+    .saved-account-card { padding: 12px; }
+    .saved-account-row { gap: 10px; }
+
+    .reorder-arrow-btn { width: 24px; height: 20px; }
+    .saved-account-avatar { width: 34px; height: 34px; font-size: 13px; }
+
+    .edit-panel-actions, .confirm-panel-actions { flex-direction: column-reverse; }
+    .edit-panel-actions .btn, .confirm-panel-actions .btn { width: 100%; justify-content: center; }
+}
+
+/* --- Micro-Devices Optimization (< 420px) --- */
+@media (max-width: 420px) {
+    .btn-header-add{ transform: scale(0.80);}
+    .saved-account-card { padding: 10px 8px; }
+    .saved-account-row { gap: 6px; position: relative; }
+
+    .saved-account-avatar { width: 30px; height: 30px; font-size: 12px; }
+
+    /* Handles long emails/names without cutting off everything */
+    .saved-account-name, .saved-account-meta, .saved-account-boid {
+        white-space: normal;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 1;
+    }
+    .saved-account-name { font-size: 13px; -webkit-line-clamp: 2; }
+
+    /* Float active badge cleanly above menu to eliminate squishing */
+    .saved-account-active-badge {
+        position: absolute;
+        top: -6px;
+        right: 32px;
+        transform: scale(0.85);
+        padding: 1px 4px;
+    }
+}
+@media(max-width: 380px){
+    .reorder-arrows { display: none; } /* Drops reordering on tiny screens to save row width */
+}
