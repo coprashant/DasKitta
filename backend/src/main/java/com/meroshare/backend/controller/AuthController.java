@@ -2,7 +2,9 @@ package com.meroshare.backend.controller;
 
 import com.meroshare.backend.dto.AuthResponse;
 import com.meroshare.backend.dto.LoginRequest;
+import com.meroshare.backend.dto.OtpRequest;
 import com.meroshare.backend.dto.RegisterRequest;
+import com.meroshare.backend.dto.ResendOtpRequest;
 import com.meroshare.backend.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,5 +26,17 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
+    }
+
+    @PostMapping("/verify-otp")
+    public ResponseEntity<String> verifyOtp(@Valid @RequestBody OtpRequest request) {
+        authService.verifyOtp(request.getEmail(), request.getCode());
+        return ResponseEntity.ok("Account verified successfully! You can now log in.");
+    }
+
+    @PostMapping("/resend-otp")
+    public ResponseEntity<String> resendOtp(@Valid @RequestBody ResendOtpRequest request) {
+        authService.resendOtp(request.getEmail());
+        return ResponseEntity.ok("A new verification code has been sent.");
     }
 }

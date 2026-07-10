@@ -55,16 +55,14 @@ export const AuthProvider = ({ children }) => {
       setIsLoading(false);
     }
   };
-
   const register = async (data) => {
     setIsLoading(true);
     try {
       const res = await registerApi(data);
-      const { token, username, email } = res.data;
-      persistSession(token, username, email);
-      if (onLoginRef.current) await onLoginRef.current();
-      toast.success("Account created");
-      navigate("/dashboard");
+
+      toast.success("Verification code sent to your email!");
+      return res.data;
+
     } catch (err) {
       const errors = err.response?.data?.errors;
       if (errors) {
@@ -72,6 +70,7 @@ export const AuthProvider = ({ children }) => {
       } else {
         toast.error(err.response?.data?.message || "Registration failed");
       }
+      throw err;
     } finally {
       setIsLoading(false);
     }

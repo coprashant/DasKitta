@@ -14,7 +14,10 @@ client.interceptors.request.use((config) => {
 
 const PUBLIC_PATHS = ["/ipo/shares", "/ipo/result/", "/auth/login", "/auth/register", "/nepse"];
 
-const isPublicPath = (url = "") => PUBLIC_PATHS.some((p) => url.includes(p));
+const isPublicPath = (url = "") => {
+    const normalizedUrl = url.toLowerCase();
+    return PUBLIC_PATHS.some((p) => normalizedUrl.includes(p.toLowerCase())) || normalizedUrl.includes("/auth/");
+};
 
 client.interceptors.response.use(
   (response) => response,

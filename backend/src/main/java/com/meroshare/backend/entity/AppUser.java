@@ -30,7 +30,9 @@ public class AppUser {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
-    // One app user can have many Meroshare accounts
+    @Column(nullable = false)
+    private boolean enabled;
+
     @OneToMany(mappedBy = "appUser", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<MeroshareAccount> meroshareAccounts;
 
