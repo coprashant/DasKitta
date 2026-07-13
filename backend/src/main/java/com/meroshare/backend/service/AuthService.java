@@ -142,7 +142,8 @@ public class AuthService {
         message.setSubject("DasKitta Verify Your Account");
         message.setText("Welcome to DasKitta\n\n" +
                 "Your 6 digit verification code is: " + otpCode + "\n\n" +
-                "This code is valid for 5 minutes. Do not share this code with anyone.");
+                "This code is valid for 5 minutes. Do not share this code with anyone.\n"+
+                "If you didn't request this, please ignore this message.");
 
         mailSender.send(message);
     }
