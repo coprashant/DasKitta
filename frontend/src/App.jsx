@@ -6,11 +6,13 @@ import { AccountProvider } from "./context/AccountContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import AccountSync from "./components/AccountSync";
 import ProtectedRoute from "./components/ProtectedRoute";
+import Settings from "./pages/Settings/Settings.jsx";
+import ProfileSettings from "./pages/Settings/ProfileSettings.jsx";
+import AddAccountSettings from "./pages/Settings/AddAccountSettings.jsx";
+import AccountsSettings from "./pages/Settings/AccountsSettings.jsx";
 import Home          from "./pages/Home/Home";
 import Auth          from "./pages/Auth/Auth";
 import Dashboard     from "./pages/Dashboard/Dashboard";
-import Accounts      from "./pages/AddAccount/Accounts";
-import AddAccount    from "./pages/AddAccount/AddAccount";
 import IPOApply      from "./pages/IPOApply/IPOApply";
 import ResultChecker from "./pages/ResultChecker/ResultChecker";
 import History       from "./pages/History/History";
@@ -50,14 +52,15 @@ const App = () => {
                   <Route path="/ipo/result" element={<ResultChecker />} />
                   <Route path="/nepse"      element={<Nepse />} />
                   <Route path="/nepse/company/:symbol" element={<CompanyDetail />} />
+                  <Route path="/settings" element={
+                    <ProtectedRoute><Settings /></ProtectedRoute>
+                  }>
+                    <Route index element={<ProfileSettings />} />
+                    <Route path="accounts" element={<AccountsSettings />} />
+                    <Route path="accounts/add" element={<AddAccountSettings />} />
+                  </Route>
                   <Route path="/dashboard" element={
                     <ProtectedRoute><Dashboard /></ProtectedRoute>
-                  } />
-                  <Route path="/accounts" element={
-                    <ProtectedRoute><Accounts /></ProtectedRoute>
-                  } />
-                  <Route path="/accounts/add" element={
-                    <ProtectedRoute><AddAccount /></ProtectedRoute>
                   } />
                   <Route path="/ipo/apply" element={
                     <ProtectedRoute><IPOApply /></ProtectedRoute>

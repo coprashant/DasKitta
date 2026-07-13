@@ -7,7 +7,7 @@ import { useNotifications } from "../../context/NotificationContext";
 import NotificationPanel from "../NotificationPanel/NotificationPanel";
 import {
   BellIcon, SunIcon, MoonIcon, ProfileIcon, CheckIcon,
-  PlusIcon, SettingsIcon, SignOutIcon
+  PlusIcon, SettingsIcon, SignOutIcon, UsersIcon
 } from "../Icons";
 import "./Navbar.css";
 
@@ -76,11 +76,14 @@ const ProfileDropdown = ({ onClose }) => {
         <div className="profile-dropdown-divider" />
 
         <div className="profile-dropdown-actions">
-          <Link to="/accounts/add" className="profile-action-btn" onClick={onClose} role="menuitem">
+          <Link to="/settings/accounts/add" className="profile-action-btn" onClick={onClose} role="menuitem">
             <PlusIcon /><span>Add account</span>
           </Link>
-          <Link to="/accounts" className="profile-action-btn" onClick={onClose} role="menuitem">
-            <SettingsIcon /><span>Manage accounts</span>
+          <Link to="/settings/accounts" className="profile-action-btn" onClick={onClose} role="menuitem">
+            <UsersIcon /><span>Manage accounts</span>
+          </Link>
+          <Link to="/settings" className="profile-action-btn" onClick={onClose} role="menuitem">
+            <SettingsIcon /><span>Settings</span>
           </Link>
         </div>
 
