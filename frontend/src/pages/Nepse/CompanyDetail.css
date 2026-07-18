@@ -1,3 +1,4 @@
+/* extra rules layered on top of the shared term-shell styles in Nepse.css */
 .term-back {
     font-family: var(--mono);
     font-size: 12px;

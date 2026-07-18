@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   getNepseIndex,
   getDailyNepseIndexGraph,
@@ -6,45 +6,54 @@ import {
   getTopGainers,
   getTopLosers,
 } from "../../api/nepse.js";
+import { buildSparkline, useChartHover, tooltipAlign } from "../../pages/Nepse/nepseUtils.js";
 import "./NepseStrip.css";
 
-function buildSparkline(rawPoints, width, height) {
-  if (!rawPoints || rawPoints.length < 2) return null;
-  const values = rawPoints.map((p) =>
-      typeof p === "object" ? (p.value ?? p.close ?? p.index ?? Object.values(p)[1]) : p
-  );
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
-  const points = values.map((v, i) => {
-    const x = (i / (values.length - 1)) * width;
-    const y = height - ((v - min) / range) * height;
-    return `${x.toFixed(2)},${y.toFixed(2)}`;
-  });
-  const isPositive = values[values.length - 1] >= values[0];
-  return { points: points.join(" "), isPositive };
-}
+const MOVERS_ROW_COUNT = 5;
 
 function Sparkline({ data, width = 340, height = 70 }) {
   const result = buildSparkline(data, width, height);
+  const { containerRef, index: hoverIndex, handlers } = useChartHover(result?.values.length ?? 0);
+
   if (!result) return <div className="skeleton-graph base-pulse" style={{ width: "100%", height }} />;
+
   const color = result.isPositive ? "var(--success)" : "var(--danger)";
+  const hover = hoverIndex != null
+      ? { x: result.coords[hoverIndex][0], y: result.coords[hoverIndex][1], value: result.values[hoverIndex] }
+      : null;
+
   return (
-      <svg
-          viewBox={`0 0 ${width} ${height}`}
-          preserveAspectRatio="none"
-          className="sparkline-svg"
-          style={{ width: "100%", height }}
-      >
-        <polyline
-            points={result.points}
-            fill="none"
-            stroke={color}
-            strokeWidth="1.5"
-            strokeLinejoin="round"
-            strokeLinecap="round"
-        />
-      </svg>
+      <div className="spark-wrap" ref={containerRef} {...handlers}>
+        <svg
+            viewBox={`0 0 ${width} ${height}`}
+            preserveAspectRatio="none"
+            className="sparkline-svg"
+            style={{ width: "100%", height }}
+        >
+          <polyline
+              points={result.points}
+              fill="none"
+              stroke={color}
+              strokeWidth="1.5"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+          />
+          {hover && (
+              <g>
+                <line x1={hover.x} y1="0" x2={hover.x} y2={height} className="spark-hover-line" />
+                <circle cx={hover.x} cy={hover.y} r="4" className="spark-hover-dot" style={{ fill: color }} />
+              </g>
+          )}
+        </svg>
+        {hover && (
+            <div
+                className={`spark-tooltip align-${tooltipAlign(hover.x / width)}`}
+                style={{ left: `${(hover.x / width) * 100}%`, top: `${(hover.y / height) * 100}%` }}
+            >
+              {Number(hover.value).toLocaleString("en-NP", { minimumFractionDigits: 2 })}
+            </div>
+        )}
+      </div>
   );
 }
 
@@ -81,6 +90,7 @@ function useNepseIndex() {
   return { indexData, graphData, isOpen, loading };
 }
 
+// picks the main index entry out of a few possible response shapes
 function resolveNepseEntry(data) {
   if (!data) return null;
 
@@ -193,7 +203,7 @@ export default function NepseStrip() {
     return () => { alive = false; };
   }, []);
 
-  const dummyArray = useMemo(() => Array(5).fill(0), []);
+  const dummyArray = useMemo(() => Array(MOVERS_ROW_COUNT).fill(0), []);
 
   return (
       <section className="nepse-strip">
@@ -204,7 +214,7 @@ export default function NepseStrip() {
               <div className="movers-list">
                 {loading
                     ? dummyArray.map((_, i) => <TickerSkeletonRow key={i} />)
-                    : gainers?.slice(0, 5).map((item, i) => (
+                    : gainers?.slice(0, MOVERS_ROW_COUNT).map((item, i) => (
                         <TickerRow key={i} item={item} type="gainer" />
                     ))}
               </div>
@@ -214,7 +224,7 @@ export default function NepseStrip() {
               <div className="movers-list">
                 {loading
                     ? dummyArray.map((_, i) => <TickerSkeletonRow key={i} />)
-                    : losers?.slice(0, 5).map((item, i) => (
+                    : losers?.slice(0, MOVERS_ROW_COUNT).map((item, i) => (
                         <TickerRow key={i} item={item} type="loser" />
                     ))}
               </div>

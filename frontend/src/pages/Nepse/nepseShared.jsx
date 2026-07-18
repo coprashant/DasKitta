@@ -3,33 +3,18 @@ import { useNavigate } from "react-router-dom";
 import { getPriceVolume } from "../../api/nepse";
 import { IconSearch } from "../../components/Icons.jsx";
 
-// number formatting helpers shared by every nepse view
-export const fmt = (n, dec = 2) =>
-    n == null ? "--" : Number(n).toLocaleString("en-NP", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+import {
+    fmt,
+    fmtCompact,
+    dirClass,
+    tooltipAlign,
+    buildChart,
+    resolveHeroKey,
+    useChartHover,
+} from "./nepseUtils";
 
-export const fmtCompact = (n) => {
-    if (n == null) return "--";
-    const num = Number(n);
-    if (Number.isNaN(num)) return "--";
-    if (num >= 1e12) return (num / 1e12).toFixed(2) + "T";
-    if (num >= 1e9) return (num / 1e9).toFixed(2) + "B";
-    if (num >= 1e6) return (num / 1e6).toFixed(2) + "M";
-    if (num >= 1e3) return (num / 1e3).toFixed(2) + "K";
-    return String(num);
-};
-
-export const dirClass = (n) => (n > 0 ? "up" : n < 0 ? "down" : "flat");
-
-// tiny directional arrow used across the terminal
-export function Arrow({ up, flat }) {
-    if (flat) return <span className="arrow-flat">•</span>;
-    return (
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4"
-             strokeLinecap="round" strokeLinejoin="round" className="arrow-icon">
-            {up ? <polyline points="18 15 12 9 6 15" /> : <polyline points="6 9 12 15 18 9" />}
-        </svg>
-    );
-}
+// re-exported so pages can pull everything nepse related from one place
+export { fmt, fmtCompact, dirClass, resolveHeroKey };
 
 // live seconds clock for headers
 export function useClock() {
@@ -41,41 +26,62 @@ export function useClock() {
     return now;
 }
 
-// finds the primary entry across possible api shapes
-export function resolveHeroKey(indices, preferred = ["NEPSE", "NEPSE Index"]) {
-    if (!indices) return null;
-    for (const key of preferred) {
-        if (indices[key]) return key;
-    }
-    const keys = Object.keys(indices);
-    return keys.length ? keys[0] : null;
+// single line placeholder shown when a ledger section has no rows
+export function EmptyRow({ label }) {
+    return <p className="ledger-empty">{label}</p>;
 }
 
-// builds line and fill polygons from raw graph points
-export function buildChart(raw, width, height) {
-    if (!raw || raw.length < 2) return null;
-    const values = raw.map((p) =>
-        typeof p === "object" ? (p.value ?? p.close ?? p.index ?? Object.values(p)[1]) : p
-    ).filter((v) => typeof v === "number" && !Number.isNaN(v));
-    if (values.length < 2) return null;
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const range = max - min || 1;
-    const step = width / (values.length - 1);
-    const coords = values.map((v, i) => [i * step, height - ((v - min) / range) * (height - 10) - 5]);
-    const line = coords.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
-    const area = `0,${height} ${line} ${width},${height}`;
-    const positive = values[values.length - 1] >= values[0];
-    return { line, area, positive };
+// row of pulsing skeleton bars, used while a ledger section is loading
+export function SkeletonRows({ count = 3 }) {
+    return Array.from({ length: count }, (_, i) => <div key={i} className="skel ledger-skel" />);
 }
 
-// hero canvas with metrics floating over a line chart, used for the
-// nepse index and for a single scrip on the company page
+// small up or down chevron, dims out when the change is flat
+export function Arrow({ up, flat }) {
+    if (flat) return <span className="arrow-icon arrow-flat">--</span>;
+    return (
+        <svg className="arrow-icon" width="9" height="9" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+            <path d={up ? "M5 1 L9 7 L1 7 Z" : "M5 9 L9 3 L1 3 Z"} fill="currentColor" />
+        </svg>
+    );
+}
+
+// shared svg marker for the hovered point on a chart or sparkline
+function HoverMarker({ hover, height, color, radius = "5" }) {
+    if (!hover) return null;
+    return (
+        <g>
+            <line x1={hover.x} y1="0" x2={hover.x} y2={height} className="term-hover-line" />
+            <circle cx={hover.x} cy={hover.y} r={radius} className="term-hover-dot" style={{ fill: color }} />
+        </g>
+    );
+}
+
+// shared floating value label for the hovered point
+function HoverTooltip({ hover, width, height, small = false }) {
+    if (!hover) return null;
+    return (
+        <div
+            className={`term-tooltip ${small ? "term-tooltip-sm" : ""} align-${tooltipAlign(hover.x / width)}`}
+            style={{ left: `${(hover.x / width) * 100}%`, top: `${(hover.y / height) * 100}%` }}
+        >
+            {fmt(hover.value)}
+        </div>
+    );
+}
+
 export function HeroChart({ loading, data, value, changeVal, changePct, eyebrow = "NEPSE INDEX" }) {
     const width = 1000;
     const height = 380;
     const chart = buildChart(data, width, height);
     const positive = changeVal >= 0;
+    const { containerRef, index: hoverIndex, handlers } = useChartHover(chart?.values.length ?? 0);
+
+    const hover = chart && hoverIndex != null
+        ? { x: chart.coords[hoverIndex][0], y: chart.coords[hoverIndex][1], value: chart.values[hoverIndex] }
+        : null;
+
+    const lineColor = chart?.positive ? "var(--term-emerald)" : "var(--term-crimson)";
 
     return (
         <div className="hero-canvas">
@@ -100,27 +106,31 @@ export function HeroChart({ loading, data, value, changeVal, changePct, eyebrow 
                 )}
             </div>
 
-            <div className="hero-chart-wrap">
+            <div className="hero-chart-wrap" ref={containerRef} {...(chart ? handlers : {})}>
                 {loading ? (
                     <div className="skel hero-skel" />
                 ) : chart ? (
-                    <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="hero-svg">
-                        <defs>
-                            <linearGradient id="heroFade" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor={chart.positive ? "var(--term-emerald)" : "var(--term-crimson)"} stopOpacity="0.20" />
-                                <stop offset="100%" stopColor={chart.positive ? "var(--term-emerald)" : "var(--term-crimson)"} stopOpacity="0" />
-                            </linearGradient>
-                        </defs>
-                        <polygon points={chart.area} fill="url(#heroFade)" stroke="none" />
-                        <polyline
-                            points={chart.line}
-                            fill="none"
-                            stroke={chart.positive ? "var(--term-emerald)" : "var(--term-crimson)"}
-                            strokeWidth="1.6"
-                            strokeLinejoin="round"
-                            strokeLinecap="round"
-                        />
-                    </svg>
+                    <>
+                        <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="hero-svg">
+                            <defs>
+                                <linearGradient id="heroFade" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor={lineColor} stopOpacity="0.20" />
+                                    <stop offset="100%" stopColor={lineColor} stopOpacity="0" />
+                                </linearGradient>
+                            </defs>
+                            <polygon points={chart.area} fill="url(#heroFade)" stroke="none" />
+                            <polyline
+                                points={chart.line}
+                                fill="none"
+                                stroke={lineColor}
+                                strokeWidth="1.6"
+                                strokeLinejoin="round"
+                                strokeLinecap="round"
+                            />
+                            <HoverMarker hover={hover} height={height} color={lineColor} radius="5" />
+                        </svg>
+                        <HoverTooltip hover={hover} width={width} height={height} />
+                    </>
                 ) : (
                     <div className="hero-chart-empty">no chart data</div>
                 )}
@@ -130,23 +140,34 @@ export function HeroChart({ loading, data, value, changeVal, changePct, eyebrow 
     );
 }
 
-// compact inline sparkline for expandable rows
 export function MiniSpark({ data, width = 280, height = 46 }) {
     const chart = buildChart(data, width, height);
+    const { containerRef, index: hoverIndex, handlers } = useChartHover(chart?.values.length ?? 0);
     if (!chart) return <div className="mini-spark-empty">no trend data</div>;
+
+    const hover = hoverIndex != null
+        ? { x: chart.coords[hoverIndex][0], y: chart.coords[hoverIndex][1], value: chart.values[hoverIndex] }
+        : null;
+    const lineColor = chart.positive ? "var(--term-emerald)" : "var(--term-crimson)";
+
     return (
-        <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="mini-spark-svg">
-            <polyline
-                points={chart.line}
-                fill="none"
-                stroke={chart.positive ? "var(--term-emerald)" : "var(--term-crimson)"}
-                strokeWidth="1.4"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-            />
-        </svg>
+        <div className="mini-spark-wrap" ref={containerRef} {...handlers}>
+            <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="mini-spark-svg">
+                <polyline
+                    points={chart.line}
+                    fill="none"
+                    stroke={lineColor}
+                    strokeWidth="1.4"
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                />
+                <HoverMarker hover={hover} height={height} color={lineColor} radius="3.5" />
+            </svg>
+            <HoverTooltip hover={hover} width={width} height={height} small />
+        </div>
     );
 }
+
 
 // borderless search that opens the full company page on pick
 export function TermSearch({ placeholder = "search symbol or company" }) {

@@ -245,11 +245,13 @@
 .hero-delta.flat { color: var(--term-text-dim); }
 .hero-delta-pct { color: var(--term-text-dim); font-weight: 400; margin-left: 2px; }
 
+/* touch-action set so vertical page scroll still works while hovering */
 .hero-chart-wrap {
   position: relative;
   width: 100%;
   height: clamp(220px, 32vw, 340px);
   margin-top: -46px;
+  touch-action: pan-y;
 }
 
 .hero-svg { width: 100%; height: 100%; display: block; }
@@ -487,3 +489,44 @@
 .hero-skel { width: 100%; height: 100%; }
 .index-skel { width: 130px; height: 60px; margin-right: 26px; }
 .ledger-skel { width: 100%; height: 20px; margin: 6px 0; }
+
+.mini-spark-wrap {
+  position: relative;
+  width: 100%;
+  touch-action: pan-y;
+}
+
+.term-hover-line {
+  stroke: var(--term-text-dim);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  pointer-events: none;
+}
+.term-hover-dot {
+  stroke: var(--term-bg);
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+.term-tooltip {
+  position: absolute;
+  transform: translate(-50%, -135%);
+  background: var(--surface);
+  border: 1px solid var(--term-line);
+  color: var(--term-text);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 3px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--shadow-lg);
+  z-index: 5;
+}
+.term-tooltip.align-start { transform: translate(0, -135%); }
+.term-tooltip.align-end   { transform: translate(-100%, -135%); }
+.term-tooltip-sm { font-size: 10px; padding: 2px 6px; }
+
+@media (pointer: fine) {
+  .hero-chart-wrap, .mini-spark-wrap { cursor: crosshair; }
+}

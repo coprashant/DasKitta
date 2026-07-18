@@ -9,13 +9,9 @@ import {
     getPriceVolume,
 } from "../../api/nepse";
 import Layout from "../../components/Layout/Layout.jsx";
-import { fmt, fmtCompact, dirClass, Arrow, HeroChart, TermSearch } from "./nepseShared.jsx";
+import { fmt, fmtCompact, HeroChart, TermSearch, EmptyRow, SkeletonRows } from "./nepseShared.jsx";
 import "./Nepse.css";
 import "./CompanyDetail.css";
-
-function EmptyRow({ label }) {
-    return <p className="ledger-empty">{label}</p>;
-}
 
 // nepse security payloads often nest reference fields as objects like
 // instrumentType: {id, code, description, activeStatus} instead of plain text
@@ -183,7 +179,7 @@ export default function CompanyDetail() {
                                 <>
                                     <p className="ledger-heading up">bid</p>
                                     {tabLoading && !buyRows.length ? (
-                                        [1, 2, 3].map((i) => <div key={i} className="skel ledger-skel" />)
+                                        <SkeletonRows count={3} />
                                     ) : buyRows.length ? (
                                         buyRows.slice(0, 6).map((r, i) => (
                                             <div className="ledger-row" key={i}>
@@ -195,7 +191,7 @@ export default function CompanyDetail() {
 
                                     <p className="ledger-heading down">ask</p>
                                     {tabLoading && !sellRows.length ? (
-                                        [1, 2, 3].map((i) => <div key={i} className="skel ledger-skel" />)
+                                        <SkeletonRows count={3} />
                                     ) : sellRows.length ? (
                                         sellRows.slice(0, 6).map((r, i) => (
                                             <div className="ledger-row" key={i}>
@@ -211,7 +207,7 @@ export default function CompanyDetail() {
                                 <>
                                     <p className="ledger-heading">recent sessions</p>
                                     {tabLoading && !history.length ? (
-                                        [1, 2, 3, 4].map((i) => <div key={i} className="skel ledger-skel" />)
+                                        <SkeletonRows count={4} />
                                     ) : history.length ? (
                                         history.slice(0, 12).map((r, i) => (
                                             <div className="ledger-row ledger-row-3" key={i}>
@@ -228,7 +224,7 @@ export default function CompanyDetail() {
                                 <>
                                     <p className="ledger-heading">recent contracts</p>
                                     {tabLoading && !floor.length ? (
-                                        [1, 2, 3, 4].map((i) => <div key={i} className="skel ledger-skel" />)
+                                        <SkeletonRows count={4} />
                                     ) : floor.length ? (
                                         floor.slice(0, 14).map((r, i) => (
                                             <div className="ledger-row ledger-row-3" key={i}>

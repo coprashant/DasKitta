@@ -28,7 +28,7 @@ import {
   getDailyTradingSubindexGraph,
 } from "../../api/nepse";
 import Layout from "../../components/Layout/Layout.jsx";
-import { fmt, fmtCompact, dirClass, Arrow, useClock, resolveHeroKey, HeroChart, MiniSpark, TermSearch } from "./nepseShared.jsx";
+import { fmt, fmtCompact, dirClass, Arrow, useClock, resolveHeroKey, HeroChart, MiniSpark, TermSearch, EmptyRow, SkeletonRows } from "./nepseShared.jsx";
 import "./Nepse.css";
 
 const REFRESH_INTERVAL = 30000;
@@ -68,10 +68,6 @@ function MoverRow({ item, tone }) {
       </span>
       </div>
   );
-}
-
-function EmptyRow({ label }) {
-  return <p className="ledger-empty">{label}</p>;
 }
 
 export default function Nepse() {
@@ -310,14 +306,14 @@ export default function Nepse() {
                     <>
                       <p className="ledger-heading up">gainers</p>
                       {feedLoading && !gainers.length
-                          ? [1, 2, 3].map((i) => <div key={i} className="skel ledger-skel" />)
+                          ? <SkeletonRows count={3} />
                           : gainers.length
                               ? gainers.slice(0, 6).map((r) => <MoverRow key={r.symbol} item={r} tone="up" />)
                               : <EmptyRow label="no gainers yet" />}
 
                       <p className="ledger-heading down">losers</p>
                       {feedLoading && !losers.length
-                          ? [1, 2, 3].map((i) => <div key={i} className="skel ledger-skel" />)
+                          ? <SkeletonRows count={3} />
                           : losers.length
                               ? losers.slice(0, 6).map((r) => <MoverRow key={r.symbol} item={r} tone="down" />)
                               : <EmptyRow label="no losers yet" />}
@@ -328,7 +324,7 @@ export default function Nepse() {
                     <>
                       <p className="ledger-heading">top turnover</p>
                       {feedLoading && !turnover.length ? (
-                          [1, 2, 3, 4].map((i) => <div key={i} className="skel ledger-skel" />)
+                          <SkeletonRows count={4} />
                       ) : turnover.length ? (
                           turnover.slice(0, 10).map((r) => (
                               <div className="ledger-row ledger-row-4" key={r.symbol}>
@@ -346,7 +342,7 @@ export default function Nepse() {
                     <>
                       <p className="ledger-heading">top trade by volume</p>
                       {feedLoading && !topTrade.length ? (
-                          [1, 2, 3].map((i) => <div key={i} className="skel ledger-skel" />)
+                          <SkeletonRows count={3} />
                       ) : topTrade.length ? (
                           topTrade.slice(0, 6).map((r) => (
                               <div className="ledger-row" key={r.symbol}>
@@ -358,7 +354,7 @@ export default function Nepse() {
 
                       <p className="ledger-heading">top by transactions</p>
                       {feedLoading && !topTransaction.length ? (
-                          [1, 2, 3].map((i) => <div key={i} className="skel ledger-skel" />)
+                          <SkeletonRows count={3} />
                       ) : topTransaction.length ? (
                           topTransaction.slice(0, 6).map((r) => (
                               <div className="ledger-row" key={r.symbol}>
@@ -370,7 +366,7 @@ export default function Nepse() {
 
                       <p className="ledger-heading">supply demand imbalance</p>
                       {feedLoading && !supplyDemand.length ? (
-                          [1, 2, 3].map((i) => <div key={i} className="skel ledger-skel" />)
+                          <SkeletonRows count={3} />
                       ) : supplyDemand.length ? (
                           supplyDemand.slice(0, 6).map((r, i) => {
                             const buy = r.buyQuantity ?? r.totalBuyQty ?? r.buyQty ?? null;
@@ -391,7 +387,7 @@ export default function Nepse() {
                     <>
                       <p className="ledger-heading">sector sub indices</p>
                       {feedLoading && !sectorRows.length ? (
-                          [1, 2, 3, 4].map((i) => <div key={i} className="skel ledger-skel" />)
+                          <SkeletonRows count={4} />
                       ) : sectorRows.length ? (
                           sectorRows.map((s) => {
                             const name = s.name ?? s.index ?? "sector";
@@ -430,7 +426,7 @@ export default function Nepse() {
                     <>
                       <p className="ledger-heading">live contracts</p>
                       {feedLoading && !floorRows.length ? (
-                          [1, 2, 3, 4].map((i) => <div key={i} className="skel ledger-skel" />)
+                          <SkeletonRows count={4} />
                       ) : floorRows.length ? (
                           floorRows.slice(0, 14).map((r, i) => (
                               <div className="ledger-row ledger-row-3" key={i}>
