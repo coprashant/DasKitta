@@ -13,7 +13,7 @@ import {
     IconArrowUp,
     IconArrowDown,
     IconUser,
-} from "../../components/Icons/Icons.jsx";
+} from "../../components/Icons.jsx";
 import "./Portfolio.css";
 
 const fmt = (n) =>
