@@ -160,6 +160,11 @@ button.btn-refresh:hover {
   font-family: var(--mono);
 }
 
+/* dark mode scrip matches units color not accent */
+[data-theme="dark"] .scrip-code {
+  color: var(--text);
+}
+
 .scrip-desc {
   font-size: 11px;
   color: var(--text-3);
@@ -171,6 +176,11 @@ button.btn-refresh:hover {
   max-width: 160px;
 }
 @media (min-width: 768px) { .scrip-desc { max-width: 200px; } }
+
+/* hide full scrip name below 600px show abbreviation only */
+@media (max-width: 599px) {
+  .scrip-desc { display: none; }
+}
 
 .cell-mono {
   font-family: var(--mono);
