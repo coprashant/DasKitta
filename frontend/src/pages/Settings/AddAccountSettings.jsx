@@ -96,9 +96,6 @@ export default function AddAccountSettings() {
         <div className="card stg-card anim-fade-up add-account-card">
             <div className="stg-card-head">
                 <h2 className="stg-card-title">Add account</h2>
-                <p className="form-hint">
-                    Connect a Meroshare account Passwords are AES encrypted before storing
-                </p>
             </div>
 
             <form onSubmit={handleSubmit}>

@@ -17,3 +17,5 @@ export const updateAccountApi = (id, data) => client.patch(`/accounts/${id}`, {
 });
 export const deleteAccountApi = (id) => client.delete(`/accounts/${id}`);
 export const getPortfolioApi = (accountId) => client.get(`/accounts/${accountId}/portfolio`);
+
+export const getAccountInfoApi = (id) => client.get(`/accounts/${id}/info`);

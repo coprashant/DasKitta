@@ -3,6 +3,7 @@ import com.meroshare.backend.dto.MeroshareAccountRequest;
 import com.meroshare.backend.dto.MeroshareAccountResponse;
 import com.meroshare.backend.dto.MeroshareAccountUpdateRequest;
 import com.meroshare.backend.dto.PortfolioResponse;
+import com.meroshare.backend.dto.MeroshareAccountInfoResponse;
 import com.meroshare.backend.service.MeroshareAccountService;
 import com.meroshare.backend.service.MeroshareApiService;
 import jakarta.validation.Valid;
@@ -58,6 +59,13 @@ public class AccountController {
             @PathVariable Long id,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(accountService.getPortfolio(id, userDetails.getUsername()));
+    }
+
+    @GetMapping("/{id}/info")
+    public ResponseEntity<MeroshareAccountInfoResponse> getAccountInfo(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(accountService.getAccountInfo(id, userDetails.getUsername()));
     }
 
 }

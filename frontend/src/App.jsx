@@ -20,6 +20,7 @@ import NotFound      from "./pages/NotFound/NotFound";
 import Portfolio     from "./pages/Portfolio/Portfolio";
 import Nepse         from "./pages/Nepse/Nepse";
 import CompanyDetail from "./pages/Nepse/CompanyDetail";
+import AccountInfo from "./pages/Settings/AccountInfo.jsx";
 const App = () => {
   return (
       <BrowserRouter>
@@ -58,6 +59,7 @@ const App = () => {
                     <Route index element={<ProfileSettings />} />
                     <Route path="accounts" element={<AccountsSettings />} />
                     <Route path="accounts/add" element={<AddAccountSettings />} />
+                    <Route path="accounts/:id/info" element={<AccountInfo />} />
                   </Route>
                   <Route path="/dashboard" element={
                     <ProtectedRoute><Dashboard /></ProtectedRoute>

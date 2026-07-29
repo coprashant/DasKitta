@@ -219,6 +219,13 @@ export default function AccountsSettings() {
                                                         Set as active
                                                     </button>
                                                 )}
+                                                <Link
+                                                    className="account-menu-item"
+                                                    to={`/settings/accounts/${acc.id}/info`}
+                                                    onClick={() => setActiveMenu(null)}
+                                                >
+                                                    View info
+                                                </Link>
                                                 <button className="account-menu-item" onClick={() => openEdit(acc)}>
                                                     Edit credentials
                                                 </button>

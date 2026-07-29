@@ -4,6 +4,7 @@ import com.meroshare.backend.dto.MeroshareAccountRequest;
 import com.meroshare.backend.dto.MeroshareAccountResponse;
 import com.meroshare.backend.dto.MeroshareAccountUpdateRequest;
 import com.meroshare.backend.dto.PortfolioResponse;
+import com.meroshare.backend.dto.MeroshareAccountInfoResponse;
 import com.meroshare.backend.entity.AppUser;
 import com.meroshare.backend.entity.MeroshareAccount;
 import com.meroshare.backend.repository.AppUserRepository;
@@ -173,5 +174,72 @@ public class MeroshareAccountService {
                 .bankId(account.getBankId())
                 .createdAt(account.getCreatedAt())
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public MeroshareAccountInfoResponse getAccountInfo(Long accountId, String appUsername) {
+        AppUser appUser = appUserRepository.findByUsername(appUsername)
+                .orElseThrow(() -> new RuntimeException("User not found " + appUsername));
+
+        MeroshareAccount account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new RuntimeException("Account not found"));
+
+        if (!account.getAppUser().getId().equals(appUser.getId())) {
+            throw new RuntimeException("Unauthorized");
+        }
+
+        // Start with what we already have stored, in case CDSC is unreachable
+        MeroshareAccountInfoResponse.MeroshareAccountInfoResponseBuilder builder = MeroshareAccountInfoResponse.builder()
+                .id(account.getId())
+                .dpId(account.getDpId())
+                .dpCode(account.getDpCode())
+                .username(account.getUsername())
+                .fullName(account.getFullName())
+                .boid(account.getBoid())
+                .demat(account.getDemat())
+                .crn(account.getCrn())
+                .bankId(account.getBankId())
+                .accountNumber(account.getAccountNumber())
+                .accountBranchId(account.getAccountBranchId())
+                .customerId(account.getCustomerId())
+                .accountTypeId(account.getAccountTypeId())
+                .createdAt(account.getCreatedAt())
+                .liveDataAvailable(false);
+
+        try {
+            String plainPassword = encryptionUtil.decrypt(account.getPassword());
+            String token = meroshareApiService.login(account.getDpId(), account.getUsername(), plainPassword);
+
+            MeroshareApiService.AccountDetails ownDetail = meroshareApiService.fetchAccountDetails(token);
+            builder.fullName(ownDetail.getFullName())
+                    .boid(ownDetail.getBoid())
+                    .demat(ownDetail.getDemat());
+
+            if (account.getBankId() != null && !account.getBankId().isBlank()) {
+                MeroshareApiService.BankDetails bankDetails =
+                        meroshareApiService.fetchBankDetails(token, account.getBankId());
+                if (bankDetails != null) {
+                    builder.branchName(bankDetails.getBranchName())
+                            .accountNumber(bankDetails.getAccountNumber())
+                            .accountBranchId(bankDetails.getAccountBranchId())
+                            .customerId(bankDetails.getCustomerId())
+                            .accountTypeId(bankDetails.getAccountTypeId());
+                }
+
+                List<Map> banks = meroshareApiService.getUserBanks(token);
+                banks.stream()
+                        .filter(b -> String.valueOf(b.get("id")).equals(account.getBankId()))
+                        .findFirst()
+                        .ifPresent(b -> builder.bankName(String.valueOf(b.get("name"))));
+            }
+
+            builder.liveDataAvailable(true);
+            log.info("ACCOUNT INFO refreshed live data for account {}", accountId);
+        } catch (Exception e) {
+            log.warn("ACCOUNT INFO could not refresh live data for account {}: {}", accountId, e.getMessage());
+            // builder already has the stored fallback values
+        }
+
+        return builder.build();
     }
 }

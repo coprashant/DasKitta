@@ -360,8 +360,22 @@
 
 .saved-account-menu-wrap { position: relative; flex-shrink: 0; }
 .icon-btn {
-    display: flex; align-items: center; justify-content: center;
-    width: 32px; height: 32px; border: none; background: none; cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: var(--text-2);
+    border-radius: var(--r-sm);
+    transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+}
+
+.icon-btn:hover {
+    color: var(--text);
+    background: var(--surface-2);
 }
 
 .account-menu {
@@ -371,14 +385,102 @@
 }
 
 .account-menu-head { display: flex; align-items: center; justify-content: space-between; }
-.account-menu-item { text-align: left; font-size: 13px; background: none; border: none; padding: 8px 10px; cursor: pointer; width: 100%; }
-.account-menu-item-danger { color: #e53e3e; }
+
+.account-menu-item {
+    display: block;
+    text-align: left;
+    text-decoration: none;
+    font-size: 13px;
+    color: var(--text);
+    background: none;
+    border: none;
+    padding: 8px 10px;
+    cursor: pointer;
+    width: 100%;
+    border-radius: var(--r-sm);
+    transition: background var(--t-fast) var(--ease);
+}
+
+.account-menu-item:hover {
+    background: var(--surface-2);
+}
+
+.account-menu-item:visited {
+    color: var(--text);
+}
+
+.account-menu-item-danger {
+    color: #e53e3e;
+}
+
+.account-menu-item-danger:hover {
+    background: var(--danger-dim);
+}
 
 .edit-account-panel, .confirm-panel { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
 .edit-panel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .edit-panel-actions, .confirm-panel-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
 .empty-state { text-align: center; padding: 32px 16px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+
+/* account info page */
+.info-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.info-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.info-row:last-of-type {
+    border-bottom: none;
+}
+
+.info-row-label {
+    font-size: 12px;
+    color: var(--text-2);
+    flex-shrink: 0;
+}
+
+.info-row-value {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.info-loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-2);
+    padding: 24px 0;
+    justify-content: center;
+}
+
+@media (max-width: 640px) {
+    .info-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+        padding: 10px 0;
+    }
+    .info-row-value {
+        text-align: left;
+        white-space: normal;
+    }
+}
 
 /* add account tab */
 .back-link {
@@ -415,10 +517,6 @@
     margin-bottom: 14px;
     padding-bottom: 10px;
     border-bottom: 1px solid var(--border);
-}
-
-.form-hint-danger {
-    color: var(--color-danger, #e53e3e);
 }
 
 .dp-error-box {
