@@ -245,7 +245,7 @@
 .hero-delta.flat { color: var(--term-text-dim); }
 .hero-delta-pct { color: var(--term-text-dim); font-weight: 400; margin-left: 2px; }
 
-/* touch-action set so vertical page scroll still works while hovering */
+/* touch action set so vertical page scroll still works while hovering */
 .hero-chart-wrap {
   position: relative;
   width: 100%;
@@ -282,11 +282,55 @@
   overflow-x: auto;
   scrollbar-width: none;
   padding: 14px 0;
-  margin-top: 10px;
-  border-top: 1px solid var(--term-line);
-  border-bottom: 1px solid var(--term-line);
+  margin-top: 0;
+  width: 100%;
+  cursor: grab;
+  user-select: none;
 }
-.term-ticker::-webkit-scrollbar { display: none; }
+.term-ticker:active {
+  cursor: grabbing;
+}
+.term-ticker::-webkit-scrollbar {
+  display: none; /* hide scrollbar on chrome and safari */
+}
+
+.term-ticker-track {
+  display: flex;
+  gap: 26px;
+  flex-shrink: 0;
+}
+
+/* hide duplicate track on desktop views completely */
+.mobile-only-duplicate {
+  display: none;
+}
+
+/* mobile live feed under 800px */
+@media (max-width: 799px) {
+  .mobile-only-duplicate {
+    display: flex; /* show duplicate only on mobile for infinite loop */
+  }
+
+  .term-ticker-track {
+    animation: ticker-scroll 25s linear infinite;
+  }
+
+  /* instantly pause auto scroll when active, hovered, or touched so user can interact */
+  .term-ticker:hover .term-ticker-track,
+  .term-ticker:active .term-ticker-track,
+  .term-ticker:focus-within .term-ticker-track {
+    animation-play-state: paused;
+  }
+}
+
+@keyframes ticker-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
 
 .term-ticker-item {
   display: flex;
@@ -308,35 +352,45 @@
 /* secondary index strip */
 .index-strip {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0;
+  flex-wrap: nowrap;
+  align-items: center;
+  width: 100%;
   margin-top: 4px;
 }
 
 .index-item {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 16px 26px 16px 0;
-  margin-right: 26px;
-  border-right: 1px solid var(--term-line);
-  min-width: 120px;
+  gap: clamp(2px, 0.4vw, 4px);
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 16px clamp(8px, 1.5vw, 20px) 16px 0;
+  margin-right: clamp(8px, 1.5vw, 20px);
 }
-.index-item:last-child { border-right: none; }
+
+.index-item:last-child {
+  border-right: none;
+  margin-right: 0;
+  padding-right: 0;
+}
 
 .index-name {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: clamp(8px, 0.85vw, 10px);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--term-text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .index-value {
   font-family: var(--mono);
-  font-size: 19px;
+  font-size: clamp(13px, 1.6vw, 19px);
   font-weight: 400;
   color: var(--term-text);
+  white-space: nowrap;
 }
 
 .index-change {
@@ -344,12 +398,24 @@
   align-items: center;
   gap: 3px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: clamp(9.5px, 1vw, 12px);
   font-weight: 500;
+  white-space: nowrap;
 }
 .index-change.up { color: var(--term-emerald); }
 .index-change.down { color: var(--term-crimson); }
 .index-change.flat { color: var(--term-text-dim); }
+
+/* skeleton fix to maintain single row behavior during loading state */
+.index-skel {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 60px;
+  margin-right: clamp(8px, 1.5vw, 20px);
+}
+.index-skel:last-child {
+  margin-right: 0;
+}
 
 /* ledger panel */
 .term-ledger { min-width: 0; }
@@ -448,6 +514,47 @@
 
 .arrow-icon { flex-shrink: 0; }
 .arrow-flat { color: var(--term-text-dim); }
+
+/* container for action controls */
+.ledger-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 4px;
+  margin-bottom: 8px;
+}
+
+/* minimal action buttons with no borders in an inline layout */
+.ledger-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 6px 0;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.ledger-action-btn:hover {
+  opacity: 0.8;
+}
+
+/* color variations */
+.ledger-action-btn.up {
+  color: var(--term-emerald);
+}
+
+.ledger-action-btn.down {
+  color: var(--term-crimson);
+}
+
+.ledger-action-btn .arrow-icon {
+  margin-left: 2px;
+}
 
 /* empty state inside the ledger */
 .ledger-empty {
