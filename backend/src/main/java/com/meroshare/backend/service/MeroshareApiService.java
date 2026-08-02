@@ -299,10 +299,11 @@ public class MeroshareApiService {
             d.setFullName(getText(node, "name"));
             d.setBoid(getText(node, "boid"));
             d.setDemat(getText(node, "demat"));
-            d.setDematExpiryDate(getText(node, "dematExpiryDateStr"));
+            d.setDematExpiryDate(getText(node, "dematExpiryDate"));
             d.setAccountExpiryDate(getText(node, "expiredDateStr"));
             d.setPasswordExpiryDate(getText(node, "passwordExpiryDateStr"));
-            log.info("[OWN_DETAIL] name {} boid {}", d.getFullName(), d.getBoid());
+            log.info("[OWN_DETAIL] name {} boid {} dematExpiry {} accountExpiry {} passwordExpiry {}",
+                    d.getFullName(), d.getBoid(), d.getDematExpiryDate(), d.getAccountExpiryDate(), d.getPasswordExpiryDate());
             return d;
         } catch (Exception e) {
             throw new RuntimeException("Failed to parse account details " + e.getMessage(), e);
