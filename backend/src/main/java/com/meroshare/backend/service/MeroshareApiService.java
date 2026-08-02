@@ -29,7 +29,7 @@ public class MeroshareApiService {
 
     private static final String USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-            "(KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0";
+                    "(KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0";
 
     private static final long TOKEN_TTL_MS = 25 * 60 * 1000;
 
@@ -299,6 +299,9 @@ public class MeroshareApiService {
             d.setFullName(getText(node, "name"));
             d.setBoid(getText(node, "boid"));
             d.setDemat(getText(node, "demat"));
+            d.setDematExpiryDate(getText(node, "dematExpiryDateStr"));
+            d.setAccountExpiryDate(getText(node, "expiredDateStr"));
+            d.setPasswordExpiryDate(getText(node, "passwordExpiryDateStr"));
             log.info("[OWN_DETAIL] name {} boid {}", d.getFullName(), d.getBoid());
             return d;
         } catch (Exception e) {
@@ -341,14 +344,14 @@ public class MeroshareApiService {
             d.setBankListId(bankListId);
             d.setAccountNumber(getText(node, "accountNumber"));
             d.setAccountBranchId(
-                node.has("accountBranchId") ? String.valueOf(node.get("accountBranchId").asInt()) : null
+                    node.has("accountBranchId") ? String.valueOf(node.get("accountBranchId").asInt()) : null
             );
             // "id" in the bank detail is used as customerId in the apply body
             d.setCustomerId(
-                node.has("id") ? String.valueOf(node.get("id").asLong()) : null
+                    node.has("id") ? String.valueOf(node.get("id").asLong()) : null
             );
             d.setAccountTypeId(
-                node.has("accountTypeId") ? node.get("accountTypeId").asInt() : 1
+                    node.has("accountTypeId") ? node.get("accountTypeId").asInt() : 1
             );
             d.setBranchName(getText(node, "branchName"));
 
@@ -447,8 +450,8 @@ public class MeroshareApiService {
     }
 
     public String applyIpo(String token, int companyShareId, String demat, String boid,
-            String accountNumber, String customerId, String accountBranchId,
-            String bankId, int accountTypeId, int kitta, String crn, String pin) {
+                           String accountNumber, String customerId, String accountBranchId,
+                           String bankId, int accountTypeId, int kitta, String crn, String pin) {
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("accountBranchId", Integer.parseInt(accountBranchId));
@@ -805,6 +808,9 @@ public class MeroshareApiService {
         private String fullName;
         private String boid;
         private String demat;
+        private String dematExpiryDate;
+        private String accountExpiryDate;
+        private String passwordExpiryDate;
     }
 
     @Data

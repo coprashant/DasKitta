@@ -61,6 +61,9 @@ public class MeroshareAccountService {
                 .fullName(ownDetail.getFullName())
                 .boid(ownDetail.getBoid())
                 .demat(ownDetail.getDemat())
+                .dematExpiryDate(ownDetail.getDematExpiryDate())
+                .accountExpiryDate(ownDetail.getAccountExpiryDate())
+                .passwordExpiryDate(ownDetail.getPasswordExpiryDate())
                 .crn(request.getCrn())
                 .pin(request.getPin() != null && !request.getPin().isBlank()
                         ? encryptionUtil.encrypt(request.getPin())
@@ -197,6 +200,9 @@ public class MeroshareAccountService {
                 .fullName(account.getFullName())
                 .boid(account.getBoid())
                 .demat(account.getDemat())
+                .dematExpiryDate(account.getDematExpiryDate())
+                .accountExpiryDate(account.getAccountExpiryDate())
+                .passwordExpiryDate(account.getPasswordExpiryDate())
                 .crn(account.getCrn())
                 .bankId(account.getBankId())
                 .accountNumber(account.getAccountNumber())
@@ -213,7 +219,10 @@ public class MeroshareAccountService {
             MeroshareApiService.AccountDetails ownDetail = meroshareApiService.fetchAccountDetails(token);
             builder.fullName(ownDetail.getFullName())
                     .boid(ownDetail.getBoid())
-                    .demat(ownDetail.getDemat());
+                    .demat(ownDetail.getDemat())
+                    .dematExpiryDate(ownDetail.getDematExpiryDate())
+                    .accountExpiryDate(ownDetail.getAccountExpiryDate())
+                    .passwordExpiryDate(ownDetail.getPasswordExpiryDate());
 
             if (account.getBankId() != null && !account.getBankId().isBlank()) {
                 MeroshareApiService.BankDetails bankDetails =

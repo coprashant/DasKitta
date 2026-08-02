@@ -15,6 +15,9 @@ public class MeroshareAccountInfoResponse {
     private String fullName;
     private String boid;
     private String demat;
+    private String dematExpiryDate;
+    private String accountExpiryDate;
+    private String passwordExpiryDate;
     private String crn;
     private String bankId;
     private String bankName;

@@ -75,6 +75,9 @@ export default function AccountInfo() {
                     <InfoRow label="Branch" value={info.branchName} />
                     <InfoRow label="Bank account no." value={info.accountNumber} />
                     <InfoRow label="Account type" value={info.accountTypeId === 1 ? "Saving" : "Current"} />
+                    <InfoRow label="Meroshare account expiry" value={info.accountExpiryDate} />
+                    <InfoRow label="Meroshare password expiry" value={info.passwordExpiryDate} />
+                    <InfoRow label="Demat expiry" value={info.dematExpiryDate} />
 
                     <button className="btn btn-secondary" style={{ marginTop: 16 }} onClick={() => navigate(-1)}>
                         Back

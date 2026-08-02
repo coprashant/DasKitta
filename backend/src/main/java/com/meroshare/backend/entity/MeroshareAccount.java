@@ -36,6 +36,12 @@ public class MeroshareAccount {
 
     private String demat;
 
+    private String dematExpiryDate;
+
+    private String accountExpiryDate;
+
+    private String passwordExpiryDate;
+
     private String bankId;
 
     private String accountNumber;
