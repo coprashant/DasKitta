@@ -139,6 +139,7 @@ public class AuthService {
         emailOtpRepository.save(emailOtp);
 
         SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom("DasKitta Support <daskitta.support@gmail.com>");
         message.setTo(email);
         message.setSubject("DasKitta Verify Your Account");
         message.setText("Welcome to DasKitta\n\n" +
@@ -259,6 +260,7 @@ public class AuthService {
         emailOtpRepository.save(emailOtp);
 
         SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom("DasKitta Support <daskitta.support@gmail.com>");
         message.setTo(newEmail);
         message.setSubject("DasKitta: Confirm Your New Email");
         message.setText("From DasKitta:\n\n" +
