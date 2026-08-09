@@ -155,7 +155,8 @@ const BellButton = () => {
 const Navbar = () => {
   const { user } = useAuth();
   const { theme, toggle } = useTheme();
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const { pathname } = location;
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef(null);
 
@@ -232,8 +233,20 @@ const Navbar = () => {
                 </div>
             ) : (
                 <>
-                  <Link to="/login" className="navbar-link navbar-link-ghost">Sign in</Link>
-                  <Link to="/register" className="btn btn-primary btn-sm">Get started</Link>
+                  <Link
+                      to="/login"
+                      state={{ background: location.state?.background || location }}
+                      className="navbar-link navbar-link-ghost"
+                  >
+                    Sign in
+                  </Link>
+                  <Link
+                      to="/register"
+                      state={{ background: location.state?.background || location }}
+                      className="btn btn-primary btn-sm"
+                  >
+                    Get started
+                  </Link>
                 </>
             )}
           </div>

@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
@@ -20,7 +20,74 @@ import NotFound      from "./pages/NotFound/NotFound";
 import Portfolio     from "./pages/Portfolio/Portfolio";
 import Nepse         from "./pages/Nepse/Nepse";
 import CompanyDetail from "./pages/Nepse/CompanyDetail";
-import AccountInfo from "./pages/Settings/AccountInfo.jsx";
+import AccountInfo   from "./pages/Settings/AccountInfo.jsx";
+
+const AppContent = () => {
+  const location = useLocation();
+  const background = location.state?.background;
+
+  return (
+      <>
+        <Toaster
+            position="top-right"
+            containerStyle={{ zIndex: 500 }}
+            toastOptions={{
+              style: {
+                background: "var(--surface)",
+                color: "var(--text)",
+                border: "1px solid var(--border)",
+                fontFamily: "var(--font)",
+                fontSize: "13px",
+                borderRadius: "var(--r)",
+                boxShadow: "var(--shadow-lg)",
+              },
+              success: { iconTheme: { primary: "var(--success)", secondary: "var(--surface)" } },
+              error:   { iconTheme: { primary: "var(--danger)",  secondary: "var(--surface)" } },
+            }}
+        />
+
+        {/* Main underlying page routing */}
+        <Routes location={background || location}>
+          <Route path="/"                   element={<Home />} />
+          <Route path="/login"              element={<Auth />} />
+          <Route path="/register"           element={<Auth />} />
+          <Route path="/ipo/result"         element={<ResultChecker />} />
+          <Route path="/nepse"              element={<Nepse />} />
+          <Route path="/nepse/company/:symbol" element={<CompanyDetail />} />
+          <Route path="/settings" element={
+            <ProtectedRoute><Settings /></ProtectedRoute>
+          }>
+            <Route index element={<ProfileSettings />} />
+            <Route path="accounts" element={<AccountsSettings />} />
+            <Route path="accounts/add" element={<AddAccountSettings />} />
+            <Route path="accounts/:id/info" element={<AccountInfo />} />
+          </Route>
+          <Route path="/dashboard" element={
+            <ProtectedRoute><Dashboard /></ProtectedRoute>
+          } />
+          <Route path="/ipo/apply" element={
+            <ProtectedRoute><IPOApply /></ProtectedRoute>
+          } />
+          <Route path="/history" element={
+            <ProtectedRoute><History /></ProtectedRoute>
+          } />
+          <Route path="/portfolio" element={
+            <ProtectedRoute><Portfolio /></ProtectedRoute>
+          } />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+
+        {/* Auth overlay modal routing (rendered above the background route) */}
+        {background && (
+            <Routes>
+              <Route path="/login" element={<Auth />} />
+              <Route path="/register" element={<Auth />} />
+            </Routes>
+        )}
+      </>
+  );
+};
+
 const App = () => {
   return (
       <BrowserRouter>
@@ -29,52 +96,7 @@ const App = () => {
             <AccountProvider>
               <NotificationProvider>
                 <AccountSync />
-                <Toaster
-                    position="top-right"
-                    containerStyle={{ zIndex: 500 }}
-                    toastOptions={{
-                      style: {
-                        background: "var(--surface)",
-                        color: "var(--text)",
-                        border: "1px solid var(--border)",
-                        fontFamily: "var(--font)",
-                        fontSize: "13px",
-                        borderRadius: "var(--r)",
-                        boxShadow: "var(--shadow-lg)",
-                      },
-                      success: { iconTheme: { primary: "var(--success)", secondary: "var(--surface)" } },
-                      error:   { iconTheme: { primary: "var(--danger)",  secondary: "var(--surface)" } },
-                    }}
-                />
-                <Routes>
-                  <Route path="/"           element={<Home />} />
-                  <Route path="/login"    element={<Auth />} />
-                  <Route path="/register" element={<Auth />} />
-                  <Route path="/ipo/result" element={<ResultChecker />} />
-                  <Route path="/nepse"      element={<Nepse />} />
-                  <Route path="/nepse/company/:symbol" element={<CompanyDetail />} />
-                  <Route path="/settings" element={
-                    <ProtectedRoute><Settings /></ProtectedRoute>
-                  }>
-                    <Route index element={<ProfileSettings />} />
-                    <Route path="accounts" element={<AccountsSettings />} />
-                    <Route path="accounts/add" element={<AddAccountSettings />} />
-                    <Route path="accounts/:id/info" element={<AccountInfo />} />
-                  </Route>
-                  <Route path="/dashboard" element={
-                    <ProtectedRoute><Dashboard /></ProtectedRoute>
-                  } />
-                  <Route path="/ipo/apply" element={
-                    <ProtectedRoute><IPOApply /></ProtectedRoute>
-                  } />
-                  <Route path="/history" element={
-                    <ProtectedRoute><History /></ProtectedRoute>
-                  } />
-                  <Route path="/portfolio" element={
-                    <ProtectedRoute><Portfolio /></ProtectedRoute>
-                  } />
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
+                <AppContent />
               </NotificationProvider>
             </AccountProvider>
           </AuthProvider>
@@ -82,4 +104,5 @@ const App = () => {
       </BrowserRouter>
   );
 };
+
 export default App;

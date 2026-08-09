@@ -1,0 +1,50 @@
+.otp-container {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    align-items: center;
+    margin: 12px 0;
+}
+
+.otp-slot {
+    width: 44px;
+    height: 52px;
+    text-align: center;
+    font-size: 20px;
+    font-weight: 600;
+    font-family: inherit;
+    color: var(--text, #1e293b);
+    background: var(--surface, #ffffff);
+    border: 1.5px solid var(--border, #cbd5e1);
+    border-radius: var(--r, 8px);
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+@media (min-width: 480px) {
+    .otp-slot {
+        width: 48px;
+        height: 56px;
+        font-size: 22px;
+    }
+}
+
+.otp-slot:hover:not(:disabled) {
+    border-color: var(--border-strong, #94a3b8);
+}
+
+.otp-slot:focus {
+    border-color: var(--accent, #3b82f6);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+.otp-slot--filled {
+    border-color: var(--border-strong, #94a3b8);
+    background: var(--surface-2, #f8fafc);
+}
+
+.otp-slot:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background: var(--surface-2, #f1f5f9);
+}
