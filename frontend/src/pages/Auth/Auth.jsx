@@ -26,6 +26,33 @@ const Auth = () => {
     const [errorMessage, setErrorMessage] = useState("");
     const [timer, setTimer] = useState(0);
 
+    const handleClose = () => {
+        if (background) {
+            navigate(background.pathname + background.search + background.hash, { replace: true });
+        } else {
+            navigate("/", { replace: true });
+        }
+    };
+
+    // Close on Escape key press
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === "Escape") handleClose();
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [background]);
+
+    // Disable body scrolling while modal is active
+    useEffect(() => {
+        if (background) {
+            document.body.style.overflow = "hidden";
+            return () => {
+                document.body.style.overflow = "";
+            };
+        }
+    }, [background]);
+
     useEffect(() => {
         setErrorMessage("");
         setIsOtpStage(false);
@@ -47,17 +74,7 @@ const Auth = () => {
 
     const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
 
-    const handleClose = () => {
-        // If opened as a modal, navigate to the background path directly so it closes in 1 click
-        if (background) {
-            navigate(background.pathname + background.search + background.hash, { replace: true });
-        } else {
-            navigate("/", { replace: true });
-        }
-    };
-
     const handleSwitchMode = (targetPath) => {
-        // Replace current history entry instead of pushing a new one
         navigate(targetPath, { state: { background }, replace: true });
     };
 
