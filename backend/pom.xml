@@ -73,12 +73,6 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
-        <!-- Spring Email Starter -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-mail</artifactId>
-        </dependency>
-
         <!-- Lombok (reduces boilerplate: @Getter, @Builder, etc.) -->
         <dependency>
             <groupId>org.projectlombok</groupId>

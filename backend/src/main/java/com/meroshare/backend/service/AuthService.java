@@ -10,8 +10,6 @@ import com.meroshare.backend.repository.AppUserRepository;
 import com.meroshare.backend.repository.EmailOtpRepository;
 import com.meroshare.backend.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -31,7 +29,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final AuthenticationManager authenticationManager;
-    private final JavaMailSender mailSender;
+    private final EmailServiceClient emailServiceClient; // Replaced JavaMailSender
 
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -138,16 +136,14 @@ public class AuthService {
 
         emailOtpRepository.save(emailOtp);
 
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom("DasKitta Support <daskitta.support@gmail.com>");
-        message.setTo(email);
-        message.setSubject("DasKitta Verify Your Account");
-        message.setText("Welcome to DasKitta\n\n" +
+        String subject = "DasKitta Verify Your Account";
+        String body = "Welcome to DasKitta\n\n" +
                 "Your 6 digit verification code is: " + otpCode + "\n\n" +
                 "This code is valid for 5 minutes. Do not share this code with anyone.\n"+
-                "If you didn't request this, please ignore this message.");
+                "If you didn't request this, please ignore this message.";
 
-        mailSender.send(message);
+        // Delegate to Node.js microservice over HTTP
+        emailServiceClient.sendEmail(email, subject, body, "DasKitta Support");
     }
 
     private String generateSecureOtp() {
@@ -259,16 +255,14 @@ public class AuthService {
 
         emailOtpRepository.save(emailOtp);
 
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom("DasKitta Support <daskitta.support@gmail.com>");
-        message.setTo(newEmail);
-        message.setSubject("DasKitta: Confirm Your New Email");
-        message.setText("From DasKitta:\n\n" +
+        String subject = "DasKitta: Confirm Your New Email";
+        String body = "From DasKitta:\n\n" +
                 "Your 6 digit code to confirm this new email is: " + otpCode + "\n\n" +
                 "This code is valid for 5 minutes. Do not share this code with anyone.\n" +
-                "If you didn't request this, please ignore this message.");
+                "If you didn't request this, please ignore this message.";
 
-        mailSender.send(message);
+        // Delegate to Node.js microservice over HTTP
+        emailServiceClient.sendEmail(newEmail, subject, body, "DasKitta Support");
     }
 
     // Confirms the email change once the correct otp is given
