@@ -6,7 +6,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-
 import java.util.HashMap;
 import java.util.Map;
 
@@ -21,7 +20,8 @@ public class EmailServiceClient {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
-    public void sendEmail(String to, String subject, String body, String senderName) {
+    // sends plain text and html body, microservice accepts both fields
+    public void sendEmail(String to, String subject, String textBody, String htmlBody, String senderName) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("x-api-key", apiKey);
@@ -29,7 +29,8 @@ public class EmailServiceClient {
         Map<String, String> requestBody = new HashMap<>();
         requestBody.put("to", to);
         requestBody.put("subject", subject);
-        requestBody.put("body", body);
+        requestBody.put("body", textBody);
+        requestBody.put("html", htmlBody);
         requestBody.put("senderName", senderName);
 
         HttpEntity<Map<String, String>> request = new HttpEntity<>(requestBody, headers);
