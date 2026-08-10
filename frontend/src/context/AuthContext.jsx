@@ -80,7 +80,7 @@ export const AuthProvider = ({ children }) => {
     clearSession();
     if (onLogoutRef.current) onLogoutRef.current();
     toast.success("Signed out");
-    navigate("/login");
+    navigate("/", { replace: true, state: null });
   }, [clearSession, navigate]);
 
   return (

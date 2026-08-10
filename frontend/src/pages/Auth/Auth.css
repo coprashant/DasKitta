@@ -38,9 +38,9 @@
 .modal-blur {
   position: absolute;
   inset: 0;
-  background: rgba(14, 22, 38, 0.55);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(14, 22, 38, 0.65);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   cursor: pointer;
 }
 
