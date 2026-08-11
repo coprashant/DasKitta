@@ -38,6 +38,18 @@ export default function AccountsSettings() {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
+    // escape key closes whichever panel is currently open
+    useEffect(() => {
+        const handleEscape = (e) => {
+            if (e.key !== "Escape") return;
+            setActiveMenu(null);
+            setEditingId(null);
+            setConfirmDeleteId(null);
+        };
+        document.addEventListener("keydown", handleEscape);
+        return () => document.removeEventListener("keydown", handleEscape);
+    }, []);
+
     const handleDelete = async (id) => {
         setDeleting(id);
         try {
@@ -64,11 +76,20 @@ export default function AccountsSettings() {
         setEditShowPassword(false);
         setEditShowPin(false);
         setActiveMenu(null);
+        // close any open delete confirm on this card so panels do not overlap
+        setConfirmDeleteId(null);
     };
 
     const closeEdit = () => {
         setEditingId(null);
         setEditForm(EMPTY_EDIT_FORM);
+    };
+
+    const openConfirmDelete = (accId) => {
+        setActiveMenu(null);
+        setConfirmDeleteId(accId);
+        // close any open edit panel on this card so panels do not overlap
+        setEditingId(null);
     };
 
     const handleEditChange = (e) => setEditForm((f) => ({ ...f, [e.target.name]: e.target.value }));
@@ -152,24 +173,26 @@ export default function AccountsSettings() {
                                 style={{ animationDelay: `${i * 0.07}s` }}
                             >
                                 <div className="saved-account-row">
-                                    <div className="reorder-arrows">
-                                        <button
-                                            className="reorder-arrow-btn"
-                                            aria-label="Move up"
-                                            onClick={() => moveAccount(i, -1)}
-                                            disabled={i === 0}
-                                        >
-                                            <ChevronIcon rotated />
-                                        </button>
-                                        <button
-                                            className="reorder-arrow-btn"
-                                            aria-label="Move down"
-                                            onClick={() => moveAccount(i, 1)}
-                                            disabled={i === accounts.length - 1}
-                                        >
-                                            <ChevronIcon />
-                                        </button>
-                                    </div>
+                                    {accounts.length > 1 && (
+                                        <div className="reorder-arrows">
+                                            <button
+                                                className="reorder-arrow-btn"
+                                                aria-label="Move up"
+                                                onClick={() => moveAccount(i, -1)}
+                                                disabled={i === 0}
+                                            >
+                                                <ChevronIcon rotated />
+                                            </button>
+                                            <button
+                                                className="reorder-arrow-btn"
+                                                aria-label="Move down"
+                                                onClick={() => moveAccount(i, 1)}
+                                                disabled={i === accounts.length - 1}
+                                            >
+                                                <ChevronIcon />
+                                            </button>
+                                        </div>
+                                    )}
 
                                     <div
                                         className={`saved-account-avatar${isActive ? " saved-account-avatar-active" : ""}`}
@@ -202,12 +225,14 @@ export default function AccountsSettings() {
                                         <button
                                             className="icon-btn"
                                             aria-label="Account options"
+                                            aria-haspopup="menu"
+                                            aria-expanded={activeMenu === acc.id}
                                             onClick={() => setActiveMenu(activeMenu === acc.id ? null : acc.id)}
                                         >
                                             <MoreIcon />
                                         </button>
                                         {activeMenu === acc.id && (
-                                            <div className="account-menu">
+                                            <div className="account-menu" role="menu">
                                                 <div className="account-menu-head">
                                                     <span className="account-menu-title">Account options</span>
                                                     <button className="icon-btn icon-btn-sm" aria-label="Close menu" onClick={() => setActiveMenu(null)}>
@@ -215,23 +240,25 @@ export default function AccountsSettings() {
                                                     </button>
                                                 </div>
                                                 {!isActive && (
-                                                    <button className="account-menu-item" onClick={() => { setActiveMenu(null); handleSelectAccount(acc); }}>
+                                                    <button className="account-menu-item" role="menuitem" onClick={() => { setActiveMenu(null); handleSelectAccount(acc); }}>
                                                         Set as active
                                                     </button>
                                                 )}
                                                 <Link
                                                     className="account-menu-item"
+                                                    role="menuitem"
                                                     to={`/settings/accounts/${acc.id}/info`}
                                                     onClick={() => setActiveMenu(null)}
                                                 >
                                                     View info
                                                 </Link>
-                                                <button className="account-menu-item" onClick={() => openEdit(acc)}>
+                                                <button className="account-menu-item" role="menuitem" onClick={() => openEdit(acc)}>
                                                     Edit credentials
                                                 </button>
                                                 <button
                                                     className="account-menu-item account-menu-item-danger"
-                                                    onClick={() => { setActiveMenu(null); setConfirmDeleteId(acc.id); }}
+                                                    role="menuitem"
+                                                    onClick={() => openConfirmDelete(acc.id)}
                                                 >
                                                     Remove account
                                                 </button>
@@ -256,6 +283,8 @@ export default function AccountsSettings() {
                                                     className="input" type={editShowPassword ? "text" : "password"}
                                                     name="password" value={editForm.password} onChange={handleEditChange}
                                                     placeholder="Leave blank to keep current password"
+                                                    autoComplete="new-password"
+                                                    autoFocus
                                                 />
                                                 <button type="button" className="input-icon-btn" onClick={() => setEditShowPassword((v) => !v)}
                                                         aria-label={editShowPassword ? "Hide password" : "Show password"}>
@@ -271,6 +300,8 @@ export default function AccountsSettings() {
                                                     className="input" type={editShowPin ? "text" : "password"}
                                                     name="pin" value={editForm.pin} onChange={handleEditChange}
                                                     placeholder="Leave blank to keep current PIN"
+                                                    autoComplete="off"
+                                                    inputMode="numeric"
                                                 />
                                                 <button type="button" className="input-icon-btn" onClick={() => setEditShowPin((v) => !v)}
                                                         aria-label={editShowPin ? "Hide PIN" : "Show PIN"}>
@@ -304,7 +335,7 @@ export default function AccountsSettings() {
                       Remove {acc.fullName} from this app? Your Meroshare account itself is not affected
                     </span>
                                         <div className="confirm-panel-actions">
-                                            <button className="btn btn-secondary btn-sm" onClick={() => setConfirmDeleteId(null)}>
+                                            <button className="btn btn-secondary btn-sm" autoFocus onClick={() => setConfirmDeleteId(null)}>
                                                 Cancel
                                             </button>
                                             <button

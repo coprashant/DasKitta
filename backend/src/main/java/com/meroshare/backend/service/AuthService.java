@@ -303,6 +303,21 @@ public class AuthService {
         return new UserDetailsResponse(user.getUsername(), user.getEmail(), user.isEnabled());
     }
 
+    // deletes the logged in user and all related data via cascade
+    @Transactional
+    public void deleteAccount(String username, String password) {
+        AppUser user = appUserRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        boolean matches = passwordEncoder.matches(password, user.getPassword());
+        if (!matches) {
+            throw new RuntimeException("Password is incorrect");
+        }
+
+        emailOtpRepository.deleteByEmail(user.getEmail());
+        appUserRepository.delete(user);
+    }
+
     // builds the html otp email template used for registration and email change
     private String buildOtpEmailHtml(String heading, String introText, String otpCode) {
         return "<!DOCTYPE html>"

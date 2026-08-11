@@ -1,10 +1,8 @@
 import { createContext, useContext, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { loginApi, registerApi } from "../api/auth";
+import { loginApi, registerApi, deleteAccountApi } from "../api/auth";
 import toast from "react-hot-toast";
-
 const AuthContext = createContext(null);
-
 const readStoredUser = () => {
   try {
     const stored = localStorage.getItem("user");
@@ -15,30 +13,24 @@ const readStoredUser = () => {
     return null;
   }
 };
-
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(readStoredUser);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-
   const onLoginRef  = useRef(null);
   const onLogoutRef = useRef(null);
-
   const registerOnLogin  = useCallback((fn) => { onLoginRef.current  = fn; }, []);
   const registerOnLogout = useCallback((fn) => { onLogoutRef.current = fn; }, []);
-
   const persistSession = (token, username, email) => {
     localStorage.setItem("token", token);
     localStorage.setItem("user", JSON.stringify({ username, email }));
     setUser({ username, email });
   };
-
   const clearSession = useCallback(() => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     setUser(null);
   }, []);
-
   const login = async (credentials) => {
     setIsLoading(true);
     try {
@@ -59,10 +51,8 @@ export const AuthProvider = ({ children }) => {
     setIsLoading(true);
     try {
       const res = await registerApi(data);
-
       toast.success("Verification code sent to your email!");
       return res.data;
-
     } catch (err) {
       const errors = err.response?.data?.errors;
       if (errors) {
@@ -75,27 +65,43 @@ export const AuthProvider = ({ children }) => {
       setIsLoading(false);
     }
   };
-
   const logout = useCallback(() => {
     clearSession();
     if (onLogoutRef.current) onLogoutRef.current();
     toast.success("Signed out");
     navigate("/", { replace: true, state: null });
   }, [clearSession, navigate]);
-
+  // deletes account on backend then clears session same as logout
+  const deleteAccount = async (password) => {
+    setIsLoading(true);
+    try {
+      await deleteAccountApi(password);
+      clearSession();
+      if (onLogoutRef.current) onLogoutRef.current();
+      toast.success("Account deleted");
+      navigate("/", { replace: true, state: null });
+    } catch (err) {
+      const data = err.response?.data;
+      const msg = typeof data === "string" ? data : (data?.message || "Could not delete account");
+      toast.error(msg);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
   return (
-    <AuthContext.Provider value={{
-      user,
-      isLoading,
-      login,
-      register,
-      logout,
-      registerOnLogin,
-      registerOnLogout,
-    }}>
-      {children}
-    </AuthContext.Provider>
+      <AuthContext.Provider value={{
+        user,
+        isLoading,
+        login,
+        register,
+        logout,
+        deleteAccount,
+        registerOnLogin,
+        registerOnLogout,
+      }}>
+        {children}
+      </AuthContext.Provider>
   );
 };
-
 export const useAuth = () => useContext(AuthContext);

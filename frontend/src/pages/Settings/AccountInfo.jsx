@@ -38,6 +38,15 @@ export default function AccountInfo() {
         return () => { cancelled = true; };
     }, [id]);
 
+    // account type is only meaningful once we know the real value
+    // avoid labeling a missing accountTypeId as Current by mistake
+    const accountTypeLabel =
+        info?.accountTypeId == null
+            ? null
+            : info.accountTypeId === 1
+                ? "Saving"
+                : "Current";
+
     return (
         <div className="stg-card anim-fade-up">
             <div className="stg-card-head">
@@ -74,7 +83,7 @@ export default function AccountInfo() {
                     <InfoRow label="Bank" value={info.bankName} />
                     <InfoRow label="Branch" value={info.branchName} />
                     <InfoRow label="Bank account no." value={info.accountNumber} />
-                    <InfoRow label="Account type" value={info.accountTypeId === 1 ? "Saving" : "Current"} />
+                    <InfoRow label="Account type" value={accountTypeLabel} />
                     <InfoRow label="Meroshare account expiry" value={info.accountExpiryDate} />
                     <InfoRow label="Meroshare password expiry" value={info.passwordExpiryDate} />
                     <InfoRow label="Demat expiry (BS)" value={info.dematExpiryDate} />

@@ -1,5 +1,6 @@
 package com.meroshare.backend.controller;
 import com.meroshare.backend.dto.AuthResponse;
+import com.meroshare.backend.dto.DeleteAccountRequest;
 import com.meroshare.backend.dto.EmailChangeConfirmRequest;
 import com.meroshare.backend.dto.EmailChangeRequest;
 import com.meroshare.backend.dto.LoginRequest;
@@ -39,7 +40,6 @@ public class AuthController {
         authService.resendOtp(request.getEmail());
         return ResponseEntity.ok("A new verification code has been sent.");
     }
-
     // Updates password for the logged in user
     @PatchMapping("/password")
     public ResponseEntity<String> updatePassword(
@@ -48,7 +48,6 @@ public class AuthController {
         authService.updatePassword(userDetails.getUsername(), request.getOldPassword(), request.getNewPassword());
         return ResponseEntity.ok("Password updated successfully");
     }
-
     // Updates username for the logged in user
     @PatchMapping("/username")
     public ResponseEntity<String> updateUsername(
@@ -57,7 +56,6 @@ public class AuthController {
         authService.updateUsername(userDetails.getUsername(), request.getNewUsername());
         return ResponseEntity.ok("Username updated successfully");
     }
-
     // Sends an otp to the new email to start the change
     @PostMapping("/email/request-change")
     public ResponseEntity<String> requestEmailChange(
@@ -66,7 +64,6 @@ public class AuthController {
         authService.requestEmailChange(userDetails.getUsername(), request.getNewEmail());
         return ResponseEntity.ok("A verification code has been sent to the new email");
     }
-
     // Confirms the new email using the otp sent to it
     @PostMapping("/email/confirm-change")
     public ResponseEntity<String> confirmEmailChange(
@@ -75,10 +72,17 @@ public class AuthController {
         authService.confirmEmailChange(userDetails.getUsername(), request.getNewEmail(), request.getCode());
         return ResponseEntity.ok("Email updated successfully");
     }
-
     // Fetches details for the logged in user
     @GetMapping("/me")
     public ResponseEntity<UserDetailsResponse> getUserDetails(@AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(authService.getUserDetails(userDetails.getUsername()));
+    }
+    // Deletes the logged in user's account permanently
+    @DeleteMapping("/delete-account")
+    public ResponseEntity<String> deleteAccount(
+            @Valid @RequestBody DeleteAccountRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        authService.deleteAccount(userDetails.getUsername(), request.getPassword());
+        return ResponseEntity.ok("Account deleted successfully");
     }
 }
