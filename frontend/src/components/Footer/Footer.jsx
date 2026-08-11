@@ -12,6 +12,7 @@ const Footer = () => {
       <footer className="site-footer">
         <div className="footer-inner">
 
+          {/* Brand Header */}
           <div className="footer-brand">
             <Link to="/" className="footer-logo-link">
               <img src="/favicon.png" alt="DasKitta" className="footer-logo-img" />
@@ -20,9 +21,8 @@ const Footer = () => {
             <span className="footer-tagline">Built for NEPSE investors.</span>
           </div>
 
-          <nav className="footer-links">
-            <Link to="/ipo/result" className="footer-link">Check Result</Link>
-
+          {/* Navigation & Legal Links */}
+          <nav className="footer-links" aria-label="Footer Navigation">
             {user ? (
                 <>
                   <Link to="/dashboard" className="footer-link">Dashboard</Link>
@@ -34,6 +34,11 @@ const Footer = () => {
                   <Link to="/register" className="footer-link">Register</Link>
                 </>
             )}
+
+            {/* Legal / Policy Links */}
+            <Link to="/privacy" className="footer-link">Privacy Policy</Link>
+            <Link to="/terms" className="footer-link">Terms of Service</Link>
+            <Link to="/disclaimer" className="footer-link">Disclaimer</Link>
 
             {isInstallable && (
                 <button
@@ -58,6 +63,7 @@ const Footer = () => {
             </a>
           </nav>
 
+          {/* Copyright */}
           <p className="footer-copy">
             &copy; {new Date().getFullYear()} DasKitta
           </p>

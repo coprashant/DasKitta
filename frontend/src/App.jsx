@@ -6,6 +6,9 @@ import { AccountProvider } from "./context/AccountContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import AccountSync from "./components/AccountSync";
 import ProtectedRoute from "./components/ProtectedRoute";
+import PrivacyPolicy from "./pages/Legal/PrivacyPolicy.jsx";
+import TermsOfService from "./pages/Legal/TermsOfService.jsx";
+import Disclaimer from "./pages/Legal/Disclaimer.jsx";
 import Settings from "./pages/Settings/Settings.jsx";
 import ProfileSettings from "./pages/Settings/ProfileSettings.jsx";
 import AddAccountSettings from "./pages/Settings/AddAccountSettings.jsx";
@@ -53,6 +56,9 @@ const AppContent = () => {
                 <Route path="/ipo/result"         element={<ResultChecker />} />
                 <Route path="/nepse"              element={<Nepse />} />
                 <Route path="/nepse/company/:symbol" element={<CompanyDetail />} />
+                <Route path="/privacy" element={<PrivacyPolicy />} />
+                <Route path="/terms" element={<TermsOfService />} />
+                <Route path="/disclaimer" element={<Disclaimer />} />
                 <Route path="/settings" element={
                     <ProtectedRoute><Settings /></ProtectedRoute>
                 }>

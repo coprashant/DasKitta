@@ -40,7 +40,7 @@ const Home = ({ theme, onThemeToggle }) => {
               <div className="hero-eyebrow-row">
               <span className="hero-np-datetime">
                 <span>{dateShort}</span>
-                <span className="hero-np-sep">/</span>
+                <span className="hero-np-sep" aria-hidden="true">/</span>
                 <span>{timeStr}</span>
               </span>
               </div>
@@ -79,8 +79,8 @@ const Home = ({ theme, onThemeToggle }) => {
               <h2 className="section-title">Designed to save you time</h2>
             </div>
             <div className="features-grid">
-              {features.map((f, i) => (
-                  <div className="feature-card" key={i}>
+              {features.map((f) => (
+                  <div className="feature-card" key={f.num}>
                     <div className="feature-top">
                       <span className="feature-num">{f.num}</span>
                     </div>
