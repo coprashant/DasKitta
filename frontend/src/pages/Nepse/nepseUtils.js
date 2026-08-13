@@ -1,116 +1,200 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 export const fmt = (n, dec = 2) =>
-    n == null ? "--" : Number(n).toLocaleString("en-NP", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+    n == null
+        ? "--"
+        : Number(n).toLocaleString("en-NP", {
+            minimumFractionDigits: dec,
+            maximumFractionDigits: dec,
+        });
 
 export const fmtCompact = (n) => {
     if (n == null) return "--";
+
     const num = Number(n);
     if (Number.isNaN(num)) return "--";
-    if (num >= 1e12) return (num / 1e12).toFixed(2) + "T";
-    if (num >= 1e9) return (num / 1e9).toFixed(2) + "B";
-    if (num >= 1e6) return (num / 1e6).toFixed(2) + "M";
-    if (num >= 1e3) return (num / 1e3).toFixed(2) + "K";
-    return String(num);
+
+    const units = [
+        [1e12, "T"],
+        [1e9, "B"],
+        [1e6, "M"],
+        [1e3, "K"],
+    ];
+
+    const unit = units.find(([size]) => num >= size);
+    return unit
+        ? `${(num / unit[0]).toFixed(2)}${unit[1]}`
+        : String(num);
 };
 
-export const dirClass = (n) => (n > 0 ? "up" : n < 0 ? "down" : "flat");
+export const dirClass = (n) =>
+    n > 0 ? "up" : n < 0 ? "down" : "flat";
 
-export function tooltipAlign(ratio) {
-    if (ratio < 0.15) return "start";
-    if (ratio > 0.85) return "end";
-    return "center";
+export const tooltipAlign = (ratio) =>
+    ratio < 0.15 ? "start" : ratio > 0.85 ? "end" : "center";
+
+function pickValue(point) {
+    if (typeof point !== "object") return point;
+
+    return (
+        point.value ??
+        point.close ??
+        point.index ??
+        Object.values(point)[1]
+    );
 }
 
-// picks a numeric value out of a raw point, object or plain number
-function pickValue(p) {
-    return typeof p === "object" ? (p.value ?? p.close ?? p.index ?? Object.values(p)[1]) : p;
+function getValues(raw) {
+    if (!Array.isArray(raw) || raw.length < 2) return null;
+
+    const values = raw
+        .map(pickValue)
+        .filter((v) => typeof v === "number" && !Number.isNaN(v));
+
+    return values.length >= 2 ? values : null;
 }
 
-// full chart line plus filled area, used by hero and mini charts
-export function buildChart(raw, width, height) {
-    if (!raw || raw.length < 2) return null;
-    const values = raw.map(pickValue).filter((v) => typeof v === "number" && !Number.isNaN(v));
-    if (values.length < 2) return null;
+function buildPoints(values, width, height, padding = 0) {
     const min = Math.min(...values);
     const max = Math.max(...values);
     const range = max - min || 1;
     const step = width / (values.length - 1);
-    const coords = values.map((v, i) => [i * step, height - ((v - min) / range) * (height - 10) - 5]);
-    const line = coords.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
-    const area = `0,${height} ${line} ${width},${height}`;
-    const positive = values[values.length - 1] >= values[0];
-    return { line, area, positive, coords, values };
+    const usableHeight = height - padding * 2;
+
+    return values.map((value, i) => [
+        i * step,
+        height -
+        ((value - min) / range) * usableHeight -
+        padding,
+    ]);
 }
 
-// plain polyline, no fill, used by the strip sparkline
+function pointsToString(points) {
+    return points
+        .map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`)
+        .join(" ");
+}
+
+function buildLine(raw, width, height, padding = 0) {
+    const values = getValues(raw);
+    if (!values) return null;
+
+    const coords = buildPoints(values, width, height, padding);
+
+    return {
+        coords,
+        values,
+        positive: values.at(-1) >= values[0],
+        line: pointsToString(coords),
+    };
+}
+
+export function buildChart(raw, width, height) {
+    const chart = buildLine(raw, width, height, 5);
+
+    if (!chart) return null;
+
+    return {
+        ...chart,
+        area: `0,${height} ${chart.line} ${width},${height}`,
+    };
+}
+
 export function buildSparkline(raw, width, height) {
-    if (!raw || raw.length < 2) return null;
-    const values = raw.map(pickValue).filter((v) => typeof v === "number" && !Number.isNaN(v));
-    if (values.length < 2) return null;
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const range = max - min || 1;
-    const coords = values.map((v, i) => {
-        const x = (i / (values.length - 1)) * width;
-        const y = height - ((v - min) / range) * height;
-        return [x, y];
-    });
-    const points = coords.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
-    const isPositive = values[values.length - 1] >= values[0];
-    return { points, isPositive, coords, values };
+    const chart = buildLine(raw, width, height);
+
+    if (!chart) return null;
+
+    return {
+        points: chart.line,
+        isPositive: chart.positive,
+        coords: chart.coords,
+        values: chart.values,
+    };
 }
 
-export function resolveHeroKey(indices, preferred = ["NEPSE", "NEPSE Index"]) {
+export function resolveHeroKey(
+    indices,
+    preferred = ["NEPSE", "NEPSE Index"]
+) {
     if (!indices) return null;
+
     for (const key of preferred) {
         if (indices[key]) return key;
     }
-    const keys = Object.keys(indices);
-    return keys.length ? keys[0] : null;
+
+    return Object.keys(indices)[0] ?? null;
 }
 
-// shared pointer tracking for any chart or sparkline hover
 export function useChartHover(pointCount) {
     const containerRef = useRef(null);
     const activeIndex = useRef(null);
     const frame = useRef(null);
     const [index, setIndex] = useState(null);
 
-    const locate = useCallback((clientX) => {
-        const el = containerRef.current;
-        if (!el || !pointCount) return;
-        const rect = el.getBoundingClientRect();
-        const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-        const idx = Math.round(ratio * (pointCount - 1));
-        if (idx !== activeIndex.current) {
-            activeIndex.current = idx;
-            setIndex(idx);
-        }
-    }, [pointCount]);
+    const locate = useCallback(
+        (clientX) => {
+            const el = containerRef.current;
 
-    const queueLocate = useCallback((clientX) => {
-        if (frame.current) return;
-        frame.current = requestAnimationFrame(() => {
-            frame.current = null;
-            locate(clientX);
-        });
-    }, [locate]);
+            if (!el || !pointCount) return;
+
+            const { left, width } = el.getBoundingClientRect();
+            const ratio = Math.min(
+                1,
+                Math.max(0, (clientX - left) / width)
+            );
+
+            const next = Math.round(ratio * (pointCount - 1));
+
+            if (next !== activeIndex.current) {
+                activeIndex.current = next;
+                setIndex(next);
+            }
+        },
+        [pointCount]
+    );
+
+    const queueLocate = useCallback(
+        (clientX) => {
+            if (frame.current) return;
+
+            frame.current = requestAnimationFrame(() => {
+                frame.current = null;
+                locate(clientX);
+            });
+        },
+        [locate]
+    );
 
     const clear = useCallback(() => {
-        if (activeIndex.current !== null) {
-            activeIndex.current = null;
-            setIndex(null);
-        }
+        if (activeIndex.current === null) return;
+
+        activeIndex.current = null;
+        setIndex(null);
     }, []);
 
-    useEffect(() => () => { if (frame.current) cancelAnimationFrame(frame.current); }, []);
+    useEffect(
+        () => () => {
+            if (frame.current) cancelAnimationFrame(frame.current);
+        },
+        []
+    );
 
-    const handlers = useMemo(() => ({
-        onPointerDown: (e) => locate(e.clientX),
-        onPointerMove: (e) => queueLocate(e.clientX),
-        onPointerLeave: (e) => { if (e.pointerType === "mouse") clear(); },
-    }), [locate, queueLocate, clear]);
+    const handlers = useMemo(
+        () => ({
+            onPointerDown: (e) => locate(e.clientX),
+            onPointerMove: (e) => queueLocate(e.clientX),
+            onPointerLeave: (e) => {
+                if (e.pointerType === "mouse") clear();
+            },
+        }),
+        [locate, queueLocate, clear]
+    );
 
-    return { containerRef, index, handlers, clear };
+    return {
+        containerRef,
+        index,
+        handlers,
+        clear,
+    };
 }

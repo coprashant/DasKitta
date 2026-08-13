@@ -1,48 +1,38 @@
-import { useState, useEffect, useRef, useId } from "react";
+import {
+    useState,
+    useEffect,
+    useRef,
+    useId,
+    useMemo,
+} from "react";
 import { useNavigate } from "react-router-dom";
-import { getPriceVolume } from "../../api/nepse";
+import { getPriceVolume, isNepseError } from "../../api/nepse";
 import { IconSearch } from "../../components/Icons.jsx";
 
 import {
     fmt,
-    fmtCompact,
     dirClass,
     tooltipAlign,
     buildChart,
-    resolveHeroKey,
     useChartHover,
 } from "./nepseUtils";
+import { useDragScroll } from "./nepseHooks";
 
-// Re-exported so pages can pull everything NEPSE-related from one place
-export { fmt, fmtCompact, dirClass, resolveHeroKey };
-
-// Live clock hook for terminal headers
-export function useClock() {
-    const [now, setNow] = useState(new Date());
-
-    useEffect(() => {
-        const id = setInterval(() => setNow(new Date()), 1000);
-        return () => clearInterval(id);
-    }, []);
-
-    return now;
-}
-
-// Single-line placeholder shown when a ledger section has no rows
 export function EmptyRow({ label }) {
     return <p className="ledger-empty">{label}</p>;
 }
 
-// Row of pulsing skeleton bars, used while a ledger section is loading
 export function SkeletonRows({ count = 3 }) {
     return Array.from({ length: count }, (_, i) => (
         <div key={i} className="skel ledger-skel" />
     ));
 }
 
-// Small up or down chevron, dims out when the change is flat
 export function Arrow({ up, flat }) {
-    if (flat) return <span className="arrow-icon arrow-flat">--</span>;
+    if (flat) {
+        return <span className="arrow-icon arrow-flat">--</span>;
+    }
+
     return (
         <svg
             className="arrow-icon"
@@ -60,9 +50,26 @@ export function Arrow({ up, flat }) {
     );
 }
 
-// Shared SVG marker for the hovered point on a chart or sparkline
-function HoverMarker({ hover, height, color, radius = "5" }) {
+function getHover(chart, index) {
+    if (!chart || index == null) return null;
+
+    const [x, y] = chart.coords[index];
+
+    return {
+        x,
+        y,
+        value: chart.values[index],
+    };
+}
+
+function HoverMarker({
+                         hover,
+                         height,
+                         color,
+                         radius = 5,
+                     }) {
     if (!hover) return null;
+
     return (
         <g>
             <line
@@ -72,6 +79,7 @@ function HoverMarker({ hover, height, color, radius = "5" }) {
                 y2={height}
                 className="term-hover-line"
             />
+
             <circle
                 cx={hover.x}
                 cy={hover.y}
@@ -83,21 +91,95 @@ function HoverMarker({ hover, height, color, radius = "5" }) {
     );
 }
 
-// Shared floating value label for the hovered point
-function HoverTooltip({ hover, width, height, small = false }) {
+function HoverTooltip({
+                          hover,
+                          width,
+                          height,
+                          small = false,
+                      }) {
     if (!hover) return null;
+
+    const ratio = hover.x / width;
+
     return (
         <div
             className={`term-tooltip ${
                 small ? "term-tooltip-sm" : ""
-            } align-${tooltipAlign(hover.x / width)}`}
+            } align-${tooltipAlign(ratio)}`}
             style={{
-                left: `${(hover.x / width) * 100}%`,
+                left: `${ratio * 100}%`,
                 top: `${(hover.y / height) * 100}%`,
             }}
         >
             {fmt(hover.value)}
         </div>
+    );
+}
+
+function ChartSvg({
+                      chart,
+                      width,
+                      height,
+                      color,
+                      hover,
+                      gradientId,
+                      area = false,
+                      radius = 5,
+                      strokeWidth = 1.6,
+                  }) {
+    return (
+        <svg
+            viewBox={`0 0 ${width} ${height}`}
+            preserveAspectRatio="none"
+            className={area ? "hero-svg" : "mini-spark-svg"}
+        >
+            {area && (
+                <defs>
+                    <linearGradient
+                        id={gradientId}
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                    >
+                        <stop
+                            offset="0%"
+                            stopColor={color}
+                            stopOpacity="0.20"
+                        />
+                        <stop
+                            offset="100%"
+                            stopColor={color}
+                            stopOpacity="0"
+                        />
+                    </linearGradient>
+                </defs>
+            )}
+
+            {area && (
+                <polygon
+                    points={chart.area}
+                    fill={`url(#${gradientId})`}
+                    stroke="none"
+                />
+            )}
+
+            <polyline
+                points={chart.line}
+                fill="none"
+                stroke={color}
+                strokeWidth={strokeWidth}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+            />
+
+            <HoverMarker
+                hover={hover}
+                height={height}
+                color={color}
+                radius={radius}
+            />
+        </svg>
     );
 }
 
@@ -109,23 +191,19 @@ export function HeroChart({
                               changePct,
                               eyebrow = "NEPSE INDEX",
                           }) {
-    const gradientId = useId(); // Prevents SVG gradient ID conflicts
+    const gradientId = useId();
     const width = 1000;
     const height = 380;
     const chart = buildChart(data, width, height);
-    const positive = changeVal >= 0;
-    const { containerRef, index: hoverIndex, handlers } = useChartHover(
-        chart?.values.length ?? 0
-    );
 
-    const hover =
-        chart && hoverIndex != null
-            ? {
-                x: chart.coords[hoverIndex][0],
-                y: chart.coords[hoverIndex][1],
-                value: chart.values[hoverIndex],
-            }
-            : null;
+    const {
+        containerRef,
+        index: hoverIndex,
+        handlers,
+    } = useChartHover(chart?.values.length ?? 0);
+
+    const hover = getHover(chart, hoverIndex);
+    const positive = changeVal >= 0;
 
     const lineColor = chart?.positive
         ? "var(--term-emerald)"
@@ -134,7 +212,10 @@ export function HeroChart({
     return (
         <div className="hero-canvas">
             <div className="hero-metrics">
-                <span className="hero-eyebrow">{eyebrow}</span>
+                <span className="hero-eyebrow">
+                    {eyebrow}
+                </span>
+
                 {loading ? (
                     <>
                         <div className="skel skel-value" />
@@ -142,15 +223,27 @@ export function HeroChart({
                     </>
                 ) : (
                     <>
-                        <div className="hero-value">{fmt(value)}</div>
-                        <div className={`hero-delta ${dirClass(changeVal)}`}>
-                            <Arrow up={positive} flat={changeVal === 0} />
+                        <div className="hero-value">
+                            {fmt(value)}
+                        </div>
+
+                        <div
+                            className={`hero-delta ${dirClass(
+                                changeVal
+                            )}`}
+                        >
+                            <Arrow
+                                up={positive}
+                                flat={changeVal === 0}
+                            />
+
                             {positive ? "+" : ""}
                             {fmt(changeVal)}
+
                             <span className="hero-delta-pct">
-                ({positive ? "+" : ""}
+                                ({positive ? "+" : ""}
                                 {fmt(changePct)}%)
-              </span>
+                            </span>
                         </div>
                     </>
                 )}
@@ -165,115 +258,109 @@ export function HeroChart({
                     <div className="skel hero-skel" />
                 ) : chart ? (
                     <>
-                        <svg
-                            viewBox={`0 0 ${width} ${height}`}
-                            preserveAspectRatio="none"
-                            className="hero-svg"
-                        >
-                            <defs>
-                                <linearGradient
-                                    id={gradientId}
-                                    x1="0"
-                                    y1="0"
-                                    x2="0"
-                                    y2="1"
-                                >
-                                    <stop offset="0%" stopColor={lineColor} stopOpacity="0.20" />
-                                    <stop offset="100%" stopColor={lineColor} stopOpacity="0" />
-                                </linearGradient>
-                            </defs>
-                            <polygon
-                                points={chart.area}
-                                fill={`url(#${gradientId})`}
-                                stroke="none"
-                            />
-                            <polyline
-                                points={chart.line}
-                                fill="none"
-                                stroke={lineColor}
-                                strokeWidth="1.6"
-                                strokeLinejoin="round"
-                                strokeLinecap="round"
-                            />
-                            <HoverMarker
-                                hover={hover}
-                                height={height}
-                                color={lineColor}
-                                radius="5"
-                            />
-                        </svg>
-                        <HoverTooltip hover={hover} width={width} height={height} />
+                        <ChartSvg
+                            chart={chart}
+                            width={width}
+                            height={height}
+                            color={lineColor}
+                            hover={hover}
+                            gradientId={gradientId}
+                            area
+                        />
+
+                        <HoverTooltip
+                            hover={hover}
+                            width={width}
+                            height={height}
+                        />
                     </>
                 ) : (
-                    <div className="hero-chart-empty">no chart data</div>
+                    <div className="hero-chart-empty">
+                        no chart data
+                    </div>
                 )}
+
                 <div className="hero-baseline" />
             </div>
         </div>
     );
 }
 
-export function MiniSpark({ data, width = 280, height = 46 }) {
+export function MiniSpark({
+                              data,
+                              width = 280,
+                              height = 46,
+                          }) {
     const chart = buildChart(data, width, height);
-    const { containerRef, index: hoverIndex, handlers } = useChartHover(
-        chart?.values.length ?? 0
-    );
 
-    if (!chart) return <div className="mini-spark-empty">no trend data</div>;
+    const {
+        containerRef,
+        index: hoverIndex,
+        handlers,
+    } = useChartHover(chart?.values.length ?? 0);
 
-    const hover =
-        hoverIndex != null
-            ? {
-                x: chart.coords[hoverIndex][0],
-                y: chart.coords[hoverIndex][1],
-                value: chart.values[hoverIndex],
-            }
-            : null;
+    if (!chart) {
+        return (
+            <div className="mini-spark-empty">
+                no trend data
+            </div>
+        );
+    }
+
+    const hover = getHover(chart, hoverIndex);
+
     const lineColor = chart.positive
         ? "var(--term-emerald)"
         : "var(--term-crimson)";
 
     return (
-        <div className="mini-spark-wrap" ref={containerRef} {...handlers}>
-            <svg
-                viewBox={`0 0 ${width} ${height}`}
-                preserveAspectRatio="none"
-                className="mini-spark-svg"
-            >
-                <polyline
-                    points={chart.line}
-                    fill="none"
-                    stroke={lineColor}
-                    strokeWidth="1.4"
-                    strokeLinejoin="round"
-                    strokeLinecap="round"
-                />
-                <HoverMarker
-                    hover={hover}
-                    height={height}
-                    color={lineColor}
-                    radius="3.5"
-                />
-            </svg>
-            <HoverTooltip hover={hover} width={width} height={height} small />
+        <div
+            className="mini-spark-wrap"
+            ref={containerRef}
+            {...handlers}
+        >
+            <ChartSvg
+                chart={chart}
+                width={width}
+                height={height}
+                color={lineColor}
+                hover={hover}
+                radius={3.5}
+                strokeWidth={1.4}
+            />
+
+            <HoverTooltip
+                hover={hover}
+                width={width}
+                height={height}
+                small
+            />
         </div>
     );
 }
 
-// Borderless search that opens the full company page on selection
-export function TermSearch({ placeholder = "search symbol or company" }) {
+export function TermSearch({
+                               placeholder = "search symbol or company",
+                           }) {
     const navigate = useNavigate();
     const [query, setQuery] = useState("");
     const [allStocks, setAllStocks] = useState([]);
-    const [results, setResults] = useState([]);
     const [open, setOpen] = useState(false);
     const wrapRef = useRef(null);
 
     useEffect(() => {
         let alive = true;
+
         getPriceVolume()
             .then((r) => {
-                if (alive) setAllStocks(r.data ?? []);
+                if (!alive) return;
+
+                if (isNepseError(r.data)) {
+                    setAllStocks([]);
+                    return;
+                }
+
+                setAllStocks(Array.isArray(r.data) ? r.data : []);
             })
             .catch(() => {});
 
@@ -282,32 +369,36 @@ export function TermSearch({ placeholder = "search symbol or company" }) {
         };
     }, []);
 
-    useEffect(() => {
-        if (!query.trim()) {
-            setResults([]);
-            setOpen(false);
-            return;
-        }
-        const q = query.toUpperCase();
-        const filtered = allStocks
+    const results = useMemo(() => {
+        const q = query.trim().toUpperCase();
+
+        if (!q) return [];
+
+        return allStocks
             .filter(
-                (s) =>
-                    s.symbol?.toUpperCase().includes(q) ||
-                    s.securityName?.toUpperCase().includes(q)
+                (stock) =>
+                    stock.symbol?.toUpperCase().includes(q) ||
+                    stock.securityName
+                        ?.toUpperCase()
+                        .includes(q)
             )
             .slice(0, 7);
-        setResults(filtered);
-        setOpen(filtered.length > 0);
     }, [query, allStocks]);
 
     useEffect(() => {
         const onClick = (e) => {
-            if (wrapRef.current && !wrapRef.current.contains(e.target)) {
+            if (!wrapRef.current?.contains(e.target)) {
                 setOpen(false);
             }
         };
+
         document.addEventListener("mousedown", onClick);
-        return () => document.removeEventListener("mousedown", onClick);
+
+        return () =>
+            document.removeEventListener(
+                "mousedown",
+                onClick
+            );
     }, []);
 
     const goToCompany = (stock) => {
@@ -316,27 +407,42 @@ export function TermSearch({ placeholder = "search symbol or company" }) {
         navigate(`/nepse/company/${stock.symbol}`);
     };
 
+    const clear = () => {
+        setQuery("");
+        setOpen(false);
+    };
+
     return (
         <div className="term-search" ref={wrapRef}>
             <div className="term-search-box">
                 <IconSearch />
+
                 <input
                     className="term-search-input"
                     placeholder={placeholder}
                     value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onFocus={() => results.length > 0 && setOpen(true)}
+                    onChange={(e) => {
+                        const next = e.target.value;
+                        setQuery(next);
+                        setOpen(next.trim().length > 0);
+                    }}
+                    onFocus={() =>
+                        results.length && setOpen(true)
+                    }
                     onKeyDown={(e) => {
-                        if (e.key === "Enter" && results[0]) goToCompany(results[0]);
+                        if (
+                            e.key === "Enter" &&
+                            results[0]
+                        ) {
+                            goToCompany(results[0]);
+                        }
                     }}
                 />
+
                 {query && (
                     <button
                         className="term-search-clear"
-                        onClick={() => {
-                            setQuery("");
-                            setOpen(false);
-                        }}
+                        onClick={clear}
                         aria-label="clear search"
                     >
                         x
@@ -344,28 +450,62 @@ export function TermSearch({ placeholder = "search symbol or company" }) {
                 )}
             </div>
 
-            {open && (
+            {open && results.length > 0 && (
                 <div className="term-search-drop">
-                    {results.map((s) => (
+                    {results.map((stock) => (
                         <div
-                            key={s.symbol}
+                            key={stock.symbol}
                             className="term-search-row"
                             role="button"
                             tabIndex={0}
-                            onClick={() => goToCompany(s)}
+                            onClick={() =>
+                                goToCompany(stock)
+                            }
                             onKeyDown={(e) => {
-                                if (e.key === "Enter") goToCompany(s);
+                                if (e.key === "Enter") {
+                                    goToCompany(stock);
+                                }
                             }}
                         >
-                            <span className="term-search-sym">{s.symbol}</span>
-                            <span className="term-search-name">{s.securityName}</span>
-                            <span className={`term-search-ltp ${dirClass(s.percentageChange)}`}>
-                {fmt(s.lastTradedPrice ?? s.closePrice)}
-              </span>
+                            <span className="term-search-sym">
+                                {stock.symbol}
+                            </span>
+
+                            <span className="term-search-name">
+                                {stock.securityName}
+                            </span>
+
+                            <span
+                                className={`term-search-ltp ${dirClass(
+                                    stock.percentageChange
+                                )}`}
+                            >
+                                {fmt(
+                                    stock.lastTradedPrice ??
+                                    stock.closePrice
+                                )}
+                            </span>
                         </div>
                     ))}
                 </div>
             )}
+        </div>
+    );
+}
+
+export function ScrollTicker({ children }) {
+    const { ref, handlers } = useDragScroll();
+
+    return (
+        <div className="term-ticker" ref={ref} {...handlers}>
+            <div className="term-ticker-track">{children}</div>
+
+            <div
+                className="term-ticker-track mobile-only-duplicate"
+                aria-hidden="true"
+            >
+                {children}
+            </div>
         </div>
     );
 }
