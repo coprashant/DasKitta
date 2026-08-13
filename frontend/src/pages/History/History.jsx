@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { getHistoryApi } from "../../api/ipo";
 import { useAccount } from "../../context/AccountContext";
@@ -22,7 +22,8 @@ import {
 import "./History.css";
 
 const PAGE_SIZE = 20;
-const Skeleton = ({ h = 12, w = "100%" }) => <div className="skeleton" style={{ height: h, width: w }} />;
+
+// Extracted outside the render loop so it doesn't re-instantiate on every render
 const STATUS_FILTERS = [
   { key: "ALL", label: "All" },
   { key: "allotted", label: "Allotted" },
@@ -33,24 +34,22 @@ const STATUS_FILTERS = [
   { key: "failed", label: "Failed" },
 ];
 
+const Skeleton = ({ h = 12, w = "100%" }) => (
+    <div className="skeleton" style={{ height: h, width: w }} />
+);
+
 /**
- * Derives a single human readable status from the raw application and result fields
- *
- * status SUCCESS with resultStatus NOT_PUBLISHED or null means amount is blocked with CDSC
- * status SUCCESS with resultStatus ALLOTTED means allotted, kitta received
- * status SUCCESS with resultStatus NOT_ALLOTTED means not allotted, amount released
- * status FAILED, ALREADY_APPLIED or PENDING show as is
+ * Derives a human-readable status object from raw application payload fields.
  */
 const deriveStatus = (item) => {
   if (item.status === "SUCCESS") {
     const r = item.resultStatus;
     if (r === "ALLOTTED") {
-      return { label: `Allotted · ${item.allottedKitta} kitta`, variant: "allotted", icon: IconCheck };
+      return { label: `Allotted · ${item.allottedKitta ?? 0} kitta`, variant: "allotted", icon: IconCheck };
     }
     if (r === "NOT_ALLOTTED") {
       return { label: "Amount released", variant: "released", icon: IconRefresh };
     }
-    // NOT_PUBLISHED, UNKNOWN or null all mean the result has not come out yet
     return { label: "Amount blocked", variant: "blocked", icon: IconClock };
   }
   if (item.status === "ALREADY_APPLIED") {
@@ -68,14 +67,16 @@ const deriveStatus = (item) => {
 const History = () => {
   const { activeAccount } = useAccount();
   const [allHistory, setAllHistory] = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [search, setSearch]         = useState("");
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
-  const [page, setPage]             = useState(1);
+  const [page, setPage] = useState(1);
 
+  // Fetch application history
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+
     (async () => {
       try {
         const res = await getHistoryApi();
@@ -86,58 +87,76 @@ const History = () => {
         if (!cancelled) setLoading(false);
       }
     })();
+
     return () => { cancelled = true; };
   }, []);
 
-  useEffect(() => { setPage(1); }, [search, statusFilter, activeAccount]);
+  // Reset pagination when active filters change
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, activeAccount]);
 
+  // Active account history dataset
   const history = useMemo(() => {
-    if (!activeAccount) return [];
+    if (!activeAccount?.username) return [];
     return allHistory.filter((h) => h.accountUsername === activeAccount.username);
   }, [allHistory, activeAccount]);
 
-  // Quick overview counts for the active account, independent of filters
+  // Overall account statistics summary
   const stats = useMemo(() => {
     let allotted = 0;
     let pending = 0;
     let failed = 0;
+
     history.forEach((h) => {
       const variant = deriveStatus(h).variant;
       if (variant === "allotted") allotted += 1;
       else if (variant === "blocked" || variant === "pending") pending += 1;
       else if (variant === "failed") failed += 1;
     });
+
     return { total: history.length, allotted, pending, failed };
   }, [history]);
 
+  // Filtered dataset search & status tag filters
   const filtered = useMemo(() => {
-    let d = history;
+    let dataset = history;
+
     if (search.trim()) {
       const q = search.toLowerCase();
-      d = d.filter((h) =>
+      dataset = dataset.filter((h) =>
           h.companyName?.toLowerCase().includes(q) ||
           h.accountUsername?.toLowerCase().includes(q) ||
           h.accountFullName?.toLowerCase().includes(q)
       );
     }
+
     if (statusFilter !== "ALL") {
-      d = d.filter((h) => deriveStatus(h).variant === statusFilter);
+      dataset = dataset.filter((h) => deriveStatus(h).variant === statusFilter);
     }
-    return d;
+
+    return dataset;
   }, [search, statusFilter, history]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const paginated = useMemo(() => {
+    const startIndex = (page - 1) * PAGE_SIZE;
+    return filtered.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [filtered, page]);
 
-  const fmtDate = (iso) => {
+  const fmtDate = useCallback((iso) => {
     if (!iso) return "—";
-    try { return new Date(iso).toLocaleDateString(); } catch { return "—"; }
-  };
+    try {
+      return new Date(iso).toLocaleDateString();
+    } catch {
+      return "—";
+    }
+  }, []);
 
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setSearch("");
     setStatusFilter("ALL");
-  };
+  }, []);
 
   const hasActiveFilters = search.trim() !== "" || statusFilter !== "ALL";
   const noAccountState = !activeAccount && !loading;
@@ -224,10 +243,12 @@ const History = () => {
                           </button>
                       )}
                     </div>
+
                     <div className="filter-scroll" role="group" aria-label="Filter by status">
                       {STATUS_FILTERS.map((s) => (
                           <button
                               key={s.key}
+                              type="button"
                               className={`filter-btn${statusFilter === s.key ? " active" : ""}`}
                               onClick={() => setStatusFilter(s.key)}
                               aria-pressed={statusFilter === s.key}
@@ -244,7 +265,10 @@ const History = () => {
                           <table className="history-table">
                             <thead>
                             <tr>
-                              <th>Company</th><th>Kitta</th><th>Status</th><th>Date</th>
+                              <th>Company</th>
+                              <th>Kitta</th>
+                              <th>Status</th>
+                              <th>Date</th>
                             </tr>
                             </thead>
                             <tbody>
@@ -265,7 +289,12 @@ const History = () => {
                         <EmptyIllustration />
                         <p>{history.length === 0 ? "No applications yet." : "No applications match your filters."}</p>
                         {hasActiveFilters && history.length > 0 && (
-                            <button className="btn btn-secondary btn-sm" style={{ marginTop: 8 }} onClick={clearFilters}>
+                            <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                style={{ marginTop: 8 }}
+                                onClick={clearFilters}
+                            >
                               Clear filters
                             </button>
                         )}
@@ -293,10 +322,10 @@ const History = () => {
                                     </td>
                                     <td>{item.appliedKitta ?? "—"}</td>
                                     <td>
-                              <span className={`h-status-badge h-status-${derived.variant}`}>
-                                <StatusIcon />
-                                {derived.label}
-                              </span>
+                                <span className={`h-status-badge h-status-${derived.variant}`}>
+                                  <StatusIcon />
+                                  {derived.label}
+                                </span>
                                       {item.status === "FAILED" && item.statusMessage && (
                                           <p className="h-msg" title={item.statusMessage}>
                                             {item.statusMessage}
@@ -312,12 +341,13 @@ const History = () => {
                         </div>
 
                         <div className="table-footer">
-                  <span>
-                    Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
-                  </span>
+                    <span>
+                      Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+                    </span>
                           {totalPages > 1 && (
                               <div className="pagination" role="navigation" aria-label="Pagination">
                                 <button
+                                    type="button"
                                     className="page-btn"
                                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                                     disabled={page === 1}
@@ -327,6 +357,7 @@ const History = () => {
                                 </button>
                                 <span className="page-info" aria-current="page">{page} / {totalPages}</span>
                                 <button
+                                    type="button"
                                     className="page-btn"
                                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                                     disabled={page === totalPages}

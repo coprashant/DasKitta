@@ -12,7 +12,7 @@ const EMPTY_FORM = {
     password: "",
     bankId: "",
     crn: "",
-    pin: ""
+    pin: "",
 };
 
 export default function AddAccountSettings() {
@@ -28,26 +28,41 @@ export default function AddAccountSettings() {
     const [dpError, setDpError] = useState(false);
     const [bankLookupLoading, setBankLookupLoading] = useState(false);
 
-    const bankLookupId = useRef(0);
+    const bankAbortRef = useRef(null);
 
     useEffect(() => {
+        let isMounted = true;
+
+        const fetchDpList = async () => {
+            setDpLoading(true);
+            setDpError(false);
+
+            try {
+                const res = await getDpListApi();
+                if (isMounted) {
+                    setDpList(Array.isArray(res.data) ? res.data : []);
+                }
+            } catch {
+                if (isMounted) {
+                    setDpError(true);
+                    toast.error("Failed to load DP list");
+                }
+            } finally {
+                if (isMounted) {
+                    setDpLoading(false);
+                }
+            }
+        };
+
         fetchDpList();
+
+        return () => {
+            isMounted = false;
+            if (bankAbortRef.current) {
+                bankAbortRef.current.abort();
+            }
+        };
     }, []);
-
-    const fetchDpList = async () => {
-        setDpLoading(true);
-        setDpError(false);
-
-        try {
-            const res = await getDpListApi();
-            setDpList(Array.isArray(res.data) ? res.data : []);
-        } catch {
-            setDpError(true);
-            toast.error("Failed to load DP list");
-        } finally {
-            setDpLoading(false);
-        }
-    };
 
     const handleChange = (e) =>
         setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
@@ -56,31 +71,41 @@ export default function AddAccountSettings() {
         const selectedId = e.target.value;
         const dp = dpList.find((d) => String(d.id) === String(selectedId));
 
+        if (bankAbortRef.current) {
+            bankAbortRef.current.abort();
+        }
+
         setForm((f) => ({
             ...f,
             dpId: selectedId,
             dpCode: dp ? dp.code : "",
-            bankId: ""
+            bankId: "",
         }));
 
         if (!selectedId) return;
 
-        const requestId = ++bankLookupId.current;
+        const controller = new AbortController();
+        bankAbortRef.current = controller;
         setBankLookupLoading(true);
 
         try {
-            const res = await getBankByDpApi(selectedId);
+            const res = await getBankByDpApi(selectedId, {
+                signal: controller.signal,
+            });
             const bankId = res.data?.bankId;
 
-            if (requestId === bankLookupId.current && bankId) {
+            if (bankId) {
                 setForm((f) => ({
                     ...f,
-                    bankId: String(bankId)
+                    bankId: String(bankId),
                 }));
             }
-        } catch {
+        } catch (err) {
+            if (err.name !== "CanceledError" && err.name !== "AbortError") {
+                toast.error("Could not resolve bank details for selected DP.");
+            }
         } finally {
-            if (requestId === bankLookupId.current) {
+            if (bankAbortRef.current === controller) {
                 setBankLookupLoading(false);
             }
         }
@@ -89,18 +114,20 @@ export default function AddAccountSettings() {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!form.dpId || !form.username || !form.password) {
-            toast.error("DP username and password are required");
+        if (!form.dpId || !form.username.trim() || !form.password) {
+            toast.error("DP, username, and password are required.");
             return;
         }
 
         if (!form.crn.trim()) {
-            toast.error("CRN number is required for IPO applications");
+            toast.error("CRN number is required for IPO applications.");
             return;
         }
 
         if (!form.bankId) {
-            toast.error("Bank ID could not be resolved Please reselect your DP");
+            toast.error(
+                "Bank ID could not be resolved. Please reselect your DP."
+            );
             return;
         }
 
@@ -110,7 +137,8 @@ export default function AddAccountSettings() {
             await addAccountApi({
                 ...form,
                 username: form.username.trim(),
-                crn: form.crn.trim()
+                crn: form.crn.trim(),
+                pin: form.pin.trim(),
             });
 
             toast.success("Account added successfully");
@@ -138,10 +166,10 @@ export default function AddAccountSettings() {
 
             <form onSubmit={handleSubmit}>
                 <div className="form-section">
-                    <h2 className="form-section-title">Broker details</h2>
+                    <h3 className="form-section-title">Broker details</h3>
 
                     <div className="form-group">
-                        <label className="form-label">
+                        <label className="form-label" htmlFor="dpIdSelect">
                             Depository Participant (DP)
                         </label>
 
@@ -151,47 +179,54 @@ export default function AddAccountSettings() {
                                 <button
                                     type="button"
                                     className="btn btn-secondary btn-sm"
-                                    onClick={fetchDpList}
+                                    onClick={() => window.location.reload()}
                                 >
                                     Retry
                                 </button>
                             </div>
                         ) : (
-                            <select
-                                className="input"
-                                name="dpId"
-                                value={form.dpId}
-                                onChange={handleDpChange}
-                                required
-                                disabled={dpLoading}
-                            >
-                                <option value="">
-                                    {dpLoading
-                                        ? "Loading DPs..."
-                                        : "Select your bank or DP"}
-                                </option>
-
-                                {dpList.map((dp) => (
-                                    <option key={dp.id} value={dp.id}>
-                                        {dp.name} ({dp.code})
+                            <div className="select-wrap">
+                                <select
+                                    id="dpIdSelect"
+                                    className="input"
+                                    name="dpId"
+                                    value={form.dpId}
+                                    onChange={handleDpChange}
+                                    required
+                                    disabled={dpLoading || loading}
+                                >
+                                    <option value="">
+                                        {dpLoading
+                                            ? "Loading DPs..."
+                                            : "Select your bank or DP"}
                                     </option>
-                                ))}
-                            </select>
+
+                                    {dpList.map((dp) => (
+                                        <option key={dp.id} value={dp.id}>
+                                            {dp.name} ({dp.code})
+                                        </option>
+                                    ))}
+                                </select>
+                                {bankLookupLoading && (
+                                    <span className="select-loading-spinner">
+                                        <SpinnerIcon />
+                                    </span>
+                                )}
+                            </div>
                         )}
                     </div>
                 </div>
 
                 <div className="form-section">
-                    <h2 className="form-section-title">
-                        Login credentials
-                    </h2>
+                    <h3 className="form-section-title">Login credentials</h3>
 
                     <div className="form-group">
-                        <label className="form-label">
+                        <label className="form-label" htmlFor="usernameInput">
                             Meroshare username
                         </label>
 
                         <input
+                            id="usernameInput"
                             className="input"
                             type="text"
                             name="username"
@@ -200,16 +235,18 @@ export default function AddAccountSettings() {
                             placeholder="Your Meroshare username"
                             required
                             autoComplete="username"
+                            disabled={loading}
                         />
                     </div>
 
                     <div className="form-group">
-                        <label className="form-label">
+                        <label className="form-label" htmlFor="passwordInput">
                             Meroshare password
                         </label>
 
                         <div className="input-with-icon">
                             <input
+                                id="passwordInput"
                                 className="input"
                                 type={showPassword ? "text" : "password"}
                                 name="password"
@@ -218,14 +255,13 @@ export default function AddAccountSettings() {
                                 placeholder="Your Meroshare password"
                                 required
                                 autoComplete="current-password"
+                                disabled={loading}
                             />
 
                             <button
                                 type="button"
                                 className="input-icon-btn"
-                                onClick={() =>
-                                    setShowPassword((v) => !v)
-                                }
+                                onClick={() => setShowPassword((v) => !v)}
                                 aria-label={
                                     showPassword
                                         ? "Hide password"
@@ -243,12 +279,15 @@ export default function AddAccountSettings() {
                 </div>
 
                 <div className="form-section">
-                    <h2 className="form-section-title">IPO details</h2>
+                    <h3 className="form-section-title">IPO details</h3>
 
                     <div className="form-group">
-                        <label className="form-label">CRN number</label>
+                        <label className="form-label" htmlFor="crnInput">
+                            CRN number
+                        </label>
 
                         <input
+                            id="crnInput"
                             className="input"
                             type="text"
                             name="crn"
@@ -256,16 +295,18 @@ export default function AddAccountSettings() {
                             onChange={handleChange}
                             placeholder="Bank CRN (required for IPO apply)"
                             required
+                            disabled={loading}
                         />
                     </div>
 
                     <div className="form-group">
-                        <label className="form-label">
+                        <label className="form-label" htmlFor="pinInput">
                             Transaction PIN
                         </label>
 
                         <div className="input-with-icon">
                             <input
+                                id="pinInput"
                                 className="input"
                                 type={showPin ? "text" : "password"}
                                 name="pin"
@@ -274,6 +315,7 @@ export default function AddAccountSettings() {
                                 placeholder="Meroshare transaction PIN (MPIN)"
                                 inputMode="numeric"
                                 autoComplete="off"
+                                disabled={loading}
                             />
 
                             <button
@@ -284,11 +326,7 @@ export default function AddAccountSettings() {
                                     showPin ? "Hide PIN" : "Show PIN"
                                 }
                             >
-                                {showPin ? (
-                                    <EyeOffIcon />
-                                ) : (
-                                    <EyeIcon />
-                                )}
+                                {showPin ? <EyeOffIcon /> : <EyeIcon />}
                             </button>
                         </div>
                     </div>
@@ -296,12 +334,11 @@ export default function AddAccountSettings() {
 
                 <div className="form-note">
                     <InfoIcon />
-
                     <span>
-                        Your password and PIN are AES encrypted before saving
+                        Your password and PIN are AES encrypted before saving.
                         <br />
-                        Bank details are resolved automatically from your
-                        selected DP
+                        Bank details are resolved automatically from your selected
+                        DP.
                     </span>
                 </div>
 
@@ -310,6 +347,7 @@ export default function AddAccountSettings() {
                         type="button"
                         className="btn btn-secondary"
                         onClick={() => navigate("/settings/accounts")}
+                        disabled={loading}
                     >
                         Cancel
                     </button>
@@ -320,13 +358,13 @@ export default function AddAccountSettings() {
                         disabled={
                             loading ||
                             dpLoading ||
-                            bankLookupLoading
+                            bankLookupLoading ||
+                            dpError
                         }
                     >
                         {loading ? (
                             <>
-                                <SpinnerIcon />
-                                Verifying and adding
+                                <SpinnerIcon /> Verifying and adding
                             </>
                         ) : (
                             "Add account"

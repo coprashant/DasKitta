@@ -1,16 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, memo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getAccountInfoApi } from "../../api/accounts";
 import { SpinnerIcon, InfoIcon } from "../../components/Icons";
 
-function InfoRow({ label, value }) {
+const InfoRow = memo(({ label, value }) => {
+    const displayValue = value != null && value !== "" ? value : "—";
     return (
         <div className="info-row">
             <span className="info-row-label">{label}</span>
-            <span className="info-row-value">{value || "—"}</span>
+            <span className="info-row-value">{displayValue}</span>
         </div>
     );
-}
+});
+
+InfoRow.displayName = "InfoRow";
 
 export default function AccountInfo() {
     const { id } = useParams();
@@ -21,25 +24,31 @@ export default function AccountInfo() {
 
     useEffect(() => {
         let cancelled = false;
-        (async () => {
+
+        const fetchInfo = async () => {
             setLoading(true);
             setError(null);
             try {
                 const res = await getAccountInfoApi(id);
-                if (!cancelled) setInfo(res.data);
+                if (!cancelled) setInfo(res?.data ?? null);
             } catch (err) {
                 if (!cancelled) {
-                    setError(err.response?.data?.message || "Could not load account info");
+                    setError(
+                        err.response?.data?.message || "Could not load account info"
+                    );
                 }
             } finally {
                 if (!cancelled) setLoading(false);
             }
-        })();
-        return () => { cancelled = true; };
+        };
+
+        fetchInfo();
+        return () => {
+            cancelled = true;
+        };
     }, [id]);
 
-    // account type is only meaningful once we know the real value
-    // avoid labeling a missing accountTypeId as Current by mistake
+    // Avoid labeling a missing accountTypeId as "Current" by mistake
     const accountTypeLabel =
         info?.accountTypeId == null
             ? null
@@ -60,38 +69,51 @@ export default function AccountInfo() {
             ) : error ? (
                 <div className="card empty-state">
                     <p>{error}</p>
-                    <button className="btn btn-secondary" onClick={() => navigate(-1)}>
+                    <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => navigate(-1)}
+                    >
                         Go back
                     </button>
                 </div>
             ) : (
-                <div className="card info-panel">
-                    {!info.liveDataAvailable && (
-                        <div className="form-note">
-                            <InfoIcon />
-                            <span>Could not reach Meroshare right now — showing last saved details</span>
-                        </div>
-                    )}
+                info && (
+                    <div className="card info-panel">
+                        {!info.liveDataAvailable && (
+                            <div className="form-note">
+                                <InfoIcon />
+                                <span>
+                                    Could not reach Meroshare right now — showing last saved details
+                                </span>
+                            </div>
+                        )}
 
-                    <InfoRow label="Full name" value={info.fullName} />
-                    <InfoRow label="BOID" value={info.boid} />
-                    <InfoRow label="Demat" value={info.demat} />
-                    <InfoRow label="DP ID" value={info.dpId} />
-                    <InfoRow label="DP Code" value={info.dpCode} />
-                    <InfoRow label="Username" value={info.username} />
-                    <InfoRow label="CRN" value={info.crn} />
-                    <InfoRow label="Bank" value={info.bankName} />
-                    <InfoRow label="Branch" value={info.branchName} />
-                    <InfoRow label="Bank account no." value={info.accountNumber} />
-                    <InfoRow label="Account type" value={accountTypeLabel} />
-                    <InfoRow label="Meroshare account expiry" value={info.accountExpiryDate} />
-                    <InfoRow label="Meroshare password expiry" value={info.passwordExpiryDate} />
-                    <InfoRow label="Demat expiry (BS)" value={info.dematExpiryDate} />
+                        <InfoRow label="Full name" value={info.fullName} />
+                        <InfoRow label="BOID" value={info.boid} />
+                        <InfoRow label="Demat" value={info.demat} />
+                        <InfoRow label="DP ID" value={info.dpId} />
+                        <InfoRow label="DP Code" value={info.dpCode} />
+                        <InfoRow label="Username" value={info.username} />
+                        <InfoRow label="CRN" value={info.crn} />
+                        <InfoRow label="Bank" value={info.bankName} />
+                        <InfoRow label="Branch" value={info.branchName} />
+                        <InfoRow label="Bank account no." value={info.accountNumber} />
+                        <InfoRow label="Account type" value={accountTypeLabel} />
+                        <InfoRow label="Meroshare account expiry" value={info.accountExpiryDate} />
+                        <InfoRow label="Meroshare password expiry" value={info.passwordExpiryDate} />
+                        <InfoRow label="Demat expiry (BS)" value={info.dematExpiryDate} />
 
-                    <button className="btn btn-secondary" style={{ marginTop: 16 }} onClick={() => navigate(-1)}>
-                        Back
-                    </button>
-                </div>
+                        <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{ marginTop: 16 }}
+                            onClick={() => navigate(-1)}
+                        >
+                            Back
+                        </button>
+                    </div>
+                )
             )}
         </div>
     );

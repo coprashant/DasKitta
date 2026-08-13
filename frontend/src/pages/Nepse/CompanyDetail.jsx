@@ -9,28 +9,42 @@ import {
     getPriceVolume,
 } from "../../api/nepse";
 import Layout from "../../components/Layout/Layout.jsx";
-import { fmt, fmtCompact, HeroChart, TermSearch, EmptyRow, SkeletonRows } from "./nepseShared.jsx";
+import {
+    fmt,
+    fmtCompact,
+    HeroChart,
+    TermSearch,
+    EmptyRow,
+    SkeletonRows,
+} from "./nepseShared.jsx";
 import "./Nepse.css";
 import "./CompanyDetail.css";
 
-// nepse security payloads often nest reference fields as objects like
-// instrumentType: {id, code, description, activeStatus} instead of plain text
 function textOf(v) {
     if (v == null) return null;
-    if (typeof v === "string" || typeof v === "number") return v;
+    if (typeof v === "string" || typeof v === "number") return String(v);
     if (typeof v === "object") return v.description ?? v.name ?? v.code ?? null;
     return null;
 }
 
-// pulls a readable name out of whichever shape the details api returns
+// Pulls the extra fields company details already returns: daily OHLC,
+// market cap, face value, public and promoter share counts
 function pickDetails(raw) {
     if (!raw) return {};
     const src = raw.security ?? raw.company ?? raw;
+    const daily = raw.securityDailyTradeDto ?? {};
     return {
         name: textOf(src.securityName ?? src.companyName ?? src.name),
         sector: textOf(src.sectorName ?? src.sector),
         instrument: textOf(src.instrumentType ?? src.securityType),
         listedShares: src.listedShares ?? src.totalListedShares ?? null,
+        faceValue: src.faceValue ?? null,
+        marketCap: raw.marketCapitalization ?? null,
+        publicShares: raw.publicShares ?? null,
+        promoterShares: raw.promoterShares ?? null,
+        open: daily.openPrice ?? null,
+        high: daily.highPrice ?? null,
+        low: daily.lowPrice ?? null,
     };
 }
 
@@ -43,80 +57,148 @@ export default function CompanyDetail() {
     const [depth, setDepth] = useState(null);
     const [history, setHistory] = useState([]);
     const [floor, setFloor] = useState([]);
+
     const [loading, setLoading] = useState(true);
     const [tab, setTab] = useState("Depth");
     const [tabLoading, setTabLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    // 1. Reset and fetch primary scrip details on symbol change
     useEffect(() => {
         let alive = true;
+
+        // Flush stale scrip data to prevent cross-symbol leaks
+        setDetails(null);
+        setQuote(null);
+        setGraphData(null);
+        setDepth(null);
+        setHistory([]);
+        setFloor([]);
         setLoading(true);
         setError(null);
-        Promise.all([getCompanyDetails(symbol), getDailyScripPriceGraph(symbol), getPriceVolume()])
+
+        Promise.all([
+            getCompanyDetails(symbol),
+            getDailyScripPriceGraph(symbol),
+            getPriceVolume(),
+        ])
             .then(([d, g, pv]) => {
                 if (!alive) return;
                 setDetails(d.data);
-                const raw = g.data;
-                setGraphData(Array.isArray(raw) ? raw : (raw?.data ?? Object.values(raw ?? {})));
+
+                const rawGraph = g.data;
+                setGraphData(
+                    Array.isArray(rawGraph)
+                        ? rawGraph
+                        : rawGraph?.data ?? Object.values(rawGraph ?? {})
+                );
+
                 const rows = pv.data ?? [];
-                const row = rows.find((r) => (r.symbol ?? "").toUpperCase() === symbol.toUpperCase());
+                const row = rows.find(
+                    (r) => (r.symbol ?? "").toUpperCase() === symbol.toUpperCase()
+                );
                 setQuote(row ?? null);
             })
-            .catch(() => { if (alive) setError("could not load company data"); })
-            .finally(() => { if (alive) setLoading(false); });
-        return () => { alive = false; };
+            .catch(() => {
+                if (alive) setError("Could not load company data");
+            })
+            .finally(() => {
+                if (alive) setLoading(false);
+            });
+
+        return () => {
+            alive = false;
+        };
     }, [symbol]);
 
+    // 2. Tab-based asynchronous lazy loader
     useEffect(() => {
         let alive = true;
-        setTabLoading(true);
+
         const load = async () => {
+            setTabLoading(true);
             try {
                 if (tab === "Depth" && !depth) {
                     const r = await getMarketDepth(symbol);
                     if (alive) setDepth(r.data);
-                }
-                if (tab === "History" && !history.length) {
+                } else if (tab === "History" && !history.length) {
                     const r = await getPriceVolumeHistory(symbol);
-                    if (alive) setHistory(Array.isArray(r.data) ? r.data : (r.data?.data ?? []));
-                }
-                if (tab === "Floorsheet" && !floor.length) {
+                    if (alive)
+                        setHistory(
+                            Array.isArray(r.data) ? r.data : r.data?.data ?? []
+                        );
+                } else if (tab === "Floorsheet" && !floor.length) {
                     const r = await getFloorsheetOf(symbol);
-                    const rows = Array.isArray(r.data) ? r.data : (r.data?.floorsheets?.content ?? []);
+                    const rows = Array.isArray(r.data)
+                        ? r.data
+                        : r.data?.floorsheets?.content ?? [];
                     if (alive) setFloor(rows);
                 }
+            } catch {
+                // Suppress tab-level endpoint errors gracefully
             } finally {
                 if (alive) setTabLoading(false);
             }
         };
-        load();
-        return () => { alive = false; };
-    }, [tab, symbol]);
 
+        load();
+
+        return () => {
+            alive = false;
+        };
+    }, [tab, symbol, depth, history.length, floor.length]);
+
+    // Price calculations
     const info = pickDetails(details);
     const heroEntry = details?.security ?? details ?? {};
     const prevClose = quote?.previousClose ?? heroEntry.previousClose ?? null;
-    const value = quote?.lastTradedPrice ?? quote?.closePrice ?? heroEntry.lastTradedPrice ?? heroEntry.closePrice ?? heroEntry.currentValue ?? 0;
-    const change = quote?.change ?? heroEntry.change ?? (prevClose != null ? value - prevClose : 0);
-    const pct = quote?.percentageChange ?? heroEntry.percentageChange ?? heroEntry.perChange
-        ?? (prevClose ? (change / prevClose) * 100 : 0);
+    const value =
+        quote?.lastTradedPrice ??
+        quote?.closePrice ??
+        heroEntry.lastTradedPrice ??
+        heroEntry.closePrice ??
+        heroEntry.currentValue ??
+        0;
+    const change =
+        quote?.change ?? heroEntry.change ?? (prevClose != null ? value - prevClose : 0);
+    const pct =
+        quote?.percentageChange ??
+        heroEntry.percentageChange ??
+        heroEntry.perChange ??
+        (prevClose ? (change / prevClose) * 100 : 0);
 
     const buyRows = depth?.buyMarketDepthList ?? depth?.bids ?? depth?.buy ?? [];
     const sellRows = depth?.sellMarketDepthList ?? depth?.asks ?? depth?.sell ?? [];
 
     const weekStats = useMemo(() => {
         if (!history.length) return null;
-        const closes = history.map((h) => h.closePrice ?? h.close ?? h.lastTradedPrice).filter((v) => typeof v === "number");
+        const closes = history
+            .map((h) => h.closePrice ?? h.close ?? h.lastTradedPrice)
+            .filter((v) => typeof v === "number" && !isNaN(v));
         if (!closes.length) return null;
         return { high: Math.max(...closes), low: Math.min(...closes) };
     }, [history]);
+
+    const hasOverview =
+        info.open != null ||
+        info.high != null ||
+        info.low != null ||
+        info.instrument ||
+        info.listedShares ||
+        info.marketCap != null ||
+        info.faceValue != null ||
+        info.publicShares != null ||
+        info.promoterShares != null ||
+        weekStats;
 
     return (
         <Layout>
             <div className="term-shell">
                 <header className="term-header">
                     <div className="term-brand">
-                        <Link to="/nepse" className="term-back">back to market</Link>
+                        <Link to="/nepse" className="term-back">
+                            back to market
+                        </Link>
                         <span className="term-brand-name">{symbol}</span>
                         {info.name && <span className="term-brand-tag">{info.name}</span>}
                     </div>
@@ -137,24 +219,86 @@ export default function CompanyDetail() {
                             eyebrow={info.sector ? `${symbol} - ${info.sector}` : symbol}
                         />
 
-                        {(info.instrument || info.listedShares || weekStats) && !loading && (
+                        {hasOverview && !loading && (
                             <div className="index-strip">
+                                {info.open != null && (
+                                    <div className="index-item">
+                                        <span className="index-name">open</span>
+                                        <span className="index-value index-value-sm">
+                      {fmt(info.open)}
+                    </span>
+                                    </div>
+                                )}
+                                {info.high != null && (
+                                    <div className="index-item">
+                                        <span className="index-name">high</span>
+                                        <span className="index-value index-value-sm">
+                      {fmt(info.high)}
+                    </span>
+                                    </div>
+                                )}
+                                {info.low != null && (
+                                    <div className="index-item">
+                                        <span className="index-name">low</span>
+                                        <span className="index-value index-value-sm">
+                      {fmt(info.low)}
+                    </span>
+                                    </div>
+                                )}
                                 {info.instrument && (
                                     <div className="index-item">
                                         <span className="index-name">instrument</span>
-                                        <span className="index-value index-value-sm">{info.instrument}</span>
+                                        <span className="index-value index-value-sm">
+                      {info.instrument}
+                    </span>
+                                    </div>
+                                )}
+                                {info.marketCap != null && (
+                                    <div className="index-item">
+                                        <span className="index-name">market cap</span>
+                                        <span className="index-value index-value-sm">
+                      {fmtCompact(info.marketCap)}
+                    </span>
                                     </div>
                                 )}
                                 {info.listedShares && (
                                     <div className="index-item">
                                         <span className="index-name">listed shares</span>
-                                        <span className="index-value index-value-sm">{fmtCompact(info.listedShares)}</span>
+                                        <span className="index-value index-value-sm">
+                      {fmtCompact(info.listedShares)}
+                    </span>
+                                    </div>
+                                )}
+                                {info.faceValue != null && (
+                                    <div className="index-item">
+                                        <span className="index-name">face value</span>
+                                        <span className="index-value index-value-sm">
+                      {fmt(info.faceValue)}
+                    </span>
+                                    </div>
+                                )}
+                                {info.publicShares != null && (
+                                    <div className="index-item">
+                                        <span className="index-name">public shares</span>
+                                        <span className="index-value index-value-sm">
+                      {fmtCompact(info.publicShares)}
+                    </span>
+                                    </div>
+                                )}
+                                {info.promoterShares != null && (
+                                    <div className="index-item">
+                                        <span className="index-name">promoter shares</span>
+                                        <span className="index-value index-value-sm">
+                      {fmtCompact(info.promoterShares)}
+                    </span>
                                     </div>
                                 )}
                                 {weekStats && (
                                     <div className="index-item">
                                         <span className="index-name">range</span>
-                                        <span className="index-value index-value-sm">{fmt(weekStats.low)} - {fmt(weekStats.high)}</span>
+                                        <span className="index-value index-value-sm">
+                      {fmt(weekStats.low)} - {fmt(weekStats.high)}
+                    </span>
                                     </div>
                                 )}
                             </div>
@@ -183,11 +327,17 @@ export default function CompanyDetail() {
                                     ) : buyRows.length ? (
                                         buyRows.slice(0, 6).map((r, i) => (
                                             <div className="ledger-row" key={i}>
-                                                <span className="ledger-sym">{fmt(r.price ?? r.rate)}</span>
-                                                <span className="ledger-num">{fmt(r.quantity ?? r.qty, 0)}</span>
+                        <span className="ledger-sym">
+                          {fmt(r.orderPrice ?? r.price ?? r.rate)}
+                        </span>
+                                                <span className="ledger-num">
+                          {fmt(r.orderQuantity ?? r.quantity ?? r.qty, 0)}
+                        </span>
                                             </div>
                                         ))
-                                    ) : <EmptyRow label="no bid depth" />}
+                                    ) : (
+                                        <EmptyRow label="no bid depth" />
+                                    )}
 
                                     <p className="ledger-heading down">ask</p>
                                     {tabLoading && !sellRows.length ? (
@@ -195,11 +345,17 @@ export default function CompanyDetail() {
                                     ) : sellRows.length ? (
                                         sellRows.slice(0, 6).map((r, i) => (
                                             <div className="ledger-row" key={i}>
-                                                <span className="ledger-sym">{fmt(r.price ?? r.rate)}</span>
-                                                <span className="ledger-num">{fmt(r.quantity ?? r.qty, 0)}</span>
+                        <span className="ledger-sym">
+                          {fmt(r.orderPrice ?? r.price ?? r.rate)}
+                        </span>
+                                                <span className="ledger-num">
+                          {fmt(r.orderQuantity ?? r.quantity ?? r.qty, 0)}
+                        </span>
                                             </div>
                                         ))
-                                    ) : <EmptyRow label="no ask depth" />}
+                                    ) : (
+                                        <EmptyRow label="no ask depth" />
+                                    )}
                                 </>
                             )}
 
@@ -211,12 +367,26 @@ export default function CompanyDetail() {
                                     ) : history.length ? (
                                         history.slice(0, 12).map((r, i) => (
                                             <div className="ledger-row ledger-row-3" key={i}>
-                                                <span className="ledger-sym">{r.businessDate ?? r.date ?? "--"}</span>
-                                                <span className="ledger-num">{fmt(r.closePrice ?? r.close ?? r.lastTradedPrice)}</span>
-                                                <span className="ledger-num">{fmtCompact(r.totalTradeQuantity ?? r.totalTradedQuantity ?? r.volume)}</span>
+                        <span className="ledger-sym">
+                          {r.businessDate ?? r.date ?? "--"}
+                        </span>
+                                                <span className="ledger-num">
+                          {fmt(
+                              r.closePrice ?? r.close ?? r.lastTradedPrice
+                          )}
+                        </span>
+                                                <span className="ledger-num">
+                          {fmtCompact(
+                              r.totalTradeQuantity ??
+                              r.totalTradedQuantity ??
+                              r.volume
+                          )}
+                        </span>
                                             </div>
                                         ))
-                                    ) : <EmptyRow label="no history yet" />}
+                                    ) : (
+                                        <EmptyRow label="no history yet" />
+                                    )}
                                 </>
                             )}
 
@@ -228,12 +398,21 @@ export default function CompanyDetail() {
                                     ) : floor.length ? (
                                         floor.slice(0, 14).map((r, i) => (
                                             <div className="ledger-row ledger-row-3" key={i}>
-                                                <span className="ledger-sym">{fmt(r.contractQuantity, 0)}</span>
-                                                <span className="ledger-num">{fmt(r.contractRate)}</span>
-                                                <span className="ledger-ltp">{r.buyerMemberId ?? "--"}/{r.sellerMemberId ?? "--"}</span>
+                        <span className="ledger-sym">
+                          {fmt(r.contractQuantity ?? r.quantity, 0)}
+                        </span>
+                                                <span className="ledger-num">
+                          {fmt(r.contractRate ?? r.rate)}
+                        </span>
+                                                <span className="ledger-ltp">
+                          {r.buyerMemberId ?? r.buyerBroker ?? "--"}/
+                                                    {r.sellerMemberId ?? r.sellerBroker ?? "--"}
+                        </span>
                                             </div>
                                         ))
-                                    ) : <EmptyRow label="no contracts yet" />}
+                                    ) : (
+                                        <EmptyRow label="no contracts yet" />
+                                    )}
                                 </>
                             )}
                         </div>

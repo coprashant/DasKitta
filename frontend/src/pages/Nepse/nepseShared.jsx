@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useId } from "react";
 import { useNavigate } from "react-router-dom";
 import { getPriceVolume } from "../../api/nepse";
 import { IconSearch } from "../../components/Icons.jsx";
@@ -13,75 +13,123 @@ import {
     useChartHover,
 } from "./nepseUtils";
 
-// re-exported so pages can pull everything nepse related from one place
+// Re-exported so pages can pull everything NEPSE-related from one place
 export { fmt, fmtCompact, dirClass, resolveHeroKey };
 
-// live seconds clock for headers
+// Live clock hook for terminal headers
 export function useClock() {
     const [now, setNow] = useState(new Date());
+
     useEffect(() => {
         const id = setInterval(() => setNow(new Date()), 1000);
         return () => clearInterval(id);
     }, []);
+
     return now;
 }
 
-// single line placeholder shown when a ledger section has no rows
+// Single-line placeholder shown when a ledger section has no rows
 export function EmptyRow({ label }) {
     return <p className="ledger-empty">{label}</p>;
 }
 
-// row of pulsing skeleton bars, used while a ledger section is loading
+// Row of pulsing skeleton bars, used while a ledger section is loading
 export function SkeletonRows({ count = 3 }) {
-    return Array.from({ length: count }, (_, i) => <div key={i} className="skel ledger-skel" />);
+    return Array.from({ length: count }, (_, i) => (
+        <div key={i} className="skel ledger-skel" />
+    ));
 }
 
-// small up or down chevron, dims out when the change is flat
+// Small up or down chevron, dims out when the change is flat
 export function Arrow({ up, flat }) {
     if (flat) return <span className="arrow-icon arrow-flat">--</span>;
     return (
-        <svg className="arrow-icon" width="9" height="9" viewBox="0 0 10 10" fill="none" aria-hidden="true">
-            <path d={up ? "M5 1 L9 7 L1 7 Z" : "M5 9 L9 3 L1 3 Z"} fill="currentColor" />
+        <svg
+            className="arrow-icon"
+            width="9"
+            height="9"
+            viewBox="0 0 10 10"
+            fill="none"
+            aria-hidden="true"
+        >
+            <path
+                d={up ? "M5 1 L9 7 L1 7 Z" : "M5 9 L9 3 L1 3 Z"}
+                fill="currentColor"
+            />
         </svg>
     );
 }
 
-// shared svg marker for the hovered point on a chart or sparkline
+// Shared SVG marker for the hovered point on a chart or sparkline
 function HoverMarker({ hover, height, color, radius = "5" }) {
     if (!hover) return null;
     return (
         <g>
-            <line x1={hover.x} y1="0" x2={hover.x} y2={height} className="term-hover-line" />
-            <circle cx={hover.x} cy={hover.y} r={radius} className="term-hover-dot" style={{ fill: color }} />
+            <line
+                x1={hover.x}
+                y1="0"
+                x2={hover.x}
+                y2={height}
+                className="term-hover-line"
+            />
+            <circle
+                cx={hover.x}
+                cy={hover.y}
+                r={radius}
+                className="term-hover-dot"
+                style={{ fill: color }}
+            />
         </g>
     );
 }
 
-// shared floating value label for the hovered point
+// Shared floating value label for the hovered point
 function HoverTooltip({ hover, width, height, small = false }) {
     if (!hover) return null;
     return (
         <div
-            className={`term-tooltip ${small ? "term-tooltip-sm" : ""} align-${tooltipAlign(hover.x / width)}`}
-            style={{ left: `${(hover.x / width) * 100}%`, top: `${(hover.y / height) * 100}%` }}
+            className={`term-tooltip ${
+                small ? "term-tooltip-sm" : ""
+            } align-${tooltipAlign(hover.x / width)}`}
+            style={{
+                left: `${(hover.x / width) * 100}%`,
+                top: `${(hover.y / height) * 100}%`,
+            }}
         >
             {fmt(hover.value)}
         </div>
     );
 }
 
-export function HeroChart({ loading, data, value, changeVal, changePct, eyebrow = "NEPSE INDEX" }) {
+export function HeroChart({
+                              loading,
+                              data,
+                              value,
+                              changeVal,
+                              changePct,
+                              eyebrow = "NEPSE INDEX",
+                          }) {
+    const gradientId = useId(); // Prevents SVG gradient ID conflicts
     const width = 1000;
     const height = 380;
     const chart = buildChart(data, width, height);
     const positive = changeVal >= 0;
-    const { containerRef, index: hoverIndex, handlers } = useChartHover(chart?.values.length ?? 0);
+    const { containerRef, index: hoverIndex, handlers } = useChartHover(
+        chart?.values.length ?? 0
+    );
 
-    const hover = chart && hoverIndex != null
-        ? { x: chart.coords[hoverIndex][0], y: chart.coords[hoverIndex][1], value: chart.values[hoverIndex] }
-        : null;
+    const hover =
+        chart && hoverIndex != null
+            ? {
+                x: chart.coords[hoverIndex][0],
+                y: chart.coords[hoverIndex][1],
+                value: chart.values[hoverIndex],
+            }
+            : null;
 
-    const lineColor = chart?.positive ? "var(--term-emerald)" : "var(--term-crimson)";
+    const lineColor = chart?.positive
+        ? "var(--term-emerald)"
+        : "var(--term-crimson)";
 
     return (
         <div className="hero-canvas">
@@ -97,28 +145,48 @@ export function HeroChart({ loading, data, value, changeVal, changePct, eyebrow 
                         <div className="hero-value">{fmt(value)}</div>
                         <div className={`hero-delta ${dirClass(changeVal)}`}>
                             <Arrow up={positive} flat={changeVal === 0} />
-                            {positive ? "+" : ""}{fmt(changeVal)}
+                            {positive ? "+" : ""}
+                            {fmt(changeVal)}
                             <span className="hero-delta-pct">
-                ({positive ? "+" : ""}{fmt(changePct)}%)
+                ({positive ? "+" : ""}
+                                {fmt(changePct)}%)
               </span>
                         </div>
                     </>
                 )}
             </div>
 
-            <div className="hero-chart-wrap" ref={containerRef} {...(chart ? handlers : {})}>
+            <div
+                className="hero-chart-wrap"
+                ref={containerRef}
+                {...(chart ? handlers : {})}
+            >
                 {loading ? (
                     <div className="skel hero-skel" />
                 ) : chart ? (
                     <>
-                        <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="hero-svg">
+                        <svg
+                            viewBox={`0 0 ${width} ${height}`}
+                            preserveAspectRatio="none"
+                            className="hero-svg"
+                        >
                             <defs>
-                                <linearGradient id="heroFade" x1="0" y1="0" x2="0" y2="1">
+                                <linearGradient
+                                    id={gradientId}
+                                    x1="0"
+                                    y1="0"
+                                    x2="0"
+                                    y2="1"
+                                >
                                     <stop offset="0%" stopColor={lineColor} stopOpacity="0.20" />
                                     <stop offset="100%" stopColor={lineColor} stopOpacity="0" />
                                 </linearGradient>
                             </defs>
-                            <polygon points={chart.area} fill="url(#heroFade)" stroke="none" />
+                            <polygon
+                                points={chart.area}
+                                fill={`url(#${gradientId})`}
+                                stroke="none"
+                            />
                             <polyline
                                 points={chart.line}
                                 fill="none"
@@ -127,7 +195,12 @@ export function HeroChart({ loading, data, value, changeVal, changePct, eyebrow 
                                 strokeLinejoin="round"
                                 strokeLinecap="round"
                             />
-                            <HoverMarker hover={hover} height={height} color={lineColor} radius="5" />
+                            <HoverMarker
+                                hover={hover}
+                                height={height}
+                                color={lineColor}
+                                radius="5"
+                            />
                         </svg>
                         <HoverTooltip hover={hover} width={width} height={height} />
                     </>
@@ -142,17 +215,31 @@ export function HeroChart({ loading, data, value, changeVal, changePct, eyebrow 
 
 export function MiniSpark({ data, width = 280, height = 46 }) {
     const chart = buildChart(data, width, height);
-    const { containerRef, index: hoverIndex, handlers } = useChartHover(chart?.values.length ?? 0);
+    const { containerRef, index: hoverIndex, handlers } = useChartHover(
+        chart?.values.length ?? 0
+    );
+
     if (!chart) return <div className="mini-spark-empty">no trend data</div>;
 
-    const hover = hoverIndex != null
-        ? { x: chart.coords[hoverIndex][0], y: chart.coords[hoverIndex][1], value: chart.values[hoverIndex] }
-        : null;
-    const lineColor = chart.positive ? "var(--term-emerald)" : "var(--term-crimson)";
+    const hover =
+        hoverIndex != null
+            ? {
+                x: chart.coords[hoverIndex][0],
+                y: chart.coords[hoverIndex][1],
+                value: chart.values[hoverIndex],
+            }
+            : null;
+    const lineColor = chart.positive
+        ? "var(--term-emerald)"
+        : "var(--term-crimson)";
 
     return (
         <div className="mini-spark-wrap" ref={containerRef} {...handlers}>
-            <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="mini-spark-svg">
+            <svg
+                viewBox={`0 0 ${width} ${height}`}
+                preserveAspectRatio="none"
+                className="mini-spark-svg"
+            >
                 <polyline
                     points={chart.line}
                     fill="none"
@@ -161,15 +248,19 @@ export function MiniSpark({ data, width = 280, height = 46 }) {
                     strokeLinejoin="round"
                     strokeLinecap="round"
                 />
-                <HoverMarker hover={hover} height={height} color={lineColor} radius="3.5" />
+                <HoverMarker
+                    hover={hover}
+                    height={height}
+                    color={lineColor}
+                    radius="3.5"
+                />
             </svg>
             <HoverTooltip hover={hover} width={width} height={height} small />
         </div>
     );
 }
 
-
-// borderless search that opens the full company page on pick
+// Borderless search that opens the full company page on selection
 export function TermSearch({ placeholder = "search symbol or company" }) {
     const navigate = useNavigate();
     const [query, setQuery] = useState("");
@@ -179,7 +270,16 @@ export function TermSearch({ placeholder = "search symbol or company" }) {
     const wrapRef = useRef(null);
 
     useEffect(() => {
-        getPriceVolume().then((r) => setAllStocks(r.data ?? [])).catch(() => {});
+        let alive = true;
+        getPriceVolume()
+            .then((r) => {
+                if (alive) setAllStocks(r.data ?? []);
+            })
+            .catch(() => {});
+
+        return () => {
+            alive = false;
+        };
     }, []);
 
     useEffect(() => {
@@ -190,7 +290,11 @@ export function TermSearch({ placeholder = "search symbol or company" }) {
         }
         const q = query.toUpperCase();
         const filtered = allStocks
-            .filter((s) => s.symbol?.toUpperCase().includes(q) || s.securityName?.toUpperCase().includes(q))
+            .filter(
+                (s) =>
+                    s.symbol?.toUpperCase().includes(q) ||
+                    s.securityName?.toUpperCase().includes(q)
+            )
             .slice(0, 7);
         setResults(filtered);
         setOpen(filtered.length > 0);
@@ -198,7 +302,9 @@ export function TermSearch({ placeholder = "search symbol or company" }) {
 
     useEffect(() => {
         const onClick = (e) => {
-            if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+            if (wrapRef.current && !wrapRef.current.contains(e.target)) {
+                setOpen(false);
+            }
         };
         document.addEventListener("mousedown", onClick);
         return () => document.removeEventListener("mousedown", onClick);
@@ -219,11 +325,20 @@ export function TermSearch({ placeholder = "search symbol or company" }) {
                     placeholder={placeholder}
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    onFocus={() => results.length && setOpen(true)}
-                    onKeyDown={(e) => { if (e.key === "Enter" && results[0]) goToCompany(results[0]); }}
+                    onFocus={() => results.length > 0 && setOpen(true)}
+                    onKeyDown={(e) => {
+                        if (e.key === "Enter" && results[0]) goToCompany(results[0]);
+                    }}
                 />
                 {query && (
-                    <button className="term-search-clear" onClick={() => { setQuery(""); setOpen(false); }} aria-label="clear search">
+                    <button
+                        className="term-search-clear"
+                        onClick={() => {
+                            setQuery("");
+                            setOpen(false);
+                        }}
+                        aria-label="clear search"
+                    >
                         x
                     </button>
                 )}
@@ -238,7 +353,9 @@ export function TermSearch({ placeholder = "search symbol or company" }) {
                             role="button"
                             tabIndex={0}
                             onClick={() => goToCompany(s)}
-                            onKeyDown={(e) => { if (e.key === "Enter") goToCompany(s); }}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") goToCompany(s);
+                            }}
                         >
                             <span className="term-search-sym">{s.symbol}</span>
                             <span className="term-search-name">{s.securityName}</span>

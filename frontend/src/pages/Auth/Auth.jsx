@@ -14,7 +14,6 @@ const Auth = () => {
     const location = useLocation();
     const isLogin = location.pathname === "/login";
 
-    // Preserve the background state when swapping between login and register
     const background = location.state?.background;
 
     const [form, setForm] = useState({ username: "", email: "", password: "" });
@@ -26,6 +25,26 @@ const Auth = () => {
     const [errorMessage, setErrorMessage] = useState("");
     const [timer, setTimer] = useState(0);
 
+    const sanitizeErrorMessage = (err, fallback) => {
+        if (err?.response?.status === 401) {
+            return "Invalid username or password.";
+        }
+        if (err?.response?.status === 409) {
+            return "An account with these details already exists.";
+        }
+        if (err?.response?.status === 429) {
+            return "Too many attempts. Please try again later.";
+        }
+        if (err?.response?.status >= 500) {
+            return "A server error occurred. Please try again later.";
+        }
+        const msg = err?.response?.data?.message;
+        if (typeof msg === "string" && msg.length < 100 && !msg.includes("Exception") && !msg.includes("Error:")) {
+            return msg;
+        }
+        return fallback;
+    };
+
     const handleClose = () => {
         if (background) {
             navigate(background.pathname + background.search + background.hash, { replace: true });
@@ -34,7 +53,6 @@ const Auth = () => {
         }
     };
 
-    // Close on Escape key press
     useEffect(() => {
         const handleKeyDown = (e) => {
             if (e.key === "Escape") handleClose();
@@ -43,7 +61,6 @@ const Auth = () => {
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [background]);
 
-    // Disable body scrolling while modal is active
     useEffect(() => {
         if (background) {
             document.body.style.overflow = "hidden";
@@ -99,7 +116,7 @@ const Auth = () => {
                 setTimer(RESEND_COOLDOWN);
             }
         } catch (err) {
-            setErrorMessage(err.response?.data?.message || "Something went wrong. Please try again.");
+            setErrorMessage(sanitizeErrorMessage(err, "Unable to authenticate. Please try again."));
         } finally {
             setLoading(false);
         }
@@ -117,7 +134,7 @@ const Auth = () => {
             setIsOtpStage(false);
             handleClose();
         } catch (err) {
-            setErrorMessage(err.response?.data?.message || "Invalid code or token expired.");
+            setErrorMessage(sanitizeErrorMessage(err, "Invalid or expired code. Please try again."));
         } finally {
             setLoading(false);
         }
@@ -133,7 +150,7 @@ const Auth = () => {
             await resendOtpApi(form.email);
             setTimer(RESEND_COOLDOWN);
         } catch (err) {
-            setErrorMessage(err.response?.data?.message || "Could not resend code. Please try again.");
+            setErrorMessage(sanitizeErrorMessage(err, "Could not resend code. Please try again."));
         } finally {
             setResending(false);
         }

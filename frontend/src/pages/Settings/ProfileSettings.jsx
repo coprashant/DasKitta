@@ -103,13 +103,19 @@ function ProfileHeader({ user, loading }) {
     );
 }
 
-function SettingsRow({ label, value, children, open, onToggle }) {
+function SettingsRow({ label, value, children, open, onToggle, id }) {
+    const panelId = `${id}-panel`;
+    const buttonId = `${id}-button`;
+
     return (
         <div className="stg-row">
             <button
+                id={buttonId}
                 type="button"
                 className="stg-row-summary"
                 onClick={onToggle}
+                aria-expanded={open}
+                aria-controls={panelId}
             >
                 <div className="stg-row-text">
                     <span className="stg-row-label">{label}</span>
@@ -125,7 +131,11 @@ function SettingsRow({ label, value, children, open, onToggle }) {
                 </span>
             </button>
 
-            {open && <div className="stg-row-form">{children}</div>}
+            {open && (
+                <div id={panelId} role="region" aria-labelledby={buttonId} className="stg-row-form">
+                    {children}
+                </div>
+            )}
         </div>
     );
 }
@@ -171,6 +181,7 @@ function UsernameSection({ username, onUpdated, open, onToggle }) {
 
     return (
         <SettingsRow
+            id="username-setting"
             label="Username"
             value={username || "Not set"}
             open={open}
@@ -298,6 +309,7 @@ function EmailSection({ email, onUpdated, open, onToggle }) {
 
     return (
         <SettingsRow
+            id="email-setting"
             label="Email"
             value={email || "Not set"}
             open={open}
@@ -438,6 +450,7 @@ function PasswordSection({ open, onToggle }) {
 
     return (
         <SettingsRow
+            id="password-setting"
             label="Password"
             value="••••••••••"
             open={open}
@@ -642,6 +655,7 @@ function DeleteAccountSection({ open, onToggle }) {
 
     return (
         <SettingsRow
+            id="delete-setting"
             label="Delete account"
             value="Permanently remove your data"
             open={open}

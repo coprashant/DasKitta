@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { getPortfolioApi } from "../../api/accounts";
 import { useAccount } from "../../context/AccountContext";
@@ -25,7 +25,7 @@ const fmtUnits = (n) =>
     typeof n === "number" ? n.toLocaleString("en-NP") : "—";
 
 const gainClass = (ltp, prev) => {
-    if (!ltp || !prev) return "";
+    if (ltp == null || prev == null) return "";
     return ltp > prev ? "positive" : ltp < prev ? "negative" : "";
 };
 
@@ -45,7 +45,6 @@ const Portfolio = () => {
         if (!id) return;
         setPortfolioLoading(true);
         setError(null);
-        setPortfolio(null);
         try {
             const res = await getPortfolioApi(id);
             setPortfolio(res?.data ?? null);
@@ -58,25 +57,45 @@ const Portfolio = () => {
 
     useEffect(() => {
         if (accountLoading) return;
+
+        let isCurrent = true;
         if (activeAccount?.id) {
-            loadPortfolio(activeAccount.id);
+            setPortfolioLoading(true);
+            setError(null);
+            getPortfolioApi(activeAccount.id)
+                .then((res) => {
+                    if (isCurrent) setPortfolio(res?.data ?? null);
+                })
+                .catch((e) => {
+                    if (isCurrent) {
+                        setError(e?.response?.data?.message || "Failed to load portfolio. Please try again.");
+                    }
+                })
+                .finally(() => {
+                    if (isCurrent) setPortfolioLoading(false);
+                });
         } else {
             setPortfolio(null);
             setError(null);
         }
-    }, [activeAccount?.id, accountLoading, loadPortfolio]);
+
+        return () => {
+            isCurrent = false;
+        };
+    }, [activeAccount?.id, accountLoading]);
 
     const handleSort = (key) => {
         if (sortKey === key) {
-            setSortAsc((p) => !p);
+            setSortAsc((prev) => !prev);
         } else {
             setSortKey(key);
             setSortAsc(true);
         }
     };
 
-    const sortedItems = portfolio?.items
-        ? [...portfolio.items].sort((a, b) => {
+    const sortedItems = useMemo(() => {
+        if (!portfolio?.items) return [];
+        return [...portfolio.items].sort((a, b) => {
             let av = a[sortKey] ?? "";
             let bv = b[sortKey] ?? "";
             if (typeof av === "string") av = av.toLowerCase();
@@ -84,11 +103,11 @@ const Portfolio = () => {
             if (av < bv) return sortAsc ? -1 : 1;
             if (av > bv) return sortAsc ? 1 : -1;
             return 0;
-        })
-        : [];
+        });
+    }, [portfolio?.items, sortKey, sortAsc]);
 
     const totalPnL = portfolio
-        ? portfolio.totalValueLTP - portfolio.totalValuePrevClose
+        ? (portfolio.totalValueLTP ?? 0) - (portfolio.totalValuePrevClose ?? 0)
         : 0;
 
     const SortIcon = ({ col }) => {
@@ -114,7 +133,6 @@ const Portfolio = () => {
     return (
         <Layout>
             <div className="portfolio-page">
-
                 <div className="portfolio-header">
                     <div>
                         <h1 className="page-title">Portfolio</h1>
@@ -126,12 +144,15 @@ const Portfolio = () => {
                     </div>
                     {activeAccount && (
                         <button
+                            type="button"
                             className="btn btn-secondary btn-sm btn-refresh"
                             onClick={() => loadPortfolio(activeAccount.id)}
                             disabled={portfolioLoading}
                             aria-label="Refresh portfolio"
                         >
-                            <span className={portfolioLoading ? "spin" : ""}><IconRefresh /></span>
+              <span className={portfolioLoading ? "spin" : ""}>
+                <IconRefresh />
+              </span>
                             Refresh
                         </button>
                     )}
@@ -139,7 +160,9 @@ const Portfolio = () => {
 
                 {showEmpty ? (
                     <div className="portfolio-empty">
-                        <div className="portfolio-empty-icon"><IconUser /></div>
+                        <div className="portfolio-empty-icon">
+                            <IconUser />
+                        </div>
                         <p>No account selected. Add an account to get started.</p>
                         <Link to="/accounts/add" className="btn btn-primary btn-sm" style={{ marginTop: 4 }}>
                             <IconPlus /> Add account
@@ -158,36 +181,42 @@ const Portfolio = () => {
                                     </div>
                                 ))}
                             </div>
-                        ) : portfolio && (
-                            <div className="summary-grid anim-fade-up">
-                                <div className="summary-card">
-                                    <p className="summary-label">
-                                        <IconLayers /> Total scrips
-                                    </p>
-                                    <p className="summary-value">{portfolio.totalItems}</p>
+                        ) : (
+                            portfolio && (
+                                <div className="summary-grid anim-fade-up">
+                                    <div className="summary-card">
+                                        <p className="summary-label">
+                                            <IconLayers /> Total scrips
+                                        </p>
+                                        <p className="summary-value">{portfolio.totalItems ?? 0}</p>
+                                    </div>
+                                    <div className="summary-card">
+                                        <p className="summary-label">
+                                            <IconTrendUp /> Value at LTP
+                                        </p>
+                                        <p className="summary-value">Rs {fmt(portfolio.totalValueLTP)}</p>
+                                    </div>
+                                    <div className={`summary-card ${totalPnL >= 0 ? "summary-card-up" : "summary-card-down"}`}>
+                                        <p className="summary-label">
+                                            {totalPnL >= 0 ? <IconArrowUp /> : <IconArrowDown />}
+                                            Day change
+                                        </p>
+                                        <p className={`summary-value ${totalPnL >= 0 ? "positive" : "negative"}`}>
+                                            {totalPnL >= 0 ? "+" : ""}Rs {fmt(Math.abs(totalPnL))}
+                                        </p>
+                                    </div>
                                 </div>
-                                <div className="summary-card">
-                                    <p className="summary-label">
-                                        <IconTrendUp /> Value at LTP
-                                    </p>
-                                    <p className="summary-value">Rs {fmt(portfolio.totalValueLTP)}</p>
-                                </div>
-                                <div className={`summary-card ${totalPnL >= 0 ? "summary-card-up" : "summary-card-down"}`}>
-                                    <p className="summary-label">
-                                        {totalPnL >= 0 ? <IconArrowUp /> : <IconArrowDown />}
-                                        Day change
-                                    </p>
-                                    <p className={`summary-value ${totalPnL >= 0 ? "positive" : "negative"}`}>
-                                        {totalPnL >= 0 ? "+" : ""}Rs {fmt(Math.abs(totalPnL))}
-                                    </p>
-                                </div>
-                            </div>
+                            )
                         )}
 
                         {error && !portfolioLoading && (
                             <div className="portfolio-error">
                                 <p>{error}</p>
-                                <button className="btn btn-secondary btn-sm" onClick={() => loadPortfolio(activeAccount.id)}>
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary btn-sm"
+                                    onClick={() => loadPortfolio(activeAccount?.id)}
+                                >
                                     Try again
                                 </button>
                             </div>
@@ -197,7 +226,9 @@ const Portfolio = () => {
                             <div className="portfolio-table-wrap anim-fade-up" style={{ animationDelay: "0.08s" }}>
                                 {sortedItems.length === 0 ? (
                                     <div className="portfolio-empty">
-                                        <div className="portfolio-empty-icon"><IconBriefcase /></div>
+                                        <div className="portfolio-empty-icon">
+                                            <IconBriefcase />
+                                        </div>
                                         <p>No holdings found in this demat account</p>
                                     </div>
                                 ) : (
@@ -210,13 +241,22 @@ const Portfolio = () => {
                                                     <th
                                                         key={col.key}
                                                         className={`col-${col.align} sortable`}
-                                                        onClick={() => handleSort(col.key)}
-                                                        aria-sort={sortKey === col.key ? (sortAsc ? "ascending" : "descending") : "none"}
+                                                        aria-sort={
+                                                            sortKey === col.key
+                                                                ? sortAsc
+                                                                    ? "ascending"
+                                                                    : "descending"
+                                                                : "none"
+                                                        }
                                                     >
-                              <span className="th-inner">
-                                {col.label}
-                                  <SortIcon col={col.key} />
-                              </span>
+                                                        <button
+                                                            type="button"
+                                                            className="th-btn"
+                                                            onClick={() => handleSort(col.key)}
+                                                        >
+                                                            {col.label}
+                                                            <SortIcon col={col.key} />
+                                                        </button>
                                                     </th>
                                                 ))}
                                             </tr>
@@ -256,7 +296,9 @@ const Portfolio = () => {
                                             </tbody>
                                             <tfoot>
                                             <tr className="tfoot-row">
-                                                <td colSpan={5} className="tfoot-label">Total</td>
+                                                <td colSpan={5} className="tfoot-label">
+                                                    Total
+                                                </td>
                                                 <td className="col-right tfoot-val">
                                                     Rs {fmt(portfolio.totalValueLTP)}
                                                 </td>

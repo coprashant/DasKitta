@@ -5,7 +5,10 @@ import { useAccount } from "../../context/AccountContext";
 import { getHistoryApi, getCdscSummaryApi } from "../../api/ipo";
 import Layout from "../../components/Layout/Layout.jsx";
 import AccountSwitcher from "../../components/AccountSwitcher/AccountSwitcher.jsx";
-import { IconUser, IconPlus, IconFile, IconRefresh, IconStack, IconCheck, IconX, IconClock } from "../../components/Icons";
+import {
+  IconUser, IconPlus, IconFile, IconRefresh,
+  IconStack, IconCheck, IconX, IconClock
+} from "../../components/Icons";
 import {
   AreaChart, Area, PieChart, Pie, Cell,
   ResponsiveContainer, Tooltip,
@@ -13,16 +16,7 @@ import {
 import "./Dashboard.css";
 
 const CDSC_MOBILE_LIMIT = 5;
-
-/** @type {{ h?: number | string, w?: number | string, style?: React.CSSProperties }} */
-const Skeleton = ({ h = 16, w = "100%", style = {} }) => (
-    <div className="skeleton" style={{ height: h, width: w, ...style }} />
-);
-
-const cdscResultBadgeClass = (s) =>
-    s === "ALLOTTED"     ? "badge-success" :
-        s === "NOT_ALLOTTED" ? "badge-danger"  : "badge-muted";
-
+const PIE_COLORS = ["var(--success)", "var(--danger)", "var(--border-strong)"];
 const TOOLTIP_STYLE = {
   background: "var(--surface)",
   border: "1px solid var(--border)",
@@ -32,16 +26,24 @@ const TOOLTIP_STYLE = {
   padding: "6px 10px",
 };
 
+const Skeleton = ({ h = 16, w = "100%", style = {} }) => (
+    <div className="skeleton" style={{ height: h, width: w, ...style }} />
+);
+
+const cdscResultBadgeClass = (s) =>
+    s === "ALLOTTED" ? "badge-success" :
+        s === "NOT_ALLOTTED" ? "badge-danger" : "badge-muted";
+
 const deriveStatus = (item) => {
   if (item.status === "SUCCESS") {
     const r = item.resultStatus;
-    if (r === "ALLOTTED")     return { label: `Allotted · ${item.allottedKitta} kitta`, variant: "allotted" };
+    if (r === "ALLOTTED") return { label: `Allotted · ${item.allottedKitta} kitta`, variant: "allotted" };
     if (r === "NOT_ALLOTTED") return { label: "Amount released", variant: "released" };
     return { label: "Amount blocked", variant: "blocked" };
   }
   if (item.status === "ALREADY_APPLIED") return { label: "Already applied", variant: "warning" };
-  if (item.status === "FAILED")          return { label: "Failed",          variant: "failed"  };
-  if (item.status === "PENDING")         return { label: "Pending",         variant: "pending" };
+  if (item.status === "FAILED") return { label: "Failed", variant: "failed" };
+  if (item.status === "PENDING") return { label: "Pending", variant: "pending" };
   return { label: item.status ?? "—", variant: "pending" };
 };
 
@@ -59,19 +61,19 @@ const StatCard = ({ icon, label, value, color, loading, delay }) => (
       <div className={`stat-icon-wrap stat-icon-${color}`}>{icon}</div>
       <div className="stat-body">
         <p className="stat-label">{label}</p>
-        {loading
-            ? <Skeleton h={36} w="52px" style={{ marginTop: 6, borderRadius: 6 }} />
-            : <p className={`stat-value stat-value-${color}`}>{value ?? "—"}</p>
-        }
+        {loading ? (
+            <Skeleton h={36} w="52px" style={{ marginTop: 6, borderRadius: 6 }} />
+        ) : (
+            <p className={`stat-value stat-value-${color}`}>{value ?? "—"}</p>
+        )}
       </div>
     </div>
 );
 
-/* CDSC table with mobile expand/collapse */
 const CdscTable = ({ items, isMobile, expanded, onExpand, onCollapse }) => {
   const visible = isMobile && !expanded ? items.slice(0, CDSC_MOBILE_LIMIT) : items;
   const showSeeAll = isMobile && !expanded && items.length > CDSC_MOBILE_LIMIT;
-  const showLess   = isMobile && expanded  && items.length > CDSC_MOBILE_LIMIT;
+  const showLess = isMobile && expanded && items.length > CDSC_MOBILE_LIMIT;
 
   return (
       <>
@@ -80,7 +82,6 @@ const CdscTable = ({ items, isMobile, expanded, onExpand, onCollapse }) => {
             <thead>
             <tr>
               <th>Company</th>
-              {/* hidden on mobile via col-type */}
               <th className="col-type">Type</th>
               <th>Result</th>
             </tr>
@@ -96,11 +97,11 @@ const CdscTable = ({ items, isMobile, expanded, onExpand, onCollapse }) => {
                     <span className="cell-type">{item.shareTypeName || "—"}</span>
                   </td>
                   <td>
-                      <span className={`badge ${cdscResultBadgeClass(item.resultStatus)}`}>
-                        {item.resultStatus === "ALLOTTED"     && <span className="badge-dot badge-dot-success" />}
-                        {item.resultStatus === "NOT_ALLOTTED" && <span className="badge-dot badge-dot-danger"  />}
-                        {item.resultStatus?.replace(/_/g, " ") ?? "—"}
-                      </span>
+                  <span className={`badge ${cdscResultBadgeClass(item.resultStatus)}`}>
+                    {item.resultStatus === "ALLOTTED" && <span className="badge-dot badge-dot-success" />}
+                    {item.resultStatus === "NOT_ALLOTTED" && <span className="badge-dot badge-dot-danger" />}
+                    {item.resultStatus?.replace(/_/g, " ") ?? "—"}
+                  </span>
                   </td>
                 </tr>
             ))}
@@ -121,22 +122,20 @@ const CdscTable = ({ items, isMobile, expanded, onExpand, onCollapse }) => {
   );
 };
 
-const PIE_COLORS = ["var(--success)", "var(--danger)", "var(--border-strong)"];
-
 const Dashboard = () => {
   const { user } = useAuth();
   const { activeAccount, accounts, loading: accountLoading } = useAccount();
 
-  const [allHistory, setAllHistory]         = useState([]);
+  const [allHistory, setAllHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
 
-  const [cdscSummary, setCdscSummary]       = useState(null);
-  const [cdscLoading, setCdscLoading]       = useState(false);
-  const [cdscError, setCdscError]           = useState(null);
+  const [cdscSummary, setCdscSummary] = useState(null);
+  const [cdscLoading, setCdscLoading] = useState(false);
+  const [cdscError, setCdscError] = useState(null);
   const [cdscRefreshing, setCdscRefreshing] = useState(false);
-  const [cdscExpanded, setCdscExpanded]     = useState(false);
+  const [cdscExpanded, setCdscExpanded] = useState(false);
 
-  /* true when viewport is narrower than 480px */
+  /* Viewport query */
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 480);
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 479px)");
@@ -145,6 +144,7 @@ const Dashboard = () => {
     return () => mq.removeEventListener("change", handler);
   }, []);
 
+  /* Fetch global history once */
   useEffect(() => {
     let cancelled = false;
     setHistoryLoading(true);
@@ -164,7 +164,9 @@ const Dashboard = () => {
     return () => { cancelled = true; };
   }, []);
 
+  /* CDSC Data Fetcher */
   const fetchCdscSummary = useCallback(async (accountId, isRefresh = false) => {
+    if (!accountId) return;
     if (isRefresh) {
       setCdscRefreshing(true);
     } else {
@@ -183,16 +185,18 @@ const Dashboard = () => {
     }
   }, []);
 
+  /* Fetch CDSC summary when active account changes */
+  const activeAccountId = activeAccount?.id;
   useEffect(() => {
     if (accountLoading) return;
-    if (!activeAccount) {
+    if (!activeAccountId) {
       setCdscSummary(null);
       setCdscError(null);
       return;
     }
     setCdscExpanded(false);
-    fetchCdscSummary(activeAccount.id, false);
-  }, [activeAccount, accountLoading, fetchCdscSummary]);
+    fetchCdscSummary(activeAccountId, false);
+  }, [activeAccountId, accountLoading, fetchCdscSummary]);
 
   const history = useMemo(() => {
     if (!activeAccount) return [];
@@ -209,11 +213,11 @@ const Dashboard = () => {
     }, []);
   }, [cdscSummary]);
 
-  const pieData = cdscSummary ? [
-    { name: "Allotted",     value: cdscSummary.allotted      },
-    { name: "Not Allotted", value: cdscSummary.failed        },
-    { name: "Pending",      value: cdscSummary.notPublished  },
-  ] : [];
+  const pieData = useMemo(() => cdscSummary ? [
+    { name: "Allotted", value: cdscSummary.allotted },
+    { name: "Not Allotted", value: cdscSummary.failed },
+    { name: "Pending", value: cdscSummary.notPublished },
+  ] : [], [cdscSummary]);
 
   const statsLoading = accountLoading || cdscLoading;
   const localLoading = accountLoading || historyLoading;
@@ -221,14 +225,13 @@ const Dashboard = () => {
   return (
       <Layout>
         <div className="page">
-
           <div className="dash-header">
             <div>
               <h1 className="page-title">Dashboard</h1>
               <p className="page-subtitle">Welcome back, <strong>{user?.username}</strong></p>
             </div>
             <div className="dash-header-actions">
-              <Link to="/accounts/add" className="btn btn-ghost btn-sm"><IconPlus /> Account</Link>
+              <Link to="/settings/accounts/add" className="btn btn-ghost btn-sm"><IconPlus /> Account</Link>
               <Link to="/ipo/apply" className="btn btn-primary btn-sm"><IconFile /> Apply IPO</Link>
             </div>
           </div>
@@ -266,28 +269,30 @@ const Dashboard = () => {
                 )}
 
                 <div className="dash-stats">
-                  <StatCard icon={<IconStack />} label="Total Applied"  value={cdscSummary?.total}        color="accent"  loading={statsLoading} delay="0ms"   />
-                  <StatCard icon={<IconCheck />} label="Allotted"       value={cdscSummary?.allotted}     color="success" loading={statsLoading} delay="60ms"  />
-                  <StatCard icon={<IconX />}     label="Not Allotted"   value={cdscSummary?.failed}       color="danger"  loading={statsLoading} delay="120ms" />
-                  <StatCard icon={<IconClock />} label="Pending"        value={cdscSummary?.notPublished} color="muted"   loading={statsLoading} delay="180ms" />
+                  <StatCard icon={<IconStack />} label="Total Applied" value={cdscSummary?.total} color="accent" loading={statsLoading} delay="0ms" />
+                  <StatCard icon={<IconCheck />} label="Allotted" value={cdscSummary?.allotted} color="success" loading={statsLoading} delay="60ms" />
+                  <StatCard icon={<IconX />} label="Not Allotted" value={cdscSummary?.failed} color="danger" loading={statsLoading} delay="120ms" />
+                  <StatCard icon={<IconClock />} label="Pending" value={cdscSummary?.notPublished} color="muted" loading={statsLoading} delay="180ms" />
                 </div>
 
                 {cdscSummary && cdscSummary.total > 0 && (
                     <div className="dash-charts">
                       <div className="card dash-chart-card anim-fade-up" style={{ animationDelay: "200ms" }}>
                         <p className="chart-label">Cumulative applications</p>
-                        <ResponsiveContainer width="100%" height={128}>
-                          <AreaChart data={areaData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
-                            <defs>
-                              <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%"  stopColor="var(--accent)" stopOpacity={0.2} />
-                                <stop offset="95%" stopColor="var(--accent)" stopOpacity={0}   />
-                              </linearGradient>
-                            </defs>
-                            <Area type="monotone" dataKey="total" stroke="var(--accent)" strokeWidth={2} fill="url(#areaGrad)" dot={false} />
-                            <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={{ color: "var(--text-2)" }} />
-                          </AreaChart>
-                        </ResponsiveContainer>
+                        <div style={{ width: "100%", height: 128 }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={areaData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+                              <defs>
+                                <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.2} />
+                                  <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
+                                </linearGradient>
+                              </defs>
+                              <Area type="monotone" dataKey="total" stroke="var(--accent)" strokeWidth={2} fill="url(#areaGrad)" dot={false} />
+                              <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={{ color: "var(--text-2)" }} />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
                       </div>
 
                       <div className="card dash-chart-card anim-fade-up" style={{ animationDelay: "260ms" }}>
@@ -296,25 +301,27 @@ const Dashboard = () => {
                             <div className="inline-empty" style={{ height: 128 }}>No results yet</div>
                         ) : (
                             <>
-                              <ResponsiveContainer width="100%" height={100}>
-                                <PieChart>
-                                  <Pie
-                                      data={pieData}
-                                      dataKey="value"
-                                      outerRadius={44}
-                                      innerRadius={26}
-                                      paddingAngle={2}
-                                  >
-                                    {pieData.map((entry, index) => (
-                                        <Cell key={entry.name} fill={PIE_COLORS[index]} />
-                                    ))}
-                                  </Pie>
-                                  <Tooltip contentStyle={TOOLTIP_STYLE} />
-                                </PieChart>
-                              </ResponsiveContainer>
+                              <div style={{ width: "100%", height: 100 }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <PieChart>
+                                    <Pie
+                                        data={pieData}
+                                        dataKey="value"
+                                        outerRadius={44}
+                                        innerRadius={26}
+                                        paddingAngle={2}
+                                    >
+                                      {pieData.map((entry, index) => (
+                                          <Cell key={entry.name} fill={PIE_COLORS[index]} />
+                                      ))}
+                                    </Pie>
+                                    <Tooltip contentStyle={TOOLTIP_STYLE} />
+                                  </PieChart>
+                                </ResponsiveContainer>
+                              </div>
                               <div className="pie-legend">
                                 <span className="pie-legend-item"><span className="pie-dot" style={{ background: "var(--success)" }} />Allotted</span>
-                                <span className="pie-legend-item"><span className="pie-dot" style={{ background: "var(--danger)"  }} />Not allotted</span>
+                                <span className="pie-legend-item"><span className="pie-dot" style={{ background: "var(--danger)" }} />Not allotted</span>
                                 <span className="pie-legend-item"><span className="pie-dot" style={{ background: "var(--border-strong)" }} />Pending</span>
                               </div>
                             </>
@@ -326,15 +333,15 @@ const Dashboard = () => {
                 <div className="dash-main">
                   <div className="dash-main-primary">
                     <div className="section-head">
-                      <span className="section-title-sm">
-                        CDSC history
-                        {cdscSummary && <span className="section-count">{cdscSummary.total}</span>}
-                      </span>
+                  <span className="section-title-sm">
+                    CDSC history
+                    {cdscSummary && <span className="section-count">{cdscSummary.total}</span>}
+                  </span>
                     </div>
                     <div className="card">
                       {cdscLoading ? (
                           <div className="table-skeleton">
-                            {[1,2,3,4,5].map(k => (
+                            {[1, 2, 3, 4, 5].map(k => (
                                 <div key={k} className="table-skeleton-row">
                                   <div style={{ flex: 1 }}>
                                     <Skeleton h={12} w="60%" />
@@ -376,7 +383,7 @@ const Dashboard = () => {
                       <div className="card">
                         {localLoading ? (
                             <div className="table-skeleton">
-                              {[1,2,3].map(k => (
+                              {[1, 2, 3].map(k => (
                                   <div key={k} className="table-skeleton-row">
                                     <Skeleton h={12} w="55%" />
                                     <Skeleton h={22} w="100px" style={{ borderRadius: 20 }} />
@@ -401,9 +408,9 @@ const Dashboard = () => {
                                       <tr key={item.id}>
                                         <td><span className="cell-primary">{item.companyName}</span></td>
                                         <td>
-                                            <span className={`h-status-badge h-status-${derived.variant}`}>
-                                              {derived.label}
-                                            </span>
+                                    <span className={`h-status-badge h-status-${derived.variant}`}>
+                                      {derived.label}
+                                    </span>
                                         </td>
                                       </tr>
                                   );
@@ -418,12 +425,12 @@ const Dashboard = () => {
                     <div>
                       <div className="section-head">
                         <span className="section-title-sm">Accounts <span className="section-count">{accounts.length}</span></span>
-                        <Link to="/accounts/add" className="section-link">Manage</Link>
+                        <Link to="/settings/accounts" className="section-link">Manage</Link>
                       </div>
                       <div className="card">
                         {accounts.length === 0 ? (
                             <div className="inline-empty">
-                              <Link to="/accounts/add" className="inline-link-btn">Add an account</Link>
+                              <Link to="settings/accounts/add" className="inline-link-btn">Add an account</Link>
                             </div>
                         ) : (
                             <div className="account-list">

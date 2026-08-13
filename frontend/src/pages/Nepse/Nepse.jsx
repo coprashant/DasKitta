@@ -1,4 +1,4 @@
-import {useState, useEffect, useCallback, useRef, useMemo} from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
     getNepseIndex,
     isNepseOpen,
@@ -10,7 +10,6 @@ import {
     getTopTransaction,
     getSupplyDemand,
     getNepseSubIndices,
-    getTradeTurnoverSubindices,
     getFloorsheet,
     getDailyNepseIndexGraph,
     getDailyBankSubindexGraph,
@@ -39,26 +38,25 @@ import {
     MiniSpark,
     TermSearch,
     EmptyRow,
-    SkeletonRows
+    SkeletonRows,
 } from "./nepseShared.jsx";
 import "./Nepse.css";
 
 const REFRESH_INTERVAL = 30000;
 
-// maps a sector label to its daily graph endpoint
 const SECTOR_GRAPH_RULES = [
-    {test: /development|dev bank/i, fetch: getDailyDevBankSubindexGraph},
-    {test: /\bbank/i, fetch: getDailyBankSubindexGraph},
-    {test: /finance/i, fetch: getDailyFinanceSubindexGraph},
-    {test: /hotel|tourism/i, fetch: getDailyHotelTourismSubindexGraph},
-    {test: /hydro/i, fetch: getDailyHydroPowerSubindexGraph},
-    {test: /investment/i, fetch: getDailyInvestmentSubindexGraph},
-    {test: /non.?life/i, fetch: getDailyNonLifeInsuranceSubindexGraph},
-    {test: /life insurance/i, fetch: getDailyLifeInsuranceSubindexGraph},
-    {test: /manufactur/i, fetch: getDailyManufacturingSubindexGraph},
-    {test: /microfinance/i, fetch: getDailyMicrofinanceSubindexGraph},
-    {test: /mutual fund/i, fetch: getDailyMutualFundSubindexGraph},
-    {test: /trading/i, fetch: getDailyTradingSubindexGraph},
+    { test: /development|dev bank/i, fetch: getDailyDevBankSubindexGraph },
+    { test: /\bbank/i, fetch: getDailyBankSubindexGraph },
+    { test: /finance/i, fetch: getDailyFinanceSubindexGraph },
+    { test: /hotel|tourism/i, fetch: getDailyHotelTourismSubindexGraph },
+    { test: /hydro/i, fetch: getDailyHydroPowerSubindexGraph },
+    { test: /investment/i, fetch: getDailyInvestmentSubindexGraph },
+    { test: /non.?life/i, fetch: getDailyNonLifeInsuranceSubindexGraph },
+    { test: /life insurance/i, fetch: getDailyLifeInsuranceSubindexGraph },
+    { test: /manufactur/i, fetch: getDailyManufacturingSubindexGraph },
+    { test: /microfinance/i, fetch: getDailyMicrofinanceSubindexGraph },
+    { test: /mutual fund/i, fetch: getDailyMutualFundSubindexGraph },
+    { test: /trading/i, fetch: getDailyTradingSubindexGraph },
 ];
 
 function matchSectorGraph(name = "") {
@@ -66,18 +64,17 @@ function matchSectorGraph(name = "") {
     return rule ? rule.fetch : getDailyOthersSubindexGraph;
 }
 
-// normalizes api responses that may come back as an array or an object map
 function toList(raw) {
-    return Array.isArray(raw) ? raw : (raw?.data ?? Object.values(raw ?? {}));
+    return Array.isArray(raw) ? raw : raw?.data ?? Object.values(raw ?? {});
 }
 
-// normalizes api responses into a list, keeping the entry name when object keyed
 function toNamedList(raw) {
-    return Array.isArray(raw) ? raw : Object.entries(raw ?? {}).map(([name, v]) => ({name, ...v}));
+    return Array.isArray(raw)
+        ? raw
+        : Object.entries(raw ?? {}).map(([name, v]) => ({ name, ...v }));
 }
 
-// dense mover row for the movers tab
-function MoverRow({item, tone}) {
+function MoverRow({ item, tone }) {
     const pct = item.percentageChange ?? 0;
     return (
         <div className="ledger-row">
@@ -85,20 +82,20 @@ function MoverRow({item, tone}) {
             <span className="ledger-row-right">
         <span className="ledger-ltp">{fmt(item.ltp)}</span>
         <span className={`ledger-pct ${tone}`}>
-          <Arrow up={tone === "up"}/> {pct >= 0 ? "+" : ""}{fmt(pct)}%
+          <Arrow up={tone === "up"} /> {pct >= 0 ? "+" : ""}
+            {fmt(pct)}%
         </span>
       </span>
         </div>
     );
 }
 
-// one item in the summary ticker tape, duplicated for the mobile loop
-function TickerItems({summary, dupSuffix = ""}) {
+function TickerItems({ summary, dupSuffix = "" }) {
     return Object.entries(summary).map(([k, v]) => (
         <span key={`${k}${dupSuffix}`} className="term-ticker-item">
-            <span className="ledger-label">{k}</span>
-            <span>{fmtCompact(typeof v === "object" ? JSON.stringify(v) : v)}</span>
-        </span>
+      <span className="ledger-label">{k}</span>
+      <span>{fmtCompact(typeof v === "object" ? JSON.stringify(v) : v)}</span>
+    </span>
     ));
 }
 
@@ -122,7 +119,6 @@ export default function Nepse() {
     const [topTransaction, setTopTransaction] = useState([]);
     const [supplyDemand, setSupplyDemand] = useState([]);
     const [sectors, setSectors] = useState([]);
-    const [sectorTurnover, setSectorTurnover] = useState([]);
     const [floorsheet, setFloorsheet] = useState(null);
     const [feedLoading, setFeedLoading] = useState(true);
 
@@ -134,25 +130,31 @@ export default function Nepse() {
     const startX = useRef(0);
     const scrollLeft = useRef(0);
 
-    // mouse drag controls for mobile, tablet, and desktop touch simulation
-    const handleMouseDown = useCallback((e) => {
+    // Mouse/Touch Drag Controls using Pointer Events (Prevents Stuck Dragging)
+    const handlePointerDown = (e) => {
         isDragging.current = true;
         startX.current = e.pageX - tickerRef.current.offsetLeft;
         scrollLeft.current = tickerRef.current.scrollLeft;
-    }, []);
+        tickerRef.current.setPointerCapture(e.pointerId);
+    };
 
-    const handleMouseLeaveOrUp = useCallback(() => {
+    const handlePointerUpOrCancel = (e) => {
         isDragging.current = false;
-    }, []);
+        try {
+            tickerRef.current.releasePointerCapture(e.pointerId);
+        } catch {
+            // Ignore if pointer capture was already released
+        }
+    };
 
-    const handleMouseMove = useCallback((e) => {
+    const handlePointerMove = (e) => {
         if (!isDragging.current) return;
-        e.preventDefault();
         const x = e.pageX - tickerRef.current.offsetLeft;
-        const walk = (x - startX.current) * 1.5; // multiplier for fast scroll
+        const walk = (x - startX.current) * 1.5;
         tickerRef.current.scrollLeft = scrollLeft.current - walk;
-    }, []);
+    };
 
+    // Safe Core Fetching
     const fetchCore = useCallback(async () => {
         try {
             const [openRes, indexRes, summaryRes, graphRes] = await Promise.all([
@@ -167,7 +169,7 @@ export default function Nepse() {
             setGraphData(toList(graphRes.data));
             setError(null);
         } catch (e) {
-            setError("data feed unavailable");
+            setError("Data feed unavailable");
         } finally {
             setLoading(false);
         }
@@ -179,9 +181,11 @@ export default function Nepse() {
         return () => clearInterval(id);
     }, [fetchCore]);
 
+    // Safe Tab Data Fetching with Cancellation Handling
     useEffect(() => {
         let alive = true;
         setFeedLoading(true);
+
         const load = async () => {
             try {
                 if (feed === "Movers" && !gainers.length) {
@@ -189,14 +193,15 @@ export default function Nepse() {
                     if (!alive) return;
                     setGainers(g.data ?? []);
                     setLosers(l.data ?? []);
-                }
-                if (feed === "Turnover" && !turnover.length) {
+                } else if (feed === "Turnover" && !turnover.length) {
                     const t = await getTopTurnover();
                     if (!alive) return;
                     setTurnover(t.data ?? []);
-                }
-                if (feed === "Activity" && !topTrade.length) {
-                    const [t, tr] = await Promise.all([getTopTrade(), getTopTransaction()]);
+                } else if (feed === "Activity" && !topTrade.length) {
+                    const [t, tr] = await Promise.all([
+                        getTopTrade(),
+                        getTopTransaction(),
+                    ]);
                     if (!alive) return;
                     setTopTrade(t.data ?? []);
                     setTopTransaction(tr.data ?? []);
@@ -205,35 +210,29 @@ export default function Nepse() {
                         if (!alive) return;
                         setSupplyDemand(toList(sd.data));
                     } catch {
-                        // imbalance list is a bonus section, missing it should not break trade and transaction data
+                        // Non-critical endpoint ignore
                     }
-                }
-                if (feed === "Sectors" && !sectors.length) {
+                } else if (feed === "Sectors" && !sectors.length) {
                     const s = await getNepseSubIndices();
                     if (!alive) return;
                     setSectors(toNamedList(s.data));
-                    try {
-                        const st = await getTradeTurnoverSubindices();
-                        if (!alive) return;
-                        setSectorTurnover(toNamedList(st.data));
-                    } catch {
-                        // turnover per sector is a bonus column, missing it should not break the sector list
-                    }
-                }
-                if (feed === "Floorsheet" && !floorsheet) {
+                } else if (feed === "Floorsheet" && !floorsheet) {
                     const f = await getFloorsheet();
                     if (!alive) return;
                     setFloorsheet(f.data);
                 }
             } finally {
-                if (alive) setFeedLoading(false);
+                if (alive) {
+                    setFeedLoading(false);
+                }
             }
         };
+
         load();
         return () => {
             alive = false;
         };
-    }, [feed]);
+    }, [feed, gainers.length, turnover.length, topTrade.length, sectors.length, floorsheet]);
 
     const heroKey = resolveHeroKey(indices);
     const heroEntry = heroKey ? indices?.[heroKey] : null;
@@ -246,26 +245,25 @@ export default function Nepse() {
         [indices, heroKey]
     );
 
-    const openBool = typeof marketOpen === "object"
-        ? marketOpen?.isOpen === "OPEN"
-        : marketOpen === true || marketOpen === "OPEN";
+    const openBool =
+        typeof marketOpen === "object"
+            ? marketOpen?.isOpen === "OPEN"
+            : marketOpen === true || marketOpen === "OPEN";
 
     const floorRows = useMemo(
-        () => (Array.isArray(floorsheet) ? floorsheet : (floorsheet?.floorsheets?.content ?? [])),
+        () => (Array.isArray(floorsheet) ? floorsheet : floorsheet?.floorsheets?.content ?? []),
         [floorsheet]
     );
 
-    // the subindex endpoint returns every index including the main ones already
-    // shown up top, so drop anything whose name is already in the index strip
     const sectorRows = useMemo(
-        () => sectors.filter((s) => !indices || !Object.prototype.hasOwnProperty.call(indices, s.name ?? s.index ?? "")),
+        () =>
+            sectors.filter(
+                (s) =>
+                    !indices ||
+                    !Object.prototype.hasOwnProperty.call(indices, s.name ?? s.index ?? "")
+            ),
         [sectors, indices]
     );
-
-    const sectorTurnoverFor = useCallback((name) => {
-        const hit = sectorTurnover.find((t) => (t.name ?? "").toLowerCase().includes(name.toLowerCase().split(" ")[0]));
-        return hit?.turnover ?? hit?.totalTurnover ?? null;
-    }, [sectorTurnover]);
 
     const toggleSector = async (name) => {
         if (expandedSector === name) {
@@ -277,9 +275,9 @@ export default function Nepse() {
             try {
                 const fetcher = matchSectorGraph(name);
                 const res = await fetcher();
-                setSectorGraphs((prev) => ({...prev, [name]: toList(res.data)}));
+                setSectorGraphs((prev) => ({ ...prev, [name]: toList(res.data) }));
             } catch {
-                setSectorGraphs((prev) => ({...prev, [name]: []}));
+                setSectorGraphs((prev) => ({ ...prev, [name]: [] }));
             }
         }
     };
@@ -287,29 +285,33 @@ export default function Nepse() {
     return (
         <Layout>
             <div className="term-shell">
-                {/* header */}
+                {/* Header */}
                 <header className="term-header">
                     <div className="term-brand">
                         <span className="term-brand-name">NEPSE</span>
                         <span className="term-brand-tag">live market feed</span>
                     </div>
 
-                    <TermSearch/>
+                    <TermSearch />
 
                     <div className="term-header-right">
             <span className={`term-status ${openBool ? "open" : "closed"}`}>
-              <span className="term-status-dot"/>
-                {marketOpen === null ? "connecting" : openBool ? "market open" : "market closed"}
+              <span className="term-status-dot" />
+                {marketOpen === null
+                    ? "connecting"
+                    : openBool
+                        ? "market open"
+                        : "market closed"}
             </span>
                         <span className="term-clock">
-              {clock.toLocaleTimeString("en-NP", {hour12: false})}
+              {clock.toLocaleTimeString("en-NP", { hour12: false })}
             </span>
                     </div>
                 </header>
 
                 {error && <div className="term-alert">{error}</div>}
 
-                {/* asymmetrical canvas */}
+                {/* Main Canvas */}
                 <div className="term-grid">
                     <div className="term-primary">
                         <HeroChart
@@ -324,34 +326,38 @@ export default function Nepse() {
                             <div
                                 className="term-ticker"
                                 ref={tickerRef}
-                                onMouseDown={handleMouseDown}
-                                onMouseLeave={handleMouseLeaveOrUp}
-                                onMouseUp={handleMouseLeaveOrUp}
-                                onMouseMove={handleMouseMove}
+                                onPointerDown={handlePointerDown}
+                                onPointerUp={handlePointerUpOrCancel}
+                                onPointerCancel={handlePointerUpOrCancel}
+                                onPointerMove={handlePointerMove}
                             >
                                 <div className="term-ticker-track">
-                                    <TickerItems summary={summary}/>
+                                    <TickerItems summary={summary} />
                                 </div>
-
-                                {/* duplicate track only rendered for mobile loop continuity */}
-                                <div className="term-ticker-track mobile-only-duplicate" aria-hidden="true">
-                                    <TickerItems summary={summary} dupSuffix="-dup"/>
+                                <div
+                                    className="term-ticker-track mobile-only-duplicate"
+                                    aria-hidden="true"
+                                >
+                                    <TickerItems summary={summary} dupSuffix="-dup" />
                                 </div>
                             </div>
                         )}
 
                         <div className="index-strip">
                             {loading
-                                ? [1, 2, 3, 4].map((i) => <div key={i} className="skel index-skel"/>)
+                                ? [1, 2, 3, 4].map((i) => <div key={i} className="skel index-skel" />)
                                 : secondaryIndices.map(([name, d]) => {
                                     const change = d.percentageChange ?? d.perChange ?? 0;
                                     return (
                                         <div key={name} className="index-item">
                                             <span className="index-name">{name}</span>
-                                            <span className="index-value">{fmt(d.currentValue ?? d.value)}</span>
+                                            <span className="index-value">
+                          {fmt(d.currentValue ?? d.value)}
+                        </span>
                                             <span className={`index-change ${dirClass(change)}`}>
-                          <Arrow up={change >= 0} flat={change === 0}/>
-                                                {change >= 0 ? "+" : ""}{fmt(change)}%
+                          <Arrow up={change >= 0} flat={change === 0} />
+                                                {change >= 0 ? "+" : ""}
+                                                {fmt(change)}%
                         </span>
                                         </div>
                                     );
@@ -359,31 +365,32 @@ export default function Nepse() {
                         </div>
                     </div>
 
-                    {/* borderless ledger */}
+                    {/* Ledger Sidebar */}
                     <aside className="term-ledger">
                         <div className="ledger-tabs">
-                            {["Movers", "Turnover", "Activity", "Sectors", "Floorsheet"].map((tab) => (
-                                <button
-                                    key={tab}
-                                    className={`ledger-tab ${feed === tab ? "active" : ""}`}
-                                    onClick={() => setFeed(tab)}
-                                >
-                                    {tab}
-                                </button>
-                            ))}
+                            {["Movers", "Turnover", "Activity", "Sectors", "Floorsheet"].map(
+                                (tab) => (
+                                    <button
+                                        key={tab}
+                                        className={`ledger-tab ${feed === tab ? "active" : ""}`}
+                                        onClick={() => setFeed(tab)}
+                                    >
+                                        {tab}
+                                    </button>
+                                )
+                            )}
                         </div>
 
                         <div className="ledger-body">
                             {feed === "Movers" && (
                                 <>
-                                    {/* gainers section */}
                                     <p className="ledger-heading up">gainers</p>
                                     {feedLoading && !gainers.length ? (
-                                        <SkeletonRows count={3}/>
+                                        <SkeletonRows count={3} />
                                     ) : gainers.length ? (
                                         <>
                                             {gainers.slice(0, gainerLimit).map((r) => (
-                                                <MoverRow key={r.symbol} item={r} tone="up"/>
+                                                <MoverRow key={r.symbol} item={r} tone="up" />
                                             ))}
                                             <div className="ledger-actions">
                                                 {gainers.length > gainerLimit && (
@@ -391,7 +398,7 @@ export default function Nepse() {
                                                         className="ledger-action-btn up"
                                                         onClick={() => setGainerLimit((prev) => prev + 5)}
                                                     >
-                                                        More <Arrow up={false}/>
+                                                        More <Arrow up={false} />
                                                     </button>
                                                 )}
                                                 {gainerLimit > 5 && (
@@ -399,23 +406,22 @@ export default function Nepse() {
                                                         className="ledger-action-btn down"
                                                         onClick={() => setGainerLimit(5)}
                                                     >
-                                                        Less <Arrow up={true}/>
+                                                        Less <Arrow up={true} />
                                                     </button>
                                                 )}
                                             </div>
                                         </>
                                     ) : (
-                                        <EmptyRow label="no gainers yet"/>
+                                        <EmptyRow label="no gainers yet" />
                                     )}
 
-                                    {/* losers section */}
                                     <p className="ledger-heading down">losers</p>
                                     {feedLoading && !losers.length ? (
-                                        <SkeletonRows count={3}/>
+                                        <SkeletonRows count={3} />
                                     ) : losers.length ? (
                                         <>
                                             {losers.slice(0, loserLimit).map((r) => (
-                                                <MoverRow key={r.symbol} item={r} tone="down"/>
+                                                <MoverRow key={r.symbol} item={r} tone="down" />
                                             ))}
                                             <div className="ledger-actions">
                                                 {losers.length > loserLimit && (
@@ -423,7 +429,7 @@ export default function Nepse() {
                                                         className="ledger-action-btn up"
                                                         onClick={() => setLoserLimit((prev) => prev + 5)}
                                                     >
-                                                        More <Arrow up={false}/>
+                                                        More <Arrow up={false} />
                                                     </button>
                                                 )}
                                                 {loserLimit > 5 && (
@@ -431,13 +437,13 @@ export default function Nepse() {
                                                         className="ledger-action-btn down"
                                                         onClick={() => setLoserLimit(5)}
                                                     >
-                                                        Less <Arrow up={true}/>
+                                                        Less <Arrow up={true} />
                                                     </button>
                                                 )}
                                             </div>
                                         </>
                                     ) : (
-                                        <EmptyRow label="no losers yet"/>
+                                        <EmptyRow label="no losers yet" />
                                     )}
                                 </>
                             )}
@@ -446,7 +452,7 @@ export default function Nepse() {
                                 <>
                                     <p className="ledger-heading">top turnover</p>
                                     {feedLoading && !turnover.length ? (
-                                        <SkeletonRows count={4}/>
+                                        <SkeletonRows count={4} />
                                     ) : turnover.length ? (
                                         turnover.slice(0, 10).map((r) => (
                                             <div className="ledger-row ledger-row-4" key={r.symbol}>
@@ -456,7 +462,9 @@ export default function Nepse() {
                                                 <span className="ledger-ltp">{fmt(r.ltp)}</span>
                                             </div>
                                         ))
-                                    ) : <EmptyRow label="no turnover data yet"/>}
+                                    ) : (
+                                        <EmptyRow label="no turnover data yet" />
+                                    )}
                                 </>
                             )}
 
@@ -464,48 +472,65 @@ export default function Nepse() {
                                 <>
                                     <p className="ledger-heading">top trade by volume</p>
                                     {feedLoading && !topTrade.length ? (
-                                        <SkeletonRows count={3}/>
+                                        <SkeletonRows count={3} />
                                     ) : topTrade.length ? (
                                         topTrade.slice(0, 6).map((r) => (
                                             <div className="ledger-row" key={r.symbol}>
                                                 <span className="ledger-sym">{r.symbol}</span>
-                                                <span
-                                                    className="ledger-num">{fmtCompact(r.shareTraded ?? r.totalTradeQuantity)}</span>
+                                                <span className="ledger-num">
+                          {fmtCompact(r.shareTraded ?? r.totalTradeQuantity)}
+                        </span>
                                             </div>
                                         ))
-                                    ) : <EmptyRow label="no trade data yet"/>}
+                                    ) : (
+                                        <EmptyRow label="no trade data yet" />
+                                    )}
 
                                     <p className="ledger-heading">top by transactions</p>
                                     {feedLoading && !topTransaction.length ? (
-                                        <SkeletonRows count={3}/>
+                                        <SkeletonRows count={3} />
                                     ) : topTransaction.length ? (
                                         topTransaction.slice(0, 6).map((r) => (
                                             <div className="ledger-row" key={r.symbol}>
                                                 <span className="ledger-sym">{r.symbol}</span>
-                                                <span
-                                                    className="ledger-num">{fmtCompact(r.totalTrades ?? r.transactionCount)}</span>
+                                                <span className="ledger-num">
+                          {fmtCompact(r.totalTrades ?? r.transactionCount)}
+                        </span>
                                             </div>
                                         ))
-                                    ) : <EmptyRow label="no transaction data yet"/>}
+                                    ) : (
+                                        <EmptyRow label="no transaction data yet" />
+                                    )}
 
                                     <p className="ledger-heading">supply demand imbalance</p>
                                     {feedLoading && !supplyDemand.length ? (
-                                        <SkeletonRows count={3}/>
+                                        <SkeletonRows count={3} />
                                     ) : supplyDemand.length ? (
                                         supplyDemand.slice(0, 6).map((r, i) => {
-                                            const buy = r.buyQuantity ?? r.totalBuyQty ?? r.buyQty ?? null;
-                                            const sell = r.sellQuantity ?? r.totalSellQty ?? r.sellQty ?? null;
+                                            const buy =
+                                                r.buyQuantity ?? r.totalBuyQty ?? r.buyQty ?? null;
+                                            const sell =
+                                                r.sellQuantity ?? r.totalSellQty ?? r.sellQty ?? null;
                                             return (
-                                                <div className="ledger-row ledger-row-3" key={r.symbol ?? i}>
-                                                    <span className="ledger-sym">{r.symbol ?? r.securityName}</span>
-                                                    <span
-                                                        className="ledger-num">{buy != null ? fmtCompact(buy) : "--"}</span>
-                                                    <span
-                                                        className="ledger-num">{sell != null ? fmtCompact(sell) : "--"}</span>
+                                                <div
+                                                    className="ledger-row ledger-row-3"
+                                                    key={r.symbol ?? i}
+                                                >
+                          <span className="ledger-sym">
+                            {r.symbol ?? r.securityName}
+                          </span>
+                                                    <span className="ledger-num">
+                            {buy != null ? fmtCompact(buy) : "--"}
+                          </span>
+                                                    <span className="ledger-num">
+                            {sell != null ? fmtCompact(sell) : "--"}
+                          </span>
                                                 </div>
                                             );
                                         })
-                                    ) : <EmptyRow label="no imbalance data yet"/>}
+                                    ) : (
+                                        <EmptyRow label="no imbalance data yet" />
+                                    )}
                                 </>
                             )}
 
@@ -513,41 +538,45 @@ export default function Nepse() {
                                 <>
                                     <p className="ledger-heading">sector sub indices</p>
                                     {feedLoading && !sectorRows.length ? (
-                                        <SkeletonRows count={4}/>
+                                        <SkeletonRows count={4} />
                                     ) : sectorRows.length ? (
                                         sectorRows.map((s) => {
                                             const name = s.name ?? s.index ?? "sector";
-                                            const change = s.percentageChange ?? s.perChange ?? s.change ?? 0;
-                                            const turn = sectorTurnoverFor(name);
+                                            const change =
+                                                s.percentageChange ?? s.perChange ?? s.change ?? 0;
                                             const expanded = expandedSector === name;
                                             return (
                                                 <div key={name} className="sector-block">
                                                     <div
-                                                        className="ledger-row ledger-row-3 sector-row"
+                                                        className="ledger-row sector-row"
                                                         role="button"
                                                         tabIndex={0}
                                                         onClick={() => toggleSector(name)}
                                                         onKeyDown={(e) => {
-                                                            if (e.key === "Enter") toggleSector(name);
+                                                            if (e.key === "Enter" || e.key === " ") {
+                                                                e.preventDefault();
+                                                                toggleSector(name);
+                                                            }
                                                         }}
                                                     >
                                                         <span className="ledger-sym">{name}</span>
                                                         <span className={`ledger-pct ${dirClass(change)}`}>
-                              <Arrow up={change >= 0} flat={change === 0}/>
-                                                            {change >= 0 ? "+" : ""}{fmt(change)}%
+                              <Arrow up={change >= 0} flat={change === 0} />
+                                                            {change >= 0 ? "+" : ""}
+                                                            {fmt(change)}%
                             </span>
-                                                        <span
-                                                            className="ledger-num">{turn ? fmtCompact(turn) : "--"}</span>
                                                     </div>
                                                     {expanded && (
                                                         <div className="sector-expand">
-                                                            <MiniSpark data={sectorGraphs[name]}/>
+                                                            <MiniSpark data={sectorGraphs[name]} />
                                                         </div>
                                                     )}
                                                 </div>
                                             );
                                         })
-                                    ) : <EmptyRow label="no sector data yet"/>}
+                                    ) : (
+                                        <EmptyRow label="no sector data yet" />
+                                    )}
                                 </>
                             )}
 
@@ -555,16 +584,22 @@ export default function Nepse() {
                                 <>
                                     <p className="ledger-heading">live contracts</p>
                                     {feedLoading && !floorRows.length ? (
-                                        <SkeletonRows count={4}/>
+                                        <SkeletonRows count={4} />
                                     ) : floorRows.length ? (
                                         floorRows.slice(0, 14).map((r, i) => (
                                             <div className="ledger-row ledger-row-3" key={i}>
                                                 <span className="ledger-sym">{r.stockSymbol}</span>
-                                                <span className="ledger-num">{fmt(r.contractQuantity, 0)}</span>
-                                                <span className="ledger-ltp">{fmt(r.contractRate)}</span>
+                                                <span className="ledger-num">
+                          {fmt(r.contractQuantity, 0)}
+                        </span>
+                                                <span className="ledger-ltp">
+                          {fmt(r.contractRate)}
+                        </span>
                                             </div>
                                         ))
-                                    ) : <EmptyRow label="no contracts yet"/>}
+                                    ) : (
+                                        <EmptyRow label="no contracts yet" />
+                                    )}
                                 </>
                             )}
                         </div>

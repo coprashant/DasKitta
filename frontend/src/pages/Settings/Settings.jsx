@@ -2,16 +2,16 @@ import { NavLink, Outlet } from "react-router-dom";
 import Layout from "../../components/Layout/Layout.jsx";
 import "./Settings.css";
 
-// tabs shown on every settings page
+// Tab configurations defined statically outside render
 const TABS = [
     { to: "/settings", label: "Profile", end: true },
-    { to: "/settings/accounts", label: "Accounts" },
-    { to: "/settings/accounts/add", label: "Add account" },
+    { to: "/settings/accounts", label: "Accounts", end: true },
+    { to: "/settings/accounts/add", label: "Add account", end: true },
 ];
 
 function SettingsMenu() {
     return (
-        <nav className="stg-menu">
+        <nav className="stg-menu" aria-label="Settings navigation">
             {TABS.map((tab) => (
                 <NavLink
                     key={tab.to}
@@ -32,14 +32,18 @@ export default function Settings() {
     return (
         <Layout>
             <div className="page stg-page">
-                <h1 className="page-title">Settings</h1>
-                <p className="page-subtitle">Manage your profile and your Meroshare accounts</p>
+                <header className="stg-header">
+                    <h1 className="page-title">Settings</h1>
+                    <p className="page-subtitle">
+                        Manage your profile and your Meroshare accounts
+                    </p>
+                </header>
 
                 <SettingsMenu />
 
-                <div className="stg-content anim-fade-up">
+                <main className="stg-content anim-fade-up">
                     <Outlet />
-                </div>
+                </main>
             </div>
         </Layout>
     );
