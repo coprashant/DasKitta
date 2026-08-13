@@ -30,7 +30,7 @@ import java.time.LocalDate;
 @Service
 public class NepseService {
 
-    // ── API endpoint paths ────────────────────────────────────────────────────
+    // API endpoint paths
     private static final String PRICE_VOLUME_URL          = "/api/nots/securityDailyTradeStat/58";
     private static final String SUMMARY_URL               = "/api/nots/market-summary/";
     private static final String SUPPLY_DEMAND_URL         = "/api/nots/nepse-data/supplydemand";
@@ -96,7 +96,7 @@ public class NepseService {
         this.staticTtl      = Duration.ofHours(staticTtlHours);
     }
 
-    // ── Cache aside helper ───────────────────────────────────────────────────
+    // Cache aside helper
 
     // Reads from redis first. On a miss, subscribes to the loader, stores the
     // result with the given ttl, then returns it
@@ -111,7 +111,7 @@ public class NepseService {
         return cached(cacheKey, liveTtl, loader);
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // Helpers
 
     private Mono<Object> postWithPayload(String path) {
         NepseDummyIdManager.DummyEntry e = dummyIdManager.getDummyEntry();
@@ -128,7 +128,7 @@ public class NepseService {
         return client.post(path, client.getPostPayloadIdForFloorSheet(e.id(), e.value()));
     }
 
-    // ── Live Market ───────────────────────────────────────────────────────────
+    // Live Market
 
     public Mono<Object> getLiveMarket() {
         return cachedLive("live-market", client.get(LIVE_MARKET_URL));
@@ -150,7 +150,7 @@ public class NepseService {
         return cachedLive("is-open", client.get(NEPSE_OPEN_URL));
     }
 
-    // ── Gainers / Losers / Top scrips ─────────────────────────────────────────
+    // Gainers Losers Top scrips
 
     public Mono<Object> getTopGainers() {
         return cachedLive("top-gainers", client.get(TOP_GAINERS_URL));
@@ -176,7 +176,7 @@ public class NepseService {
         return cachedLive("supply-demand", client.get(SUPPLY_DEMAND_URL));
     }
 
-    // ── Company / Security ────────────────────────────────────────────────────
+    // Company Security
 
     public Mono<Object> getCompanyList() {
         return cachedLive("companies", client.get(COMPANY_LIST_URL));
@@ -202,27 +202,27 @@ public class NepseService {
     public Mono<Object> getCompanyPriceVolumeHistory(long companyId, String startDate, String endDate) {
         String key = "price-volume-history:" + companyId + ":" + startDate + ":" + endDate;
         return cachedLive(key, client.get(COMPANY_PRICE_VOL_HIST + companyId
-                + "?&size=500&startDate=" + startDate + "&endDate=" + endDate));
+                + "?size=500&startDate=" + startDate + "&endDate=" + endDate));
     }
 
     public Mono<Object> getMarketDepth(long companyId) {
         return cachedLive("market-depth:" + companyId, client.get(MARKET_DEPTH + companyId + "/"));
     }
 
-    // ── Floorsheet ────────────────────────────────────────────────────────────
+    // Floorsheet
 
     public Mono<Object> getFloorSheet() {
-        return cachedLive("floorsheet", postWithFloorsheetPayload(FLOOR_SHEET + "?&size=500&sort=contractId,desc"));
+        return cachedLive("floorsheet", postWithFloorsheetPayload(FLOOR_SHEET + "?size=500&sort=contractId,desc"));
     }
 
     public Mono<Object> getFloorSheetOf(long companyId) {
         String today = LocalDate.now().toString();
         return cachedLive("floorsheet:" + companyId + ":" + today,
                 postWithFloorsheetPayload(COMPANY_FLOORSHEET + companyId
-                        + "?&businessDate=" + today + "&size=500&sort=contractid,desc"));
+                        + "?businessDate=" + today + "&size=500&sort=contractid,desc"));
     }
 
-    // ── Index graphs ──────────────────────────────────────────────────────────
+    // Index graphs
 
     public Mono<Object> getDailyNepseIndexGraph() {
         return cachedLive("graph:nepse", postWithPayload(NEPSE_INDEX_GRAPH));
@@ -292,7 +292,7 @@ public class NepseService {
         return cachedLive("graph:trading", postWithPayload(TRADING_SUBINDEX_GRAPH));
     }
 
-    // ── Response transformers (mirror Python server's reshaping) ─────────────
+    // Response transformers (mirror Python server's reshaping)
 
     /** [{detail:"Total Turnover Rs:", value:123}, ...] converts to {"Total Turnover Rs:": 123, ...} */
     private Object summaryArrayToMap(Object raw) {

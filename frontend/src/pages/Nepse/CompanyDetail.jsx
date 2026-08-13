@@ -1,13 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
-import {
-    getCompanyDetails,
-    getDailyScripPriceGraph,
-    getMarketDepth,
-    getPriceVolumeHistory,
-    getFloorsheetOf,
-    getPriceVolume,
-} from "../../api/nepse";
+import { getCompanyDetails, getDailyScripPriceGraph, getMarketDepth, getPriceVolumeHistory, getFloorsheetOf, getPriceVolume, isNepseError } from "../../api/nepse";
 import Layout from "../../components/Layout/Layout.jsx";
 import {
     fmt,
@@ -62,12 +55,12 @@ export default function CompanyDetail() {
     const [tab, setTab] = useState("Depth");
     const [tabLoading, setTabLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [floorUnavailable, setFloorUnavailable] = useState(false);
 
-    // 1. Reset and fetch primary scrip details on symbol change
+// 1. Reset and fetch primary scrip details on symbol change
     useEffect(() => {
         let alive = true;
 
-        // Flush stale scrip data to prevent cross-symbol leaks
         setDetails(null);
         setQuote(null);
         setGraphData(null);
@@ -84,16 +77,25 @@ export default function CompanyDetail() {
         ])
             .then(([d, g, pv]) => {
                 if (!alive) return;
+
+                if (isNepseError(d.data)) {
+                    setError("Company data is temporarily unavailable");
+                    return;
+                }
                 setDetails(d.data);
 
                 const rawGraph = g.data;
-                setGraphData(
-                    Array.isArray(rawGraph)
-                        ? rawGraph
-                        : rawGraph?.data ?? Object.values(rawGraph ?? {})
-                );
+                if (isNepseError(rawGraph)) {
+                    setGraphData([]);
+                } else {
+                    setGraphData(
+                        Array.isArray(rawGraph)
+                            ? rawGraph
+                            : rawGraph?.data ?? Object.values(rawGraph ?? {})
+                    );
+                }
 
-                const rows = pv.data ?? [];
+                const rows = isNepseError(pv.data) ? [] : pv.data ?? [];
                 const row = rows.find(
                     (r) => (r.symbol ?? "").toUpperCase() === symbol.toUpperCase()
                 );
@@ -120,22 +122,32 @@ export default function CompanyDetail() {
             try {
                 if (tab === "Depth" && !depth) {
                     const r = await getMarketDepth(symbol);
-                    if (alive) setDepth(r.data);
+                    if (alive) setDepth(isNepseError(r.data) ? { unavailable: true } : r.data);
                 } else if (tab === "History" && !history.length) {
                     const r = await getPriceVolumeHistory(symbol);
-                    if (alive)
-                        setHistory(
-                            Array.isArray(r.data) ? r.data : r.data?.data ?? []
-                        );
+                    if (alive) {
+                        if (isNepseError(r.data)) {
+                            setHistory([]);
+                        } else {
+                            setHistory(Array.isArray(r.data) ? r.data : r.data?.data ?? []);
+                        }
+                    }
                 } else if (tab === "Floorsheet" && !floor.length) {
                     const r = await getFloorsheetOf(symbol);
-                    const rows = Array.isArray(r.data)
-                        ? r.data
-                        : r.data?.floorsheets?.content ?? [];
-                    if (alive) setFloor(rows);
+                    if (alive) {
+                        if (isNepseError(r.data)) {
+                            setFloor([]);
+                            setFloorUnavailable(true);
+                        } else {
+                            const rows = Array.isArray(r.data)
+                                ? r.data
+                                : r.data?.floorsheets?.content ?? [];
+                            setFloor(rows);
+                        }
+                    }
                 }
             } catch {
-                // Suppress tab-level endpoint errors gracefully
+                // network-level failure, distinct from a soft NEPSE error
             } finally {
                 if (alive) setTabLoading(false);
             }
@@ -398,20 +410,20 @@ export default function CompanyDetail() {
                                     ) : floor.length ? (
                                         floor.slice(0, 14).map((r, i) => (
                                             <div className="ledger-row ledger-row-3" key={i}>
-                        <span className="ledger-sym">
-                          {fmt(r.contractQuantity ?? r.quantity, 0)}
-                        </span>
+                    <span className="ledger-sym">
+                        {fmt(r.contractQuantity ?? r.quantity, 0)}
+                    </span>
                                                 <span className="ledger-num">
-                          {fmt(r.contractRate ?? r.rate)}
-                        </span>
+                        {fmt(r.contractRate ?? r.rate)}
+                    </span>
                                                 <span className="ledger-ltp">
-                          {r.buyerMemberId ?? r.buyerBroker ?? "--"}/
+                        {r.buyerMemberId ?? r.buyerBroker ?? "--"}/
                                                     {r.sellerMemberId ?? r.sellerBroker ?? "--"}
-                        </span>
+                    </span>
                                             </div>
                                         ))
                                     ) : (
-                                        <EmptyRow label="no contracts yet" />
+                                        <EmptyRow label={floorUnavailable ? "floorsheet temporarily unavailable" : "no contracts yet"} />
                                     )}
                                 </>
                             )}

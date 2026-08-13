@@ -104,3 +104,8 @@ export const getDailyOthersSubindexGraph = () =>
 
 export const getDailyTradingSubindexGraph = () =>
     client.get("/nepse/graph/trading");
+
+// True if response body is the backend fallback shape instead of real data
+export function isNepseError(data) {
+    return !!(data && typeof data === "object" && data.error === true);
+}

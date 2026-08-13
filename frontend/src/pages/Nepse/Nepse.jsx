@@ -25,6 +25,7 @@ import {
     getDailyNonLifeInsuranceSubindexGraph,
     getDailyOthersSubindexGraph,
     getDailyTradingSubindexGraph,
+    isNepseError,
 } from "../../api/nepse";
 import Layout from "../../components/Layout/Layout.jsx";
 import {
@@ -65,13 +66,20 @@ function matchSectorGraph(name = "") {
 }
 
 function toList(raw) {
+    if (isNepseError(raw)) return [];
     return Array.isArray(raw) ? raw : raw?.data ?? Object.values(raw ?? {});
 }
 
 function toNamedList(raw) {
+    if (isNepseError(raw)) return [];
     return Array.isArray(raw)
         ? raw
         : Object.entries(raw ?? {}).map(([name, v]) => ({ name, ...v }));
+}
+
+// Returns data as is, or null if it is the error fallback shape
+function safe(raw) {
+    return isNepseError(raw) ? null : raw;
 }
 
 function MoverRow({ item, tone }) {
@@ -120,6 +128,7 @@ export default function Nepse() {
     const [supplyDemand, setSupplyDemand] = useState([]);
     const [sectors, setSectors] = useState([]);
     const [floorsheet, setFloorsheet] = useState(null);
+    const [floorUnavailable, setFloorUnavailable] = useState(false);
     const [feedLoading, setFeedLoading] = useState(true);
 
     const [expandedSector, setExpandedSector] = useState(null);
@@ -163,11 +172,23 @@ export default function Nepse() {
                 getSummary(),
                 getDailyNepseIndexGraph(),
             ]);
-            setMarketOpen(openRes.data);
-            setIndices(indexRes.data);
-            setSummary(summaryRes.data);
-            setGraphData(toList(graphRes.data));
-            setError(null);
+
+            const open = safe(openRes.data);
+            const idx = safe(indexRes.data);
+            const summ = safe(summaryRes.data);
+            const graph = toList(graphRes.data);
+
+            setMarketOpen(open);
+            setIndices(idx);
+            setSummary(summ);
+            setGraphData(graph);
+
+            // Core feed partly or fully unavailable upstream
+            if (open == null || idx == null || summ == null) {
+                setError("Some market data is temporarily unavailable");
+            } else {
+                setError(null);
+            }
         } catch (e) {
             setError("Data feed unavailable");
         } finally {
@@ -191,20 +212,20 @@ export default function Nepse() {
                 if (feed === "Movers" && !gainers.length) {
                     const [g, l] = await Promise.all([getTopGainers(), getTopLosers()]);
                     if (!alive) return;
-                    setGainers(g.data ?? []);
-                    setLosers(l.data ?? []);
+                    setGainers(isNepseError(g.data) ? [] : g.data ?? []);
+                    setLosers(isNepseError(l.data) ? [] : l.data ?? []);
                 } else if (feed === "Turnover" && !turnover.length) {
                     const t = await getTopTurnover();
                     if (!alive) return;
-                    setTurnover(t.data ?? []);
+                    setTurnover(isNepseError(t.data) ? [] : t.data ?? []);
                 } else if (feed === "Activity" && !topTrade.length) {
                     const [t, tr] = await Promise.all([
                         getTopTrade(),
                         getTopTransaction(),
                     ]);
                     if (!alive) return;
-                    setTopTrade(t.data ?? []);
-                    setTopTransaction(tr.data ?? []);
+                    setTopTrade(isNepseError(t.data) ? [] : t.data ?? []);
+                    setTopTransaction(isNepseError(tr.data) ? [] : tr.data ?? []);
                     try {
                         const sd = await getSupplyDemand();
                         if (!alive) return;
@@ -219,7 +240,13 @@ export default function Nepse() {
                 } else if (feed === "Floorsheet" && !floorsheet) {
                     const f = await getFloorsheet();
                     if (!alive) return;
-                    setFloorsheet(f.data);
+                    if (isNepseError(f.data)) {
+                        setFloorsheet(null);
+                        setFloorUnavailable(true);
+                    } else {
+                        setFloorsheet(f.data);
+                        setFloorUnavailable(false);
+                    }
                 }
             } finally {
                 if (alive) {
@@ -598,7 +625,13 @@ export default function Nepse() {
                                             </div>
                                         ))
                                     ) : (
-                                        <EmptyRow label="no contracts yet" />
+                                        <EmptyRow
+                                            label={
+                                                floorUnavailable
+                                                    ? "floorsheet temporarily unavailable"
+                                                    : "no contracts yet"
+                                            }
+                                        />
                                     )}
                                 </>
                             )}

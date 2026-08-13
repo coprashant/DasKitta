@@ -20,7 +20,7 @@ public class NepseController {
         this.symbolResolver = symbolResolver;
     }
 
-    // ── Live Market ───────────────────────────────────────────────────────────
+    // Live Market
 
     @GetMapping("/live-market")
     public Mono<ResponseEntity<Object>> getLiveMarket() {
@@ -47,7 +47,7 @@ public class NepseController {
         return nepseService.isNepseOpen().map(ResponseEntity::ok);
     }
 
-    // ── Gainers / Losers / Top scrips ─────────────────────────────────────────
+    // Gainers Losers Top scrips
 
     @GetMapping("/top-gainers")
     public Mono<ResponseEntity<Object>> getTopGainers() {
@@ -79,7 +79,7 @@ public class NepseController {
         return nepseService.getSupplyDemand().map(ResponseEntity::ok);
     }
 
-    // ── Company / Security ────────────────────────────────────────────────────
+    // Company Security
 
     @GetMapping("/companies")
     public Mono<ResponseEntity<Object>> getCompanyList() {
@@ -96,7 +96,7 @@ public class NepseController {
         return nepseService.getSecurityList().map(ResponseEntity::ok);
     }
 
-    // Symbol-based endpoints: resolve symbol → numeric ID first
+    // Symbol based endpoints resolve symbol to numeric id first
 
     @GetMapping("/company/details")
     public Mono<ResponseEntity<Object>> getCompanyDetails(@RequestParam String symbol) {
@@ -131,7 +131,7 @@ public class NepseController {
                 .map(ResponseEntity::ok);
     }
 
-    // ── Floorsheet ────────────────────────────────────────────────────────────
+    // Floorsheet
 
     @GetMapping("/floorsheet")
     public Mono<ResponseEntity<Object>> getFloorsheet() {
@@ -145,7 +145,7 @@ public class NepseController {
                 .map(ResponseEntity::ok);
     }
 
-    // ── Index Graphs ──────────────────────────────────────────────────────────
+    // Index Graphs
 
     @GetMapping("/graph/nepse")
     public Mono<ResponseEntity<Object>> getDailyNepseIndexGraph() {

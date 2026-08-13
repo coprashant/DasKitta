@@ -12,7 +12,7 @@ import javax.net.ssl.SSLException;
 /**
  * Builds a WebClient with TLS verification disabled for nepalstock.com.
  * NEPSE uses a self-signed / non-standard certificate chain that Java's
- * default truststore rejects — mirroring the Python lib's setTLSVerification(False).
+ * default truststore rejects, mirroring the Python lib's setTLSVerification(False).
  */
 public class NepseHttpClientFactory {
 
@@ -37,9 +37,7 @@ public class NepseHttpClientFactory {
                     .defaultHeader("Pragma", "no-cache")
                     .defaultHeader("Cache-Control", "no-cache")
                     .defaultHeader("Referer", "nepalstock.com")
-                    .defaultHeader("Host", "www.nepalstock.com")
                     .build();
-
         } catch (SSLException e) {
             throw new RuntimeException("Failed to create NEPSE SSL context", e);
         }
