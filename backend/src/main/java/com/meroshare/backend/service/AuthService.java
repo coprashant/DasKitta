@@ -5,9 +5,7 @@ import com.meroshare.backend.dto.LoginRequest;
 import com.meroshare.backend.dto.RegisterRequest;
 import com.meroshare.backend.dto.UserDetailsResponse;
 import com.meroshare.backend.entity.AppUser;
-import com.meroshare.backend.entity.EmailOtp;
 import com.meroshare.backend.repository.AppUserRepository;
-import com.meroshare.backend.repository.EmailOtpRepository;
 import com.meroshare.backend.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -17,7 +15,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
-import java.time.LocalDateTime;
 import java.util.Optional;
 
 @Service
@@ -25,15 +22,13 @@ import java.util.Optional;
 public class AuthService {
 
     private final AppUserRepository appUserRepository;
-    private final EmailOtpRepository emailOtpRepository;
+    private final OtpService otpService;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final AuthenticationManager authenticationManager;
     private final EmailServiceClient emailServiceClient;
 
     private final SecureRandom secureRandom = new SecureRandom();
-
-    private static final long OTP_RESEND_COOLDOWN_SECONDS = 60;
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -109,32 +104,9 @@ public class AuthService {
         sendRegistrationOtp(email);
     }
 
-    @Transactional
     public void sendRegistrationOtp(String email) {
-        Optional<EmailOtp> existing = emailOtpRepository.findByEmail(email);
-
-        if (existing.isPresent()) {
-            LocalDateTime lastSent = existing.get().getLastSentAt();
-            boolean tooSoon = lastSent != null
-                    && lastSent.plusSeconds(OTP_RESEND_COOLDOWN_SECONDS).isAfter(LocalDateTime.now());
-
-            if (tooSoon) {
-                throw new RuntimeException("Please wait a bit before requesting another code");
-            }
-        }
-
         String otpCode = generateSecureOtp();
-
-        emailOtpRepository.deleteByEmail(email);
-
-        EmailOtp emailOtp = EmailOtp.builder()
-                .email(email)
-                .otpCode(otpCode)
-                .expiryTime(LocalDateTime.now().plusMinutes(5))
-                .lastSentAt(LocalDateTime.now())
-                .build();
-
-        emailOtpRepository.save(emailOtp);
+        otpService.storeOtp(email, otpCode);
 
         String subject = "DasKitta Verify Your Account";
         String textBody = "Welcome to DasKitta\n\n"
@@ -156,25 +128,13 @@ public class AuthService {
 
     @Transactional
     public void verifyOtp(String email, String code) {
-        EmailOtp emailOtp = emailOtpRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Invalid or expired verification code"));
-
-        if (emailOtp.isExpired()) {
-            emailOtpRepository.deleteByEmail(email);
-            throw new RuntimeException("Verification code has expired. Please request a new one.");
-        }
-
-        if (!emailOtp.getOtpCode().equals(code)) {
-            throw new RuntimeException("Incorrect verification code");
-        }
+        otpService.verifyOtp(email, code);
 
         AppUser user = appUserRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User profile not found"));
 
         user.setEnabled(true);
         appUserRepository.save(user);
-
-        emailOtpRepository.deleteByEmail(email);
     }
 
     // updates the password for a logged in user
@@ -231,32 +191,9 @@ public class AuthService {
     }
 
     // sends an otp code to the new email for confirmation
-    @Transactional
     public void sendEmailChangeOtp(String newEmail) {
-        Optional<EmailOtp> existing = emailOtpRepository.findByEmail(newEmail);
-
-        if (existing.isPresent()) {
-            LocalDateTime lastSent = existing.get().getLastSentAt();
-            boolean tooSoon = lastSent != null
-                    && lastSent.plusSeconds(OTP_RESEND_COOLDOWN_SECONDS).isAfter(LocalDateTime.now());
-
-            if (tooSoon) {
-                throw new RuntimeException("Please wait a bit before requesting another code");
-            }
-        }
-
         String otpCode = generateSecureOtp();
-
-        emailOtpRepository.deleteByEmail(newEmail);
-
-        EmailOtp emailOtp = EmailOtp.builder()
-                .email(newEmail)
-                .otpCode(otpCode)
-                .expiryTime(LocalDateTime.now().plusMinutes(5))
-                .lastSentAt(LocalDateTime.now())
-                .build();
-
-        emailOtpRepository.save(emailOtp);
+        otpService.storeOtp(newEmail, otpCode);
 
         String subject = "DasKitta Confirm Your New Email";
         String textBody = "From DasKitta\n\n"
@@ -277,22 +214,10 @@ public class AuthService {
         AppUser user = appUserRepository.findByUsername(currentUsername)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        EmailOtp emailOtp = emailOtpRepository.findByEmail(newEmail)
-                .orElseThrow(() -> new RuntimeException("Invalid or expired verification code"));
-
-        if (emailOtp.isExpired()) {
-            emailOtpRepository.deleteByEmail(newEmail);
-            throw new RuntimeException("Verification code has expired. Please request a new one.");
-        }
-
-        if (!emailOtp.getOtpCode().equals(code)) {
-            throw new RuntimeException("Incorrect verification code");
-        }
+        otpService.verifyOtp(newEmail, code);
 
         user.setEmail(newEmail);
         appUserRepository.save(user);
-
-        emailOtpRepository.deleteByEmail(newEmail);
     }
 
     // returns saved details for a logged in user
@@ -314,7 +239,7 @@ public class AuthService {
             throw new RuntimeException("Password is incorrect");
         }
 
-        emailOtpRepository.deleteByEmail(user.getEmail());
+        otpService.clearOtp(user.getEmail());
         appUserRepository.delete(user);
     }
 

@@ -5,20 +5,27 @@ import com.meroshare.backend.service.nepse.NepseDummyIdManager;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.time.LocalDate;
 
 /**
  * NEPSE market data service.
- * Calls nepalstock.com directly — no Python sidecar required.
+ * Calls nepalstock.com directly, no Python sidecar required.
  *
  * Base URL  : https://www.nepalstock.com
  * Auth      : Authorization: Salter <token>  (managed by NepseTokenManager)
  * GET calls : plain GET with auth header
  * POST calls: POST with JSON body {"id": <payloadId>} where payloadId is
  *             derived from salts + dummyId + today's date
+ *
+ * Responses are cached in Redis using a cache aside pattern. Most endpoints
+ * use a short TTL since market data changes constantly. The security list
+ * is closer to static metadata so it uses a much longer TTL.
  */
 @Service
 public class NepseService {
@@ -66,13 +73,42 @@ public class NepseService {
     private static final String FLOOR_SHEET               = "/api/nots/nepse-data/floorsheet";
     private static final String MARKET_DEPTH              = "/api/nots/nepse-data/marketdepth/";
 
+    // Redis cache key prefix and namespaces
+    private static final String CACHE_PREFIX = "nepse:";
+
     private final NepseClient         client;
     private final NepseDummyIdManager dummyIdManager;
+    private final ReactiveRedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper        mapper = new ObjectMapper();
 
-    public NepseService(NepseClient client, NepseDummyIdManager dummyIdManager) {
+    private final Duration liveTtl;
+    private final Duration staticTtl;
+
+    public NepseService(NepseClient client,
+                        NepseDummyIdManager dummyIdManager,
+                        ReactiveRedisTemplate<String, Object> redisTemplate,
+                        @Value("${cache.nepse.live-ttl-seconds:10}") long liveTtlSeconds,
+                        @Value("${cache.cdsc.static-ttl-hours:24}") long staticTtlHours) {
         this.client         = client;
         this.dummyIdManager = dummyIdManager;
+        this.redisTemplate  = redisTemplate;
+        this.liveTtl        = Duration.ofSeconds(liveTtlSeconds);
+        this.staticTtl      = Duration.ofHours(staticTtlHours);
+    }
+
+    // ── Cache aside helper ───────────────────────────────────────────────────
+
+    // Reads from redis first. On a miss, subscribes to the loader, stores the
+    // result with the given ttl, then returns it
+    private Mono<Object> cached(String cacheKey, Duration ttl, Mono<Object> loader) {
+        String key = CACHE_PREFIX + cacheKey;
+        return redisTemplate.opsForValue().get(key)
+                .switchIfEmpty(Mono.defer(() -> loader.flatMap(value ->
+                        redisTemplate.opsForValue().set(key, value, ttl).thenReturn(value))));
+    }
+
+    private Mono<Object> cachedLive(String cacheKey, Mono<Object> loader) {
+        return cached(cacheKey, liveTtl, loader);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -94,79 +130,171 @@ public class NepseService {
 
     // ── Live Market ───────────────────────────────────────────────────────────
 
-    public Mono<Object> getLiveMarket()      { return client.get(LIVE_MARKET_URL); }
-    public Mono<Object> getNepseIndex()      { return client.get(NEPSE_INDEX_URL).map(this::indexArrayToMap); }
-    public Mono<Object> getNepseSubIndices() { return client.get(NEPSE_SUBINDICES_URL).map(this::indexArrayToMap); }
-    public Mono<Object> getSummary()         { return client.get(SUMMARY_URL).map(this::summaryArrayToMap); }
-    public Mono<Object> isNepseOpen()        { return client.get(NEPSE_OPEN_URL); }
+    public Mono<Object> getLiveMarket() {
+        return cachedLive("live-market", client.get(LIVE_MARKET_URL));
+    }
+
+    public Mono<Object> getNepseIndex() {
+        return cachedLive("index", client.get(NEPSE_INDEX_URL).map(this::indexArrayToMap));
+    }
+
+    public Mono<Object> getNepseSubIndices() {
+        return cachedLive("sub-indices", client.get(NEPSE_SUBINDICES_URL).map(this::indexArrayToMap));
+    }
+
+    public Mono<Object> getSummary() {
+        return cachedLive("summary", client.get(SUMMARY_URL).map(this::summaryArrayToMap));
+    }
+
+    public Mono<Object> isNepseOpen() {
+        return cachedLive("is-open", client.get(NEPSE_OPEN_URL));
+    }
 
     // ── Gainers / Losers / Top scrips ─────────────────────────────────────────
 
-    public Mono<Object> getTopGainers()            { return client.get(TOP_GAINERS_URL); }
-    public Mono<Object> getTopLosers()             { return client.get(TOP_LOSERS_URL); }
-    public Mono<Object> getTopTenTurnoverScrips()  { return client.get(TOP_TEN_TURNOVER_URL); }
-    public Mono<Object> getTopTenTradeScrips()     { return client.get(TOP_TEN_TRADE_URL); }
-    public Mono<Object> getTopTenTransactionScrips(){ return client.get(TOP_TEN_TRANSACTION_URL); }
-    public Mono<Object> getSupplyDemand()          { return client.get(SUPPLY_DEMAND_URL); }
+    public Mono<Object> getTopGainers() {
+        return cachedLive("top-gainers", client.get(TOP_GAINERS_URL));
+    }
+
+    public Mono<Object> getTopLosers() {
+        return cachedLive("top-losers", client.get(TOP_LOSERS_URL));
+    }
+
+    public Mono<Object> getTopTenTurnoverScrips() {
+        return cachedLive("top-turnover", client.get(TOP_TEN_TURNOVER_URL));
+    }
+
+    public Mono<Object> getTopTenTradeScrips() {
+        return cachedLive("top-trade", client.get(TOP_TEN_TRADE_URL));
+    }
+
+    public Mono<Object> getTopTenTransactionScrips() {
+        return cachedLive("top-transaction", client.get(TOP_TEN_TRANSACTION_URL));
+    }
+
+    public Mono<Object> getSupplyDemand() {
+        return cachedLive("supply-demand", client.get(SUPPLY_DEMAND_URL));
+    }
 
     // ── Company / Security ────────────────────────────────────────────────────
 
-    public Mono<Object> getCompanyList()  { return client.get(COMPANY_LIST_URL); }
-    public Mono<Object> getSecurityList() { return client.get(SECURITY_LIST_URL); }
-    public Mono<Object> getPriceVolume()  { return client.get(PRICE_VOLUME_URL); }
+    public Mono<Object> getCompanyList() {
+        return cachedLive("companies", client.get(COMPANY_LIST_URL));
+    }
+
+    // Security list is treated as static CDSC style metadata, long ttl
+    public Mono<Object> getSecurityList() {
+        return cached("security-list", staticTtl, client.get(SECURITY_LIST_URL));
+    }
+
+    public Mono<Object> getPriceVolume() {
+        return cachedLive("price-volume", client.get(PRICE_VOLUME_URL));
+    }
 
     public Mono<Object> getCompanyDetails(long companyId) {
-        return postWithScripPayload(COMPANY_DETAILS + companyId);
+        return cachedLive("company-details:" + companyId, postWithScripPayload(COMPANY_DETAILS + companyId));
     }
 
     public Mono<Object> getDailyScripPriceGraph(long companyId) {
-        return postWithScripPayload(COMPANY_DAILY_GRAPH + companyId);
+        return cachedLive("scrip-price-graph:" + companyId, postWithScripPayload(COMPANY_DAILY_GRAPH + companyId));
     }
 
     public Mono<Object> getCompanyPriceVolumeHistory(long companyId, String startDate, String endDate) {
-        return client.get(COMPANY_PRICE_VOL_HIST + companyId
-                + "?&size=500&startDate=" + startDate + "&endDate=" + endDate);
+        String key = "price-volume-history:" + companyId + ":" + startDate + ":" + endDate;
+        return cachedLive(key, client.get(COMPANY_PRICE_VOL_HIST + companyId
+                + "?&size=500&startDate=" + startDate + "&endDate=" + endDate));
     }
 
     public Mono<Object> getMarketDepth(long companyId) {
-        return client.get(MARKET_DEPTH + companyId + "/");
+        return cachedLive("market-depth:" + companyId, client.get(MARKET_DEPTH + companyId + "/"));
     }
 
     // ── Floorsheet ────────────────────────────────────────────────────────────
 
     public Mono<Object> getFloorSheet() {
-        return postWithFloorsheetPayload(FLOOR_SHEET + "?&size=500&sort=contractId,desc");
+        return cachedLive("floorsheet", postWithFloorsheetPayload(FLOOR_SHEET + "?&size=500&sort=contractId,desc"));
     }
 
     public Mono<Object> getFloorSheetOf(long companyId) {
         String today = LocalDate.now().toString();
-        return postWithFloorsheetPayload(COMPANY_FLOORSHEET + companyId
-                + "?&businessDate=" + today + "&size=500&sort=contractid,desc");
+        return cachedLive("floorsheet:" + companyId + ":" + today,
+                postWithFloorsheetPayload(COMPANY_FLOORSHEET + companyId
+                        + "?&businessDate=" + today + "&size=500&sort=contractid,desc"));
     }
 
     // ── Index graphs ──────────────────────────────────────────────────────────
 
-    public Mono<Object> getDailyNepseIndexGraph()                    { return postWithPayload(NEPSE_INDEX_GRAPH); }
-    public Mono<Object> getDailySensitiveIndexGraph()                { return postWithPayload(SENSITIVE_INDEX_GRAPH); }
-    public Mono<Object> getDailyFloatIndexGraph()                    { return postWithPayload(FLOAT_INDEX_GRAPH); }
-    public Mono<Object> getDailySensitiveFloatIndexGraph()           { return postWithPayload(SENSITIVE_FLOAT_GRAPH); }
-    public Mono<Object> getDailyBankSubindexGraph()                  { return postWithPayload(BANK_SUBINDEX_GRAPH); }
-    public Mono<Object> getDailyDevelopmentBankSubindexGraph()       { return postWithPayload(DEV_BANK_SUBINDEX_GRAPH); }
-    public Mono<Object> getDailyFinanceSubindexGraph()               { return postWithPayload(FINANCE_SUBINDEX_GRAPH); }
-    public Mono<Object> getDailyHotelTourismSubindexGraph()          { return postWithPayload(HOTEL_SUBINDEX_GRAPH); }
-    public Mono<Object> getDailyHydroPowerSubindexGraph()            { return postWithPayload(HYDRO_SUBINDEX_GRAPH); }
-    public Mono<Object> getDailyInvestmentSubindexGraph()            { return postWithPayload(INVESTMENT_SUBINDEX_GRAPH); }
-    public Mono<Object> getDailyLifeInsuranceSubindexGraph()         { return postWithPayload(LIFE_INS_SUBINDEX_GRAPH); }
-    public Mono<Object> getDailyManufacturingProcessingSubindexGraph(){ return postWithPayload(MANUF_SUBINDEX_GRAPH); }
-    public Mono<Object> getDailyMicrofinanceSubindexGraph()          { return postWithPayload(MICROFINANCE_GRAPH); }
-    public Mono<Object> getDailyMutualFundSubindexGraph()            { return postWithPayload(MUTUAL_FUND_GRAPH); }
-    public Mono<Object> getDailyNonLifeInsuranceSubindexGraph()      { return postWithPayload(NON_LIFE_INS_GRAPH); }
-    public Mono<Object> getDailyOthersSubindexGraph()                { return postWithPayload(OTHERS_SUBINDEX_GRAPH); }
-    public Mono<Object> getDailyTradingSubindexGraph()               { return postWithPayload(TRADING_SUBINDEX_GRAPH); }
+    public Mono<Object> getDailyNepseIndexGraph() {
+        return cachedLive("graph:nepse", postWithPayload(NEPSE_INDEX_GRAPH));
+    }
+
+    public Mono<Object> getDailySensitiveIndexGraph() {
+        return cachedLive("graph:sensitive", postWithPayload(SENSITIVE_INDEX_GRAPH));
+    }
+
+    public Mono<Object> getDailyFloatIndexGraph() {
+        return cachedLive("graph:float", postWithPayload(FLOAT_INDEX_GRAPH));
+    }
+
+    public Mono<Object> getDailySensitiveFloatIndexGraph() {
+        return cachedLive("graph:sensitive-float", postWithPayload(SENSITIVE_FLOAT_GRAPH));
+    }
+
+    public Mono<Object> getDailyBankSubindexGraph() {
+        return cachedLive("graph:bank", postWithPayload(BANK_SUBINDEX_GRAPH));
+    }
+
+    public Mono<Object> getDailyDevelopmentBankSubindexGraph() {
+        return cachedLive("graph:dev-bank", postWithPayload(DEV_BANK_SUBINDEX_GRAPH));
+    }
+
+    public Mono<Object> getDailyFinanceSubindexGraph() {
+        return cachedLive("graph:finance", postWithPayload(FINANCE_SUBINDEX_GRAPH));
+    }
+
+    public Mono<Object> getDailyHotelTourismSubindexGraph() {
+        return cachedLive("graph:hotel-tourism", postWithPayload(HOTEL_SUBINDEX_GRAPH));
+    }
+
+    public Mono<Object> getDailyHydroPowerSubindexGraph() {
+        return cachedLive("graph:hydro-power", postWithPayload(HYDRO_SUBINDEX_GRAPH));
+    }
+
+    public Mono<Object> getDailyInvestmentSubindexGraph() {
+        return cachedLive("graph:investment", postWithPayload(INVESTMENT_SUBINDEX_GRAPH));
+    }
+
+    public Mono<Object> getDailyLifeInsuranceSubindexGraph() {
+        return cachedLive("graph:life-insurance", postWithPayload(LIFE_INS_SUBINDEX_GRAPH));
+    }
+
+    public Mono<Object> getDailyManufacturingProcessingSubindexGraph() {
+        return cachedLive("graph:manufacturing", postWithPayload(MANUF_SUBINDEX_GRAPH));
+    }
+
+    public Mono<Object> getDailyMicrofinanceSubindexGraph() {
+        return cachedLive("graph:microfinance", postWithPayload(MICROFINANCE_GRAPH));
+    }
+
+    public Mono<Object> getDailyMutualFundSubindexGraph() {
+        return cachedLive("graph:mutual-fund", postWithPayload(MUTUAL_FUND_GRAPH));
+    }
+
+    public Mono<Object> getDailyNonLifeInsuranceSubindexGraph() {
+        return cachedLive("graph:non-life-insurance", postWithPayload(NON_LIFE_INS_GRAPH));
+    }
+
+    public Mono<Object> getDailyOthersSubindexGraph() {
+        return cachedLive("graph:others", postWithPayload(OTHERS_SUBINDEX_GRAPH));
+    }
+
+    public Mono<Object> getDailyTradingSubindexGraph() {
+        return cachedLive("graph:trading", postWithPayload(TRADING_SUBINDEX_GRAPH));
+    }
 
     // ── Response transformers (mirror Python server's reshaping) ─────────────
 
-    /** [{detail:"Total Turnover Rs:", value:123}, ...] → {"Total Turnover Rs:": 123, ...} */
+    /** [{detail:"Total Turnover Rs:", value:123}, ...] converts to {"Total Turnover Rs:": 123, ...} */
     private Object summaryArrayToMap(Object raw) {
         try {
             JsonNode array = mapper.valueToTree(raw);
@@ -182,7 +310,7 @@ public class NepseService {
         } catch (Exception e) { return raw; }
     }
 
-    /** [{index:"NEPSE", ...}, ...] → {"NEPSE": {...}, ...} */
+    /** [{index:"NEPSE", ...}, ...] converts to {"NEPSE": {...}, ...} */
     private Object indexArrayToMap(Object raw) {
         try {
             JsonNode array = mapper.valueToTree(raw);

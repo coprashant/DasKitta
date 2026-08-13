@@ -1,4 +1,5 @@
 package com.meroshare.backend.controller;
+import com.meroshare.backend.config.RedisConfig;
 import com.meroshare.backend.dto.MeroshareAccountRequest;
 import com.meroshare.backend.dto.MeroshareAccountResponse;
 import com.meroshare.backend.dto.MeroshareAccountUpdateRequest;
@@ -8,6 +9,7 @@ import com.meroshare.backend.service.MeroshareAccountService;
 import com.meroshare.backend.service.MeroshareApiService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -20,14 +22,21 @@ import java.util.Map;
 public class AccountController {
     private final MeroshareAccountService accountService;
     private final MeroshareApiService meroshareApiService;
+
+    // Static CDSC metadata, cached for 24 hours by RedisConfig cache settings
+    @Cacheable(cacheNames = RedisConfig.CACHE_CDSC_STATIC, key = "'bank-by-dp:' + #dpId")
     @GetMapping("/bank-by-dp/{dpId}")
     public ResponseEntity<Map<String, Object>> getBankByDp(@PathVariable Integer dpId) {
         return ResponseEntity.ok(meroshareApiService.getBankByDp(dpId));
     }
+
+    // Static CDSC metadata, cached for 24 hours by RedisConfig cache settings
+    @Cacheable(cacheNames = RedisConfig.CACHE_CDSC_STATIC, key = "'dp-list'")
     @GetMapping("/dp-list")
     public ResponseEntity<List<Map>> getDpList() {
         return ResponseEntity.ok(meroshareApiService.getDpList());
     }
+
     @GetMapping
     public ResponseEntity<List<MeroshareAccountResponse>> getAccounts(
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -53,19 +62,16 @@ public class AccountController {
         accountService.deleteAccount(id, userDetails.getUsername());
         return ResponseEntity.noContent().build();
     }
-
     @GetMapping("/{id}/portfolio")
     public ResponseEntity<PortfolioResponse> getPortfolio(
             @PathVariable Long id,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(accountService.getPortfolio(id, userDetails.getUsername()));
     }
-
     @GetMapping("/{id}/info")
     public ResponseEntity<MeroshareAccountInfoResponse> getAccountInfo(
             @PathVariable Long id,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(accountService.getAccountInfo(id, userDetails.getUsername()));
     }
-
 }
