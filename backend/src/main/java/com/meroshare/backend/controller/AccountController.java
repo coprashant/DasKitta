@@ -1,15 +1,13 @@
 package com.meroshare.backend.controller;
-import com.meroshare.backend.config.RedisConfig;
 import com.meroshare.backend.dto.MeroshareAccountRequest;
 import com.meroshare.backend.dto.MeroshareAccountResponse;
 import com.meroshare.backend.dto.MeroshareAccountUpdateRequest;
 import com.meroshare.backend.dto.PortfolioResponse;
 import com.meroshare.backend.dto.MeroshareAccountInfoResponse;
+import com.meroshare.backend.service.CdscMetadataService;
 import com.meroshare.backend.service.MeroshareAccountService;
-import com.meroshare.backend.service.MeroshareApiService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -21,20 +19,18 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AccountController {
     private final MeroshareAccountService accountService;
-    private final MeroshareApiService meroshareApiService;
+    private final CdscMetadataService cdscMetadataService;
 
-    // Static CDSC metadata, cached for 24 hours by RedisConfig cache settings
-    @Cacheable(cacheNames = RedisConfig.CACHE_CDSC_STATIC, key = "'bank-by-dp:' + #dpId")
+    // Static CDSC metadata, cached for 24 hours via CdscMetadataService
     @GetMapping("/bank-by-dp/{dpId}")
     public ResponseEntity<Map<String, Object>> getBankByDp(@PathVariable Integer dpId) {
-        return ResponseEntity.ok(meroshareApiService.getBankByDp(dpId));
+        return ResponseEntity.ok(cdscMetadataService.getBankByDp(dpId));
     }
 
-    // Static CDSC metadata, cached for 24 hours by RedisConfig cache settings
-    @Cacheable(cacheNames = RedisConfig.CACHE_CDSC_STATIC, key = "'dp-list'")
+    // Static CDSC metadata, cached for 24 hours via CdscMetadataService
     @GetMapping("/dp-list")
     public ResponseEntity<List<Map>> getDpList() {
-        return ResponseEntity.ok(meroshareApiService.getDpList());
+        return ResponseEntity.ok(cdscMetadataService.getDpList());
     }
 
     @GetMapping
