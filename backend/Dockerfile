@@ -12,7 +12,7 @@ RUN --mount=type=cache,target=/root/.m2 \
 # 2. Copy source code and build using the Maven cache
 COPY src ./src
 RUN --mount=type=cache,target=/root/.m2 \
-    mvn clean package -DskipTests -Dmaven.javadoc.skip=true -B
+    mvn clean package -DskipTests -Dmaven.javadoc.skip=true -B \
 
 # ── Stage 2: Run ──────────────────────────────────────────────────────────────
 FROM eclipse-temurin:21-jre-alpine
@@ -22,16 +22,17 @@ WORKDIR /app
 RUN apk add --no-cache curl
 
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-USER appuser
 
 COPY --from=builder /app/target/*.jar app.jar
 
-ENV PORT=8080
+USER appuser
+
+# Explicitly expose port 8080 (Render overrides PORT automatically at runtime)
 EXPOSE 8080
 
-ENTRYPOINT ["sh", "-c", "java \
-  -XX:+UseContainerSupport \
-  -XX:MaxRAMPercentage=75.0 \
-  -Djava.security.egd=file:/dev/./urandom \
-  -Dserver.port=${PORT} \
-  -jar app.jar"]
+# Clean exec form without 'sh -c' string escaping issues
+ENTRYPOINT ["java", \
+  "-XX:+UseContainerSupport", \
+  "-XX:MaxRAMPercentage=75.0", \
+  "-Djava.security.egd=file:/dev/./urandom", \
+  "-jar", "app.jar"]
