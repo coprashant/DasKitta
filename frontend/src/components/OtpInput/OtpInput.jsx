@@ -3,26 +3,41 @@ import "./OtpInput.css";
 
 const OTP_LENGTH = 6;
 
-const OtpInput = ({ value = "", onChange, disabled = false }) => {
+const OtpInput = ({ value = "", onChange = () => {}, disabled = false }) => {
     const inputRefs = useRef([]);
-    const otpArray = Array.from({ length: OTP_LENGTH }, (_, i) => value[i] || "");
+    const safeValue = String(value || "");
+    const otpArray = Array.from({ length: OTP_LENGTH }, (_, i) => safeValue[i] || "");
 
     useEffect(() => {
+        if (disabled) return;
         const firstEmptyIndex = otpArray.findIndex((digit) => !digit);
         const targetIndex = firstEmptyIndex !== -1 ? firstEmptyIndex : 0;
         inputRefs.current[targetIndex]?.focus();
     }, []);
 
     const handleChange = (e, index) => {
-        const val = e.target.value.replace(/\D/g, "");
-        if (!val) return;
-
-        const lastChar = val.slice(-1);
+        const rawVal = e.target.value.replace(/\D/g, "");
         const newOtp = [...otpArray];
-        newOtp[index] = lastChar;
-        const combined = newOtp.join("");
 
-        onChange(combined);
+        if (!rawVal) {
+            newOtp[index] = "";
+            onChange(newOtp.join(""));
+            return;
+        }
+
+        if (rawVal.length > 1) {
+            const chars = rawVal.split("");
+            for (let i = 0; i < chars.length && index + i < OTP_LENGTH; i++) {
+                newOtp[index + i] = chars[i];
+            }
+            onChange(newOtp.join(""));
+            const nextFocus = Math.min(index + chars.length, OTP_LENGTH - 1);
+            inputRefs.current[nextFocus]?.focus();
+            return;
+        }
+
+        newOtp[index] = rawVal;
+        onChange(newOtp.join(""));
 
         if (index < OTP_LENGTH - 1) {
             inputRefs.current[index + 1]?.focus();
