@@ -7,7 +7,10 @@
   }
 }
 
-/* Modern Gradient Shimmer Effect */
+:root {
+  --mascot-size: clamp(32px, 3.5vw, 52px);
+}
+
 .base-pulse {
   background: linear-gradient(
           90deg,
@@ -126,9 +129,24 @@
 .nepse-hero-delta.down { color: var(--danger); }
 
 .nepse-hero-graph {
+  position: relative;
   width: 100%;
-  height: 70px;
+  height: clamp(70px, 8vw, 130px);
   overflow: visible;
+}
+
+.bull-lottie-container {
+  position: absolute;
+  pointer-events: none;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bull-lottie-player {
+  width: var(--mascot-size);
+  height: var(--mascot-size);
 }
 
 .sparkline-svg {
@@ -185,6 +203,13 @@
   width: 100%;
 }
 
+.ticker-empty-state {
+  padding: 16px 0;
+  min-height: 44px;
+  color: var(--text-3);
+  font-size: clamp(12px, 1.8vw, 13.5px);
+}
+
 .ticker-flat-row {
   display: flex;
   justify-content: space-between;
@@ -239,11 +264,13 @@
   stroke-dasharray: 3 3;
   pointer-events: none;
 }
+
 .spark-hover-dot {
   stroke: var(--surface);
   stroke-width: 1.5;
   pointer-events: none;
 }
+
 .spark-tooltip {
   position: absolute;
   transform: translate(-50%, -135%);
@@ -259,6 +286,7 @@
   box-shadow: var(--shadow-lg);
   z-index: 5;
 }
+
 .spark-tooltip.align-start { transform: translate(0, -135%); }
 .spark-tooltip.align-end   { transform: translate(-100%, -135%); }
 

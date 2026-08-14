@@ -7,18 +7,19 @@ import {
     getTopLosers,
 } from "../../api/nepse.js";
 import { buildSparkline, useChartHover, tooltipAlign } from "../../pages/Nepse/nepseUtils.js";
+import BullMascot from "./BullMascot.jsx";
 import "./NepseStrip.css";
 
 const MOVERS_ROW_COUNT = 5;
 
-function SkeletonGraphSVG({ width = 340, height = 70 }) {
+function SkeletonGraphSVG({ width = 340, height = 100 }) {
     return (
-        <div className="skeleton-graph-wrap" style={{ width: "100%", height }}>
+        <div className="skeleton-graph-wrap" style={{ width: "100%", height: "100%" }}>
             <svg
                 viewBox={`0 0 ${width} ${height}`}
                 preserveAspectRatio="none"
                 className="sparkline-svg skeleton-svg-wave"
-                style={{ width: "100%", height }}
+                style={{ width: "100%", height: "100%" }}
             >
                 <path
                     d={`M 0 ${height * 0.7} Q ${width * 0.25} ${height * 0.2}, ${width * 0.5} ${height * 0.5} T ${width} ${height * 0.3}`}
@@ -32,8 +33,11 @@ function SkeletonGraphSVG({ width = 340, height = 70 }) {
     );
 }
 
-function Sparkline({ data, width = 340, height = 70 }) {
-    const result = buildSparkline(data, width, height);
+function Sparkline({ data, isOpen, pts, width = 340, height = 100 }) {
+    const result = useMemo(
+        () => buildSparkline(data, width, height),
+        [data, width, height]
+    );
     const { containerRef, index: hoverIndex, handlers } = useChartHover(result?.values.length ?? 0);
 
     if (!result) return <SkeletonGraphSVG width={width} height={height} />;
@@ -43,13 +47,22 @@ function Sparkline({ data, width = 340, height = 70 }) {
         ? { x: result.coords[hoverIndex][0], y: result.coords[hoverIndex][1], value: result.values[hoverIndex] }
         : null;
 
+    const coords = result.coords || [];
+    const targetCoord = isOpen
+        ? coords[0] || [0, height * 0.7]
+        : coords[coords.length - 1] || [width, height * 0.5];
+
+    const mascotPos = targetCoord
+        ? { x: (targetCoord[0] / width) * 100, y: (targetCoord[1] / height) * 100 } // Percentage for Y keeps mascot positioned accurately on tall graphs
+        : null;
+
     return (
-        <div className="spark-wrap" ref={containerRef} {...handlers}>
+        <div className="spark-wrap" ref={containerRef} style={{ position: "relative", width: "100%", height: "100%", overflow: "visible" }} {...handlers}>
             <svg
                 viewBox={`0 0 ${width} ${height}`}
                 preserveAspectRatio="none"
                 className="sparkline-svg"
-                style={{ width: "100%", height }}
+                style={{ width: "100%", height: "100%", overflow: "visible" }}
             >
                 <polyline
                     points={result.points}
@@ -66,6 +79,9 @@ function Sparkline({ data, width = 340, height = 70 }) {
                     </g>
                 )}
             </svg>
+
+            <BullMascot isOpen={isOpen} pts={pts} position={mascotPos} />
+
             {hover && (
                 <div
                     className={`spark-tooltip align-${tooltipAlign(hover.x / width)}`}
@@ -99,7 +115,10 @@ function useNepseIndex() {
                 setIsOpen(typeof rawOpen === "object" ? rawOpen?.isOpen === "OPEN" : !!rawOpen);
                 const rawGraph = grf.data;
                 setGraphData(Array.isArray(rawGraph) ? rawGraph : (rawGraph?.data ?? Object.values(rawGraph)));
-            } catch {
+            } catch (error) {
+                if (import.meta.env.DEV) {
+                    console.warn("Failed to load NEPSE hero data", error);
+                }
             } finally {
                 if (alive) setLoading(false);
             }
@@ -142,7 +161,7 @@ export function NepseHeroCard() {
                     <div className="skeleton-text skeleton-delta base-pulse" />
                 </div>
                 <div className="nepse-hero-graph">
-                    <SkeletonGraphSVG width={340} height={70} />
+                    <SkeletonGraphSVG width={340} height={100} />
                 </div>
             </div>
         );
@@ -153,8 +172,8 @@ export function NepseHeroCard() {
             <div className="nepse-hero-header">
                 <span className="terminal-label">NEPSE MARKET INDEX</span>
                 <span className={`terminal-indicator ${isOpen ? "open" : "closed"}`}>
-          {isOpen ? "Market Open" : "Market Closed"}
-        </span>
+                    {isOpen ? "Market Open" : "Market Closed"}
+                </span>
             </div>
             <div className="nepse-hero-metrics">
                 <div className="nepse-hero-value">
@@ -165,7 +184,7 @@ export function NepseHeroCard() {
                 </div>
             </div>
             <div className="nepse-hero-graph">
-                <Sparkline data={graphData} width={340} height={70} />
+                <Sparkline data={graphData} width={340} height={100} isOpen={isOpen} pts={pts} />
             </div>
         </div>
     );
@@ -182,8 +201,8 @@ function TickerRow({ item, type }) {
             <div className="ticker-values">
                 <span className="ticker-ltp">Rs. {Number(ltp).toLocaleString("en-NP")}</span>
                 <span className={`ticker-pct ${type === "gainer" ? "up" : "down"}`}>
-          {pct >= 0 ? "+" : ""}{Number(pct).toFixed(2)}%
-        </span>
+                    {pct >= 0 ? "+" : ""}{Number(pct).toFixed(2)}%
+                </span>
             </div>
         </div>
     );
@@ -201,6 +220,10 @@ function TickerSkeletonRow() {
     );
 }
 
+function TickerEmptyState({ message }) {
+    return <div className="ticker-empty-state">{message}</div>;
+}
+
 export default function NepseStrip() {
     const [gainers, setGainers] = useState(null);
     const [losers, setLosers] = useState(null);
@@ -214,7 +237,10 @@ export default function NepseStrip() {
                 if (!alive) return;
                 setGainers(Array.isArray(gRes.data) ? gRes.data : gRes.data?.data ?? []);
                 setLosers(Array.isArray(lRes.data) ? lRes.data : lRes.data?.data ?? []);
-            } catch {
+            } catch (error) {
+                if (import.meta.env.DEV) {
+                    console.warn("Failed to load NEPSE movers", error);
+                }
             } finally {
                 if (alive) setLoading(false);
             }
@@ -224,6 +250,8 @@ export default function NepseStrip() {
     }, []);
 
     const dummyArray = useMemo(() => Array(MOVERS_ROW_COUNT).fill(0), []);
+    const topGainers = gainers?.slice(0, MOVERS_ROW_COUNT) ?? [];
+    const topLosers = losers?.slice(0, MOVERS_ROW_COUNT) ?? [];
 
     return (
         <section className="nepse-strip">
@@ -234,9 +262,11 @@ export default function NepseStrip() {
                         <div className="movers-list">
                             {loading
                                 ? dummyArray.map((_, i) => <TickerSkeletonRow key={i} />)
-                                : gainers?.slice(0, MOVERS_ROW_COUNT).map((item, i) => (
-                                    <TickerRow key={i} item={item} type="gainer" />
-                                ))}
+                                : topGainers.length > 0
+                                    ? topGainers.map((item, i) => (
+                                        <TickerRow key={item?.symbol ?? `gainer-${i}`} item={item} type="gainer" />
+                                    ))
+                                    : <TickerEmptyState message="No gainers available right now." />}
                         </div>
                     </div>
                     <div className="movers-col">
@@ -244,9 +274,11 @@ export default function NepseStrip() {
                         <div className="movers-list">
                             {loading
                                 ? dummyArray.map((_, i) => <TickerSkeletonRow key={i} />)
-                                : losers?.slice(0, MOVERS_ROW_COUNT).map((item, i) => (
-                                    <TickerRow key={i} item={item} type="loser" />
-                                ))}
+                                : topLosers.length > 0
+                                    ? topLosers.map((item, i) => (
+                                        <TickerRow key={item?.symbol ?? `loser-${i}`} item={item} type="loser" />
+                                    ))
+                                    : <TickerEmptyState message="No losers available right now." />}
                         </div>
                     </div>
                 </div>
