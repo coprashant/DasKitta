@@ -1,270 +1,297 @@
 # DasKitta
 
-A unified platform for NEPSE investors to manage multiple Meroshare accounts, apply for IPOs in bulk, track holdings, and monitor market activity from one app.
+A unified investment management platform for NEPSE investors. Manage multiple Meroshare accounts, apply for IPOs in bulk, track portfolio holdings, and monitor real-time market activity—all from a single application.
 
-Live app: [https://daskitta.vercel.app](https://daskitta.vercel.app)
+**Live Application:** [https://daskitta.vercel.app](https://daskitta.vercel.app)
 
-## Latest Upgrades
+## Recent Improvements
 
-- Backend upgraded to Java 21 and Spring Boot 3.5.14.
-- Frontend upgraded to React 19, React Router 7, and Vite 8.
-- PWA support added with vite-plugin-pwa (auto-update service worker + installable app manifest).
-- Auth flow expanded with OTP verification, OTP resend, and profile update APIs.
-- Account management expanded with account update endpoint.
-- Dockerized backend build updated to Eclipse Temurin 21 runtime.
+Latest enhancements and optimizations:
 
-## Features
+- **Caching & Rate Limiting:** Integrated Upstash Redis with WebFlux support for optimized performance and API rate limiting
+- **Email Service:** Replaced in-built email service with custom email micorservice API for reliable email delivery
+- **Account Management:** Added delete account feature and credential update capabilities
+- **Data Enhancements:** Track Meroshare and DEMAT account expiry dates; view detailed Meroshare account information
+- **Error Handling:** Comprehensive error handling improvements and code optimizations
+- **Configuration:** Environment-based configuration with dotenv support for local development
+- **Docker:** Optimized multi-stage Docker builds with proper permission handling for Tomcat
+- **Legal Compliance:** Integrated Terms of Service, Privacy Policy, and Disclaimer pages
+
+## Core Features
 
 ### Authentication and User Profile
+- JWT-based authentication with secure token management
+- Registration, login, and OTP verification with resend capability
+- Profile management: password, username, and email change workflows
+- Protected routes with automatic redirection for unauthorized access
 
-- JWT-based authentication.
-- Registration and login.
-- OTP verification and resend flow.
-- Profile actions: change password, change username, request/confirm email change.
-- Protected frontend routes with automatic redirect on unauthorized responses.
+### Multi-Account Management
+- Manage multiple Meroshare accounts under a single DasKitta user
+- Fetch DP and bank listings dynamically
+- Update account credentials without re-adding accounts
+- View aggregated portfolio and per-account information
 
-### Meroshare Account Management
+### IPO and Investment Tools
+- Discover and track open IPO opportunities
+- Apply to multiple IPOs across selected accounts simultaneously
+- Check IPO results by share ID (guest access available)
+- Access application history and CDSC summary data
 
-- Add and manage multiple Meroshare accounts under one DasKitta user.
-- Fetch DP list and bank list by DP.
-- Update account credentials (password and pin) without re-adding an account.
-- View per-account information and portfolio.
+### Market Intelligence
+- Real-time NEPSE market data and live market feed
+- Market indices, sub-indices, and sector performance
+- Top performers: gainers, losers, turnover, and transaction data
+- Company profiles with price history, market depth, and floorsheet data
 
-### IPO and CDSC
-
-- View open IPOs and public share list.
-- Apply to IPOs across selected accounts.
-- Check IPO results by share ID (with optional guest BOID check).
-- Track application history and applied companies.
-- View CDSC summary data.
-
-### NEPSE Market Data
-
-- Live market feed, index, and summary.
-- Top gainers, losers, turnover, trades, and transactions.
-- Company details, price-volume history, market depth, and floorsheet data.
-- Sector and index graph endpoints for charting in the frontend.
-
-### Progressive Web App
-
-- Installable app experience on supported browsers.
-- Auto-updating service worker registration.
+### Progressive Web App (PWA)
+- Install as a native app on supported browsers
+- Auto-updating service worker for seamless updates
+- Offline support and improved performance
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Frontend | React 19, React Router DOM 7, Axios, Framer Motion, Recharts, Vite 8 |
-| Backend | Java 21, Spring Boot 3.5.14, Spring Security, Spring Data JPA, Spring WebFlux |
-| Database | PostgreSQL |
-| Auth/Security | JWT (jjwt 0.12.5), AES encryption for external credentials |
-| PWA | vite-plugin-pwa |
+| Component | Technology |
+|-----------|-----------|
+| **Frontend** | React 19, React Router 7, Vite 8, Axios, Framer Motion, Recharts |
+| **Backend** | Java 21, Spring Boot 3.5.14, Spring Security, Spring Data JPA, Spring WebFlux |
+| **Database** | PostgreSQL 14+ |
+| **Security** | JWT (jjwt 0.12.5), AES encryption for sensitive credentials |
+| **PWA** | vite-plugin-pwa |
+| **Containerization** | Docker (multi-stage builds), Docker Compose
 
 ## Project Structure
 
-```text
-DasKitta
+```
+DasKitta/
 ├── backend/
+│   ├── src/main/java/com/meroshare/backend/
+│   │   ├── controller/           API endpoints (Auth, Account, IPO, NEPSE, Ping)
+│   │   ├── service/              Business logic and external API integration
+│   │   ├── security/             JWT filters, token utilities, encryption
+│   │   ├── repository/           Spring Data JPA repositories
+│   │   ├── entity/               JPA domain models
+│   │   └── dto/                  Request and response data transfer objects
+│   ├── src/main/resources/
+│   │   └── application.properties
 │   ├── pom.xml
-│   ├── Dockerfile
-│   └── src/main/
-│       ├── java/com/meroshare/backend/
-│       │   ├── controller/     # Auth, Account, IPO, Nepse, Ping
-│       │   ├── service/        # Business and integration services
-│       │   ├── security/       # JWT filter, token utils, encryption utils
-│       │   ├── repository/     # Spring Data JPA repositories
-│       │   ├── entity/         # JPA entities
-│       │   └── dto/            # Request/response models
-│       └── resources/
-│           ├── application.properties
-│           └── application-local.properties
+│   ├── Dockerfile                Multi-stage Java 21 build
+│   └── mvnw                       Maven wrapper for consistent builds
+│
 ├── frontend/
+│   ├── src/
+│   │   ├── api/                  API client modules (auth, accounts, ipo, nepse)
+│   │   ├── components/           Reusable UI components and route guards
+│   │   ├── context/              State management (Auth, Account, Notification, Theme)
+│   │   ├── pages/                Page components (Home, Dashboard, IPO, NEPSE, etc.)
+│   │   └── assets/               Images and static resources
 │   ├── package.json
 │   ├── vite.config.js
-│   └── src/
-│       ├── api/                # API clients: auth/accounts/ipo/nepse
-│       ├── components/         # Shared UI components and route guards
-│       ├── context/            # Auth, account, notification, theme context
-│       └── pages/              # Home, dashboard, IPO, NEPSE, portfolio, settings
-└── docker-compose.yml          # PostgreSQL service for local setup
+│   ├── eslint.config.js
+│   ├── index.html
+│   └── vercel.json               Vercel deployment configuration
+│
+├── docker-compose.yml            PostgreSQL service for local development
+├── README.md                      This file
+├── MEROSHARE_API_REFERENCE.md     Meroshare API documentation
+└── NEPSE_API_REFERENCE.md         NEPSE API documentation
 ```
 
-## API Overview
+## API Reference
 
-Base URL (local): `http://localhost:8080/api`
+Base URL: `http://localhost:8080/api` (local) 
 
-### Auth
+### Authentication Endpoints
+```
+POST   /auth/register              Register a new user
+POST   /auth/login                 Authenticate and receive JWT
+POST   /auth/verify-otp            Verify OTP for login
+POST   /auth/resend-otp            Request OTP resend
+PATCH  /auth/password              Change password
+PATCH  /auth/username              Change username
+POST   /auth/email/request-change  Initiate email change
+POST   /auth/email/confirm-change  Confirm email change
+GET    /auth/me                    Get authenticated user profile
+```
 
-- `POST /auth/register`
-- `POST /auth/login`
-- `POST /auth/verify-otp`
-- `POST /auth/resend-otp`
-- `PATCH /auth/password`
-- `PATCH /auth/username`
-- `POST /auth/email/request-change`
-- `POST /auth/email/confirm-change`
-- `GET /auth/me`
+### Account Management Endpoints
+```
+GET    /accounts                   List all user accounts
+POST   /accounts                   Add new Meroshare account
+PATCH  /accounts/{id}              Update account credentials
+DELETE /accounts/{id}              Remove account
+GET    /accounts/{id}/info         Get account information
+GET    /accounts/{id}/portfolio    Get account portfolio
+GET    /accounts/dp-list           List all DPs
+GET    /accounts/bank-by-dp/{dpId} List banks for a DP
+```
 
-### Accounts
+### IPO Endpoints
+```
+GET    /ipo/open                   List open IPO opportunities
+GET    /ipo/applied-companies      Get applied companies
+GET    /ipo/shares                 Get public share list
+POST   /ipo/apply                  Apply to IPOs
+GET    /ipo/result/{shareId}       Check IPO result
+GET    /ipo/history                Get application history
+GET    /ipo/cdsc-summary           Get CDSC summary data
+```
 
-- `GET /accounts/dp-list`
-- `GET /accounts/bank-by-dp/{dpId}`
-- `GET /accounts`
-- `POST /accounts`
-- `PATCH /accounts/{id}`
-- `DELETE /accounts/{id}`
-- `GET /accounts/{id}/portfolio`
-- `GET /accounts/{id}/info`
+### Market Data Endpoints
+```
+GET    /nepse/live-market          Real-time market data
+GET    /nepse/index                Market indices
+GET    /nepse/sub-indices          Sub-indices data
+GET    /nepse/summary              Market summary
+GET    /nepse/is-open              Check market status
+GET    /nepse/top-gainers          Top gaining stocks
+GET    /nepse/top-losers           Top losing stocks
+GET    /nepse/top-turnover         Highest turnover stocks
+GET    /nepse/top-trade            Top traded stocks
+GET    /nepse/top-transaction      Top transaction stocks
+GET    /nepse/supply-demand        Supply and demand data
+GET    /nepse/companies            List all companies
+GET    /nepse/company/details      Company profile
+GET    /nepse/price-volume         Price and volume data
+GET    /nepse/price-volume-history Historical price data
+GET    /nepse/market-depth         Market depth for symbol
+GET    /nepse/scrip-price-graph    Price graph for symbol
+GET    /nepse/floorsheet           Floorsheet data
+GET    /nepse/floorsheet/company   Company floorsheet
+```
 
-### IPO
+**Note:** Detailed API request/response documentation is available in internal reference files. Contact the developer for access to the Meroshare and NEPSE API reference documentation.
 
-- `GET /ipo/applied-companies`
-- `GET /ipo/shares`
-- `GET /ipo/open`
-- `POST /ipo/apply`
-- `GET /ipo/result/{shareId}`
-- `GET /ipo/history`
-- `GET /ipo/cdsc-summary`
-
-### NEPSE
-
-- `GET /nepse/live-market`
-- `GET /nepse/index`
-- `GET /nepse/sub-indices`
-- `GET /nepse/summary`
-- `GET /nepse/is-open`
-- `GET /nepse/top-gainers`
-- `GET /nepse/top-losers`
-- `GET /nepse/top-turnover`
-- `GET /nepse/top-trade`
-- `GET /nepse/top-transaction`
-- `GET /nepse/supply-demand`
-- `GET /nepse/companies`
-- `GET /nepse/price-volume`
-- `GET /nepse/security-list`
-- `GET /nepse/company/details?symbol=...`
-- `GET /nepse/scrip-price-graph?symbol=...`
-- `GET /nepse/price-volume-history?symbol=...`
-- `GET /nepse/market-depth?symbol=...`
-- `GET /nepse/floorsheet`
-- `GET /nepse/floorsheet/company?symbol=...`
-- `GET /nepse/graph/*`
-
-For full payload/response examples, see:
-
-- [MEROSHARE_API_REFERENCE.md](MEROSHARE_API_REFERENCE.md)
-- [NEPSE_API_REFERENCE.md](NEPSE_API_REFERENCE.md)
-
-## Setup and Run
+## Getting Started
 
 ### Prerequisites
 
-- Java 21+
-- Node.js 20+ and npm
-- PostgreSQL 14+ (or Docker)
-- Maven wrapper (`./mvnw`) is included
+- **Java 21+** (for backend development)
+- **Node.js 20+** and npm (for frontend development)
+- **PostgreSQL 14+** (database)
+- **Docker & Docker Compose** (optional, for containerized setup)
+- **Maven Wrapper** (included in backend directory)
 
-### 1. Start PostgreSQL
+### Step 1: Database Setup
 
-Option A: local PostgreSQL instance
-
-```sql
-CREATE DATABASE meroshare_db;
+**Option A: Local PostgreSQL**
+```bash
+createdb daskitta_db
 ```
 
-Option B: Docker Compose
+**Option B: Docker Compose** (recommended)
+```bash
+docker compose up -d
+```
+
+### Step 2: Backend Configuration
+
+1. Navigate to the backend directory:
+```bash
+cd backend
+```
+
+2. Set required environment variables:
+```bash
+export PORT=8080
+export DATABASE_URL='jdbc:postgresql://localhost:5432/daskitta_db'
+export DB_USERNAME='postgres'
+export DB_PASSWORD='your_password'
+
+export APP_JWT_SECRET='your_strong_secret_key'
+export APP_JWT_EXPIRATION_MS='2592000000'
+export CORS_ALLOWED_ORIGINS='http://localhost:5173'
+
+export MEROSHARE_BASE_URL='https://webbackend.cdsc.com.np/api'
+export NEPSE_API_URL='http://localhost:8000'
+
+export SPRING_MAIL_USERNAME='your_email@gmail.com'
+export SPRING_MAIL_PASSWORD='your_app_password'
+```
+
+3. Run the application:
+```bash
+./mvnw spring-boot:run
+```
+
+Backend will be available at `http://localhost:8080`
+
+### Step 3: Frontend Configuration
+
+1. Navigate to the frontend directory:
+```bash
+cd ../frontend
+```
+
+2. Create `.env` file:
+```bash
+VITE_API_BASE_URL=http://localhost:8080/api
+```
+
+3. Install dependencies and run:
+```bash
+npm install
+npm run dev
+```
+
+Frontend will be available at `http://localhost:5173`
+
+### Step 4: Production Build
+
+**Backend:**
+```bash
+cd backend
+./mvnw clean package
+java -jar target/*.jar
+```
+
+**Frontend:**
+```bash
+cd frontend
+npm run build
+npm run preview
+```
+
+## Docker Deployment
+
+### Using Docker Compose
 
 ```bash
 docker compose up -d
 ```
 
-### 2. Backend Configuration
+This starts a PostgreSQL 14 instance configured for local development.
 
-Backend uses profiles:
-
-- `local` is default (`application.properties`)
-- `prod` is for production DB overrides (`application-prod.properties`)
-
-Set environment variables (recommended) before running:
-
-```bash
-export PORT=8080
-export DATABASE_URL='jdbc:postgresql://localhost:5432/meroshare_db'
-export DB_USERNAME='postgres'
-export DB_PASSWORD='your_password'
-
-export APP_JWT_SECRET='replace_with_a_strong_secret'
-export APP_JWT_EXPIRATION_MS='2592000000'
-export CORS_ALLOWED_ORIGINS='your_host_url'
-
-export MEROSHARE_BASE_URL='https://webbackend.cdsc.com.np/api'
-export NEPSE_API_URL='http://localhost:8000'
-
-export SPRING_MAIL_USERNAME='your_email'
-export SPRING_MAIL_PASSWORD='your_app_password'
-```
-
-To run with default profile:
+### Building Backend Image Manually
 
 ```bash
 cd backend
-./mvnw spring-boot:run
+docker build -t daskitta-backend:latest .
+docker run --rm -p 8080:8080 \
+  -e DATABASE_URL='jdbc:postgresql://host.docker.internal:5432/meroshare_db' \
+  -e DB_USERNAME='postgres' \
+  -e DB_PASSWORD='your_password' \
+  -e APP_JWT_SECRET='your_secret' \
+  daskitta-backend:latest
 ```
 
-### 3. Frontend Configuration
+**Note:** The Dockerfile uses multi-stage builds with Eclipse Temurin 21 for optimized image size and runtime performance.
 
-Create `frontend/.env`:
+## Security Considerations
 
-```bash
-VITE_API_BASE_URL=http://localhost:8080/api
-```
+- **Authentication:** JWT-based with configurable expiration
+- **Credential Encryption:** User account passwords and PINs are encrypted using AES before storage
+- **Protected Routes:** Frontend route guards and API interceptors enforce authorization
+- **CORS:** Configured to accept requests from specified origins only
+- **Environment Variables:** Sensitive values (secrets, API keys) must be provided via environment variables
 
-Run frontend:
+## Contributing
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+This project is actively maintained by Prasant Bhattarai.
 
-Frontend runs on `http://localhost:5173`.
-
-### 4. Build for Production
-
-```bash
-# Backend
-cd backend
-./mvnw clean package
-java -jar target/*.jar
-
-# Frontend
-cd ../frontend
-npm run build
-npm run preview
-```
-
-## Docker Notes
-
-- `docker-compose.yml` currently provisions PostgreSQL for local development.
-- `backend/Dockerfile` is multi-stage and builds/runs with Java 21 images.
-
-To build backend image manually:
-
-```bash
-cd backend
-docker build -t daskitta-backend .
-docker run --rm -p 8080:8080 daskitta-backend
-```
-
-## Security Notes
-
-- JWT secures protected APIs.
-- External account credentials are encrypted before persistence.
-- Route guarding is enforced in frontend protected routes and API interceptor behavior.
-
-## Developer
-
-Prasant Bhattarai
-
+**Developer Profile:**
 - Portfolio: [https://prasant-bhattarai.com.np](https://prasant-bhattarai.com.np)
 - GitHub: [https://github.com/coprashant](https://github.com/coprashant)
+
+## License
+
+This project is open source. See the repository for more details.
