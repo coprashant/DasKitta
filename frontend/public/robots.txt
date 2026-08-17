@@ -1,0 +1,20 @@
+User-agent: *
+Allow: /
+Allow: /ipo/result
+Allow: /nepse
+Allow: /nepse/company/
+Allow: /privacy
+Allow: /terms
+Allow: /disclaimer
+
+Disallow: /dashboard
+Disallow: /ipo/apply
+Disallow: /history
+Disallow: /portfolio
+Disallow: /settings
+Disallow: /settings/
+Disallow: /login
+Disallow: /register
+Disallow: /api/
+
+Sitemap: https://daskitta.prasant-bhattarai.com.np/sitemap.xml

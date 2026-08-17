@@ -4,6 +4,8 @@ import { useAuth } from "../../context/AuthContext";
 import Layout from "../../components/Layout/Layout.jsx";
 import NepseStrip, { NepseHeroCard } from "../../components/NepseStrip/NepseStrip.jsx";
 import { useNepaliDateTime } from "../../dateUtils";
+import SEO from "../../seo/SEO.jsx";
+import { HOME_JSONLD } from "../../seo/jsonLd.js";
 import "./Home.css";
 
 const FEATURES = [
@@ -56,6 +58,10 @@ const Home = ({ theme, onThemeToggle }) => {
 
   return (
       <Layout theme={theme} onThemeToggle={onThemeToggle}>
+        <SEO
+            canonical="/"
+            jsonLd={HOME_JSONLD}
+        />
         {/* Hero Section */}
         <section className="hero">
           <div className="hero-inner">

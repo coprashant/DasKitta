@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import OtpInput from "../../components/OtpInput/OtpInput";
 import { EyeIcon, EyeOffIcon, CloseIcon, SpinnerIcon } from "../../components/Icons";
 import { verifyOtpApi, resendOtpApi } from "../../api/auth";
+import SEO from "../../seo/SEO.jsx";
 import "./Auth.css";
 
 const RESEND_COOLDOWN = 60;
@@ -158,6 +159,16 @@ const Auth = () => {
 
     return (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+            <SEO
+                title={isLogin ? "Sign In" : "Create Account"}
+                description={
+                    isLogin
+                        ? "Sign in to DasKitta to manage your Meroshare accounts, apply for IPOs, and track your NEPSE portfolio."
+                        : "Create a free DasKitta account to apply for NEPSE IPOs across multiple Meroshare accounts, track your portfolio, and check allotment results."
+                }
+                canonical={isLogin ? "/login" : "/register"}
+                noindex={true}
+            />
             <div className="modal-blur" onClick={handleClose} aria-hidden="true" />
 
             <div className="modal-box">

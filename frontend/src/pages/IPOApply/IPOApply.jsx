@@ -14,6 +14,7 @@ import Layout from "../../components/Layout/Layout.jsx";
 import toast from "react-hot-toast";
 import ipoData from "../../ipo_data.json";
 import { bsToAd, nowNepal } from "../../dateUtils";
+import SEO from "../../seo/SEO.jsx";
 import "./IPOApply.css";
 
 const STATUS_BADGE_MAP = {
@@ -508,6 +509,12 @@ const IPOApply = () => {
 
   return (
       <Layout>
+        <SEO
+            title="Apply for IPOs"
+            description="Apply for open NEPSE IPOs across all your Meroshare accounts in one click. Select the IPO, pick accounts, and submit in seconds."
+            canonical="/ipo/apply"
+            noindex={true}
+        />
         <div className="page ipo-page">
           <h1 className="page-title">IPO Application</h1>
           <p className="page-subtitle">Select an offering and accounts to apply in one step.</p>

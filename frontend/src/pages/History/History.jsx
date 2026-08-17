@@ -4,6 +4,7 @@ import { getHistoryApi } from "../../api/ipo";
 import { useAccount } from "../../context/AccountContext";
 import Layout from "../../components/Layout/Layout.jsx";
 import AccountSwitcher from "../../components/AccountSwitcher/AccountSwitcher.jsx";
+import SEO from "../../seo/SEO.jsx";
 import {
   IconPlus,
   IconUser,
@@ -163,6 +164,12 @@ const History = () => {
 
   return (
       <Layout>
+        <SEO
+            title="Application History"
+            description="A complete timeline of all your past NEPSE IPO applications, allotment results, and transaction statuses across your Meroshare accounts."
+            canonical="/history"
+            noindex={true}
+        />
         <div className="page">
           <div className="history-shell">
             <div className="history-page-header">

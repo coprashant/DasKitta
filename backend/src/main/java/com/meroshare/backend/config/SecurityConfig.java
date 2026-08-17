@@ -53,7 +53,7 @@ public class SecurityConfig {
                 "http://localhost:5173",
                 "http://localhost:3000",
                 "https://daskitta.vercel.app",
-                "https://daskitta.netlify.app"
+                "https://daskitta.prasant-bhattarai.com.np"
         ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));

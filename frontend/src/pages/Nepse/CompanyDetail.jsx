@@ -18,6 +18,8 @@ import {
     ScrollTicker,
 } from "./nepseShared.jsx";
 import { fmt, fmtCompact } from "./nepseUtils";
+import SEO from "../../seo/SEO.jsx";
+import { companyDetailJsonLd } from "../../seo/jsonLd.js";
 import "./Nepse.css";
 import "./CompanyDetail.css";
 
@@ -369,6 +371,12 @@ export default function CompanyDetail() {
 
     return (
         <Layout>
+            <SEO
+                title={info.name ? `${info.name} (${symbol}) Stock Price` : `${symbol} Stock Price`}
+                description={`Live stock price, market depth, price-volume history, and floorsheet for ${info.name || symbol} (${symbol}) listed on the Nepal Stock Exchange (NEPSE).`}
+                canonical={`/nepse/company/${symbol}`}
+                jsonLd={companyDetailJsonLd(symbol, info.name)}
+            />
             <div className="term-shell">
                 <header className="term-header">
                     <div className="term-brand">

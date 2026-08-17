@@ -10,6 +10,8 @@ import { useAuth } from "../../context/AuthContext";
 import Layout from "../../components/Layout/Layout.jsx";
 import { InfoIcon, SpinnerIcon, WarnIcon } from "../../components/Icons";
 import toast from "react-hot-toast";
+import SEO from "../../seo/SEO.jsx";
+import { RESULT_CHECKER_JSONLD } from "../../seo/jsonLd.js";
 import "./ResultChecker.css";
 
 const resolveShareId = (ipo) =>
@@ -105,6 +107,12 @@ const ResultChecker = () => {
 
   return (
       <Layout>
+        <SEO
+            title="IPO Result Checker"
+            description="Check your NEPSE IPO allotment result instantly. Enter your BOID and select the IPO company to find out if you were allotted shares — no login required."
+            canonical="/ipo/result"
+            jsonLd={RESULT_CHECKER_JSONLD}
+        />
         <div className="page">
           <h1 className="page-title">IPO result checker</h1>
           <p className="page-subtitle">

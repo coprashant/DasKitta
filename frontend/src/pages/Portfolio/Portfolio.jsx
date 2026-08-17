@@ -4,6 +4,7 @@ import { getPortfolioApi } from "../../api/accounts";
 import { useAccount } from "../../context/AccountContext";
 import Layout from "../../components/Layout/Layout.jsx";
 import AccountSwitcher from "../../components/AccountSwitcher/AccountSwitcher.jsx";
+import SEO from "../../seo/SEO.jsx";
 import {
     IconBriefcase,
     IconTrendUp,
@@ -132,6 +133,12 @@ const Portfolio = () => {
 
     return (
         <Layout>
+            <SEO
+                title="Portfolio"
+                description="View your NEPSE demat holdings, current stock values, and portfolio performance across your Meroshare accounts."
+                canonical="/portfolio"
+                noindex={true}
+            />
             <div className="portfolio-page">
                 <div className="portfolio-header">
                     <div>

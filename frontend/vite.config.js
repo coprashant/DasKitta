@@ -12,15 +12,28 @@ export default defineConfig({
     }),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.png', 'apple-touch-icon.png'],
+      includeAssets: ['favicon.png', 'apple-touch-icon.png', 'robots.txt', 'sitemap.xml'],
       manifest: {
-        name: 'DasKitta',
+        name: 'DasKitta — Nepal IPO and NEPSE Tracker',
         short_name: 'DasKitta',
-        description: 'Track NEPSE portfolios and apply for IPOs with ease.',
+        description: 'Apply for NEPSE IPOs across all your Meroshare accounts in one click. Track your stock portfolio, check IPO allotment results, and monitor live Nepal stock market data.',
         theme_color: '#1e6fb5',
         background_color: '#141b26',
         display: 'standalone',
+        orientation: 'portrait-primary',
         start_url: '/',
+        scope: '/',
+        id: '/',
+        lang: 'en-NP',
+        categories: ['finance', 'utilities'],
+        screenshots: [
+          {
+            src: 'daskitta.png',
+            sizes: '1200x630',
+            type: 'image/png',
+            label: 'DasKitta home screen showing IPO applications and NEPSE data'
+          }
+        ],
         icons: [
           {
             src: 'favicon.png',

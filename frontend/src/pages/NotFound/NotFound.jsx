@@ -1,18 +1,18 @@
-import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Layout from "../../components/Layout/Layout.jsx";
+import SEO from "../../seo/SEO.jsx";
 import "./NotFound.css";
 
 const NotFound = () => {
   const navigate = useNavigate();
 
-  // Set page title for clarity
-  useEffect(() => {
-    document.title = "404 - Page Not Found";
-  }, []);
-
   return (
       <Layout>
+        <SEO
+            title="404 — Page Not Found"
+            description="The page you are looking for does not exist on DasKitta."
+            noindex={true}
+        />
         <div className="notfound-page" role="main">
           <div className="notfound-inner anim-fade-up">
             <div className="notfound-graphic" aria-hidden="true">

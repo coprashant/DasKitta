@@ -1,9 +1,15 @@
 import Layout from "../../components/Layout/Layout.jsx";
+import SEO from "../../seo/SEO.jsx";
 import "./Legal.css";
 
 const Disclaimer = () => {
     return (
         <Layout>
+            <SEO
+                title="Disclaimer"
+                description="DasKitta is not a licensed financial advisor. All NEPSE market data and IPO information is provided for informational purposes only."
+                canonical="/disclaimer"
+            />
             <main className="page">
                 <div className="legal-doc">
                     <h1 className="page-title">Disclaimer</h1>

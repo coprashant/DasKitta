@@ -44,6 +44,8 @@ import {
     resolveHeroKey,
 } from "./nepseUtils";
 import { useClock } from "./nepseHooks";
+import SEO from "../../seo/SEO.jsx";
+import { NEPSE_JSONLD } from "../../seo/jsonLd.js";
 import "./Nepse.css";
 
 const REFRESH_INTERVAL = 30000;
@@ -437,6 +439,12 @@ export default function Nepse() {
 
     return (
         <Layout>
+            <SEO
+                title="NEPSE Live Market Data"
+                description="Live Nepal Stock Exchange (NEPSE) index, top gainers, losers, turnover, sector sub-indices, and individual stock prices. Updated every 30 seconds during market hours."
+                canonical="/nepse"
+                jsonLd={NEPSE_JSONLD}
+            />
             <div className="term-shell">
                 <header className="term-header">
                     <div className="term-brand">

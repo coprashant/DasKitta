@@ -5,6 +5,7 @@ import { useAccount } from "../../context/AccountContext";
 import { getHistoryApi, getCdscSummaryApi } from "../../api/ipo";
 import Layout from "../../components/Layout/Layout.jsx";
 import AccountSwitcher from "../../components/AccountSwitcher/AccountSwitcher.jsx";
+import SEO from "../../seo/SEO.jsx";
 import {
   IconUser, IconPlus, IconFile, IconRefresh,
   IconStack, IconCheck, IconX, IconClock
@@ -224,6 +225,12 @@ const Dashboard = () => {
 
   return (
       <Layout>
+        <SEO
+            title="Dashboard"
+            description="Your IPO application dashboard — view allotment stats, recent applications, and CDSC summary across your Meroshare accounts."
+            canonical="/dashboard"
+            noindex={true}
+        />
         <div className="page">
           <div className="dash-header">
             <div>

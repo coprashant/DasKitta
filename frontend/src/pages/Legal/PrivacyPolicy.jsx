@@ -1,9 +1,15 @@
 import Layout from "../../components/Layout/Layout.jsx";
+import SEO from "../../seo/SEO.jsx";
 import "./Legal.css";
 
 const PrivacyPolicy = () => {
     return (
         <Layout>
+            <SEO
+                title="Privacy Policy"
+                description="Learn how DasKitta collects, uses, and protects your personal data and Meroshare credentials."
+                canonical="/privacy"
+            />
             <main className="page">
                 <div className="legal-doc">
                     <h1 className="page-title">Privacy Policy</h1>

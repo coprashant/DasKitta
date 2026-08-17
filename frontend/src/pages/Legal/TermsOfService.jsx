@@ -1,9 +1,15 @@
 import Layout from "../../components/Layout/Layout.jsx";
+import SEO from "../../seo/SEO.jsx";
 import "./Legal.css";
 
 const TermsOfService = () => {
     return (
         <Layout>
+            <SEO
+                title="Terms of Service"
+                description="Read the terms and conditions governing your use of DasKitta, the NEPSE IPO and portfolio tracking platform."
+                canonical="/terms"
+            />
             <main className="page">
                 <div className="legal-doc">
                     <h1 className="page-title">Terms of Service</h1>
