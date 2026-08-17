@@ -8,24 +8,20 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.util.AntPathMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Map;
 
-/**
- * Basic fixed window rate limiter backed by redis atomic counters.
- * Applies only to the configured paths, everything else passes through.
- * The limit is keyed by client ip plus path, so each caller gets its own
- * counter per endpoint.
- */
 @Slf4j
 @Component
 public class RateLimitFilter extends OncePerRequestFilter {
 
     private final StringRedisTemplate redisTemplate;
     private final Map<String, LimitRule> rules;
+    private final AntPathMatcher pathMatcher = new AntPathMatcher();
 
     private static final String KEY_PREFIX = "ratelimit:";
 
@@ -48,38 +44,51 @@ public class RateLimitFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        String path = request.getRequestURI();
-        LimitRule rule = rules.get(path);
 
-        if (rule == null) {
+        // Skip CORS preflight OPTIONS requests from consuming rate limits
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        String clientIp = resolveClientIp(request);
-        String key = KEY_PREFIX + path + ":" + clientIp;
+        String requestPath = request.getRequestURI();
 
-        Long count = redisTemplate.opsForValue().increment(key);
-        if (count != null && count == 1L) {
-            redisTemplate.expire(key, rule.window());
+        Map.Entry<String, LimitRule> matchedRule = rules.entrySet().stream()
+                .filter(entry -> pathMatcher.match(entry.getKey(), requestPath) || 
+                                 pathMatcher.match(entry.getKey() + "/", requestPath))
+                .findFirst()
+                .orElse(null);
+
+        if (matchedRule == null) {
+            filterChain.doFilter(request, response);
+            return;
         }
 
-        if (count != null && count > rule.maxRequests()) {
-            log.warn("[RATE_LIMIT] Blocked {} from {}, count={}", path, clientIp, count);
-            response.setStatus(429);
-            response.setContentType("application/json");
-            response.getWriter().write("{\"error\":\"Too many requests. Please try again later.\"}");
-            return;
+        LimitRule rule = matchedRule.getValue();
+        String clientIp = resolveClientIp(request);
+        String key = KEY_PREFIX + matchedRule.getKey() + ":" + clientIp;
+
+        try {
+            Long count = redisTemplate.opsForValue().increment(key);
+            if (count != null && count == 1L) {
+                redisTemplate.expire(key, rule.window());
+            }
+
+            if (count != null && count > rule.maxRequests()) {
+                log.warn("[RATE_LIMIT] Blocked request to {} from IP: {}", requestPath, clientIp);
+                response.setStatus(429);
+                response.setContentType("application/json");
+                response.getWriter().write("{\"error\":\"Too many requests. Please try again later.\"}");
+                return;
+            }
+        } catch (Exception e) {
+            log.error("[RATE_LIMIT] Redis connection failed during rate limiting check: {}", e.getMessage());
         }
 
         filterChain.doFilter(request, response);
     }
 
     private String resolveClientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
         return request.getRemoteAddr();
     }
 
