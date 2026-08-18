@@ -42,28 +42,25 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                .requestMatchers(
-                        HttpMethod.POST,
-                        "/api/auth/login",
-                        "/api/auth/register",
-                        "/api/auth/resend-otp"
-                ).permitAll()
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/auth/login",
+                                "/api/auth/register",
+                                "/api/auth/resend-otp"
+                        ).permitAll()
 
-                .requestMatchers("/api/nepse/**").permitAll()
+                        .requestMatchers("/api/nepse/**").permitAll()
 
-                .requestMatchers(
-                        HttpMethod.GET,
-                        HttpMethod.HEAD,
-                        "/api/ping"
-                ).permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/ping").permitAll()
+                        .requestMatchers(HttpMethod.HEAD, "/api/ping").permitAll()
 
-                .requestMatchers(HttpMethod.GET, "/api/ipo/shares").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/ipo/result/**").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/accounts/dp-list").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/accounts/bank-by-dp/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/ipo/shares").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/ipo/result/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/accounts/dp-list").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/accounts/bank-by-dp/**").permitAll()
 
-                .anyRequest().authenticated()
-        )
+                        .anyRequest().authenticated()
+                )
                 // Filter ordering: Rate limit -> Auth evaluation -> Authentication Filter
                 .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
