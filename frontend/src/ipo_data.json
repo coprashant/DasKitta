@@ -1,11 +1,11 @@
 [
   {
     "id": "ipo-001",
-    "companyName": "7% Laxmi Sunrise Debenture 2092",
-    "scrip": "LSD2092",
-    "companyShareId": 793,
-    "status": "open",
-    "openDate": "2083-04-14",
-    "closeDate": "2083-04-19"
+    "companyName": "Beni Hydropower Project Limited",
+    "scrip": "BHPL",
+    "companyShareId": 792,
+    "status": "upcoming",
+    "openDate": "2083-05-22",
+    "closeDate": "2083-05-28"
   }
 ]
