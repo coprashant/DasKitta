@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useAccount } from "./AccountContext";
 import { getHistoryApi } from "../api/ipo";
 import ipoData from "../ipo_data.json";
@@ -74,14 +74,13 @@ const deriveIpoNotifs = (deletedIds) => {
     try {
       closeAd = bsToAd(ipo.closeDate);
       openAd  = bsToAd(ipo.openDate);
-    } catch (e) {
-      console.error(`dateUtils: ${e.message}`);
+    } catch {
       continue;
     }
 
     if (ipo.status === "open") {
       if (closeAd < now) continue;
-      const diffClose  = closeAd - now;
+      const diffClose = closeAd - now;
       const { days }   = msToDhm(diffClose);
       if (days <= 3) {
         const id = buildId("ipo-closing", ipo.id);
@@ -94,6 +93,7 @@ const deriveIpoNotifs = (deletedIds) => {
             detail:    closingDetail(ipo.closeDate),
             timestamp: new Date(closeAd.getTime() - 3 * 86400000).toISOString(),
             ipoId:     ipo.id,
+            targetUrl: "/ipo/apply",
           });
         }
       }
@@ -111,6 +111,7 @@ const deriveIpoNotifs = (deletedIds) => {
           detail:    openingDetail(ipo.openDate),
           timestamp: new Date(openAd.getTime() - 7 * 86400000).toISOString(),
           ipoId:     ipo.id,
+          targetUrl: "/ipo/apply",
         });
       }
     }
@@ -133,6 +134,7 @@ const deriveFromHistory = (items, deletedIds) => {
           detail:    item.statusMessage || null,
           timestamp: item.appliedAt,
           shareId:   item.shareId,
+          targetUrl: "/dashboard",
         });
       }
     }
@@ -146,42 +148,46 @@ const mergeNotifs = (existing, incoming) => {
     if (!map.has(n.id)) map.set(n.id, n);
   }
   return Array.from(map.values()).sort(
-    (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
+      (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
   );
 };
 
 export const NotificationProvider = ({ children }) => {
   const { activeAccount } = useAccount();
 
-  const [notifsByAccount, setNotifsByAccount] = useState({});
-  const [readByAccount,   setReadByAccount]   = useState({});
+  const [notifsByAccount, setNotifsByAccount]   = useState({});
+  const [readIdsByAccount, setReadIdsByAccount] = useState({});
   const [loading, setLoading] = useState(false);
 
   const fetchedRef = useRef(new Set());
-
-  const accountId = activeAccount?.id;
+  const accountId  = activeAccount?.id;
 
   const notifications = accountId ? (notifsByAccount[accountId] || []) : [];
-  const readTimestamp = accountId ? (readByAccount[accountId] || 0) : 0;
+  const rawReadIds    = accountId ? readIdsByAccount[accountId] : [];
+  const readIdsArr    = Array.isArray(rawReadIds) ? rawReadIds : [];
+  const readIds       = useMemo(() => new Set(readIdsArr), [readIdsArr]);
 
-  const unreadCount = notifications.filter(
-    (n) => new Date(n.timestamp).getTime() > readTimestamp
-  ).length;
+  const unreadCount = useMemo(
+      () => notifications.filter((n) => !readIds.has(n.id)).length,
+      [notifications, readIds]
+  );
 
   const loadForAccount = useCallback(async (acc) => {
     if (!acc) return;
     const id = acc.id;
 
     const storedNotifs  = readStored(NOTIF_KEY(id))   || [];
-    const storedRead    = readStored(READ_KEY(id))     || 0;
-    const storedDeleted = readStored(DELETED_KEY(id))  || [];
-    const deletedIds    = new Set(storedDeleted);
+    const storedRead    = readStored(READ_KEY(id));
+    const validRead     = Array.isArray(storedRead) ? storedRead : [];
+    const storedDeleted = readStored(DELETED_KEY(id));
+    const validDeleted  = Array.isArray(storedDeleted) ? storedDeleted : [];
+    const deletedIds    = new Set(validDeleted);
 
     const ipoNotifs = deriveIpoNotifs(deletedIds);
     const merged    = mergeNotifs(storedNotifs, ipoNotifs);
 
     setNotifsByAccount((prev) => ({ ...prev, [id]: merged }));
-    setReadByAccount((prev)   => ({ ...prev, [id]: storedRead }));
+    setReadIdsByAccount((prev) => ({ ...prev, [id]: validRead }));
     writeStored(NOTIF_KEY(id), merged);
 
     if (fetchedRef.current.has(id)) return;
@@ -191,7 +197,7 @@ export const NotificationProvider = ({ children }) => {
     try {
       const histRes   = await getHistoryApi();
       const histItems = (Array.isArray(histRes?.data) ? histRes.data : [])
-        .filter((h) => h.accountUsername === acc.username);
+          .filter((h) => h.accountUsername === acc.username);
       const histNotifs = deriveFromHistory(histItems, deletedIds);
       const mergedAll  = mergeNotifs(merged, histNotifs);
       setNotifsByAccount((prev) => ({ ...prev, [id]: mergedAll }));
@@ -202,23 +208,53 @@ export const NotificationProvider = ({ children }) => {
     }
   }, []);
 
+  // Sync active account accurately
   useEffect(() => {
     if (activeAccount) loadForAccount(activeAccount);
-  }, [activeAccount?.id]);
+  }, [activeAccount, loadForAccount]);
+
+  const markAsRead = useCallback((notifId) => {
+    if (!accountId) return;
+    setReadIdsByAccount((prev) => {
+      const currentRaw = prev[accountId];
+      const currentArr = Array.isArray(currentRaw) ? currentRaw : [];
+      const current = new Set(currentArr);
+      current.add(notifId);
+      const updated = Array.from(current);
+      writeStored(READ_KEY(accountId), updated);
+      return { ...prev, [accountId]: updated };
+    });
+  }, [accountId]);
 
   const markAllRead = useCallback(() => {
     if (!accountId) return;
-    const now = Date.now();
-    setReadByAccount((prev) => ({ ...prev, [accountId]: now }));
-    writeStored(READ_KEY(accountId), now);
+    const allIds = (notifsByAccount[accountId] || []).map((n) => n.id);
+    setReadIdsByAccount((prev) => ({ ...prev, [accountId]: allIds }));
+    writeStored(READ_KEY(accountId), allIds);
+  }, [accountId, notifsByAccount]);
+
+  const removeNotif = useCallback((notifId) => {
+    if (!accountId) return;
+    const existing = readStored(DELETED_KEY(accountId));
+    const validExisting = Array.isArray(existing) ? existing : [];
+    const updatedDeleted = Array.from(new Set([...validExisting, notifId]));
+    writeStored(DELETED_KEY(accountId), updatedDeleted);
+
+    setNotifsByAccount((prev) => {
+      const current = prev[accountId] || [];
+      const filtered = current.filter((n) => n.id !== notifId);
+      writeStored(NOTIF_KEY(accountId), filtered);
+      return { ...prev, [accountId]: filtered };
+    });
   }, [accountId]);
 
   const clearAll = useCallback(() => {
     if (!accountId) return;
     const current    = notifsByAccount[accountId] || [];
     const deletedIds = current.map((n) => n.id);
-    const existing   = readStored(DELETED_KEY(accountId)) || [];
-    const merged     = [...new Set([...existing, ...deletedIds])];
+    const existing   = readStored(DELETED_KEY(accountId));
+    const validExisting = Array.isArray(existing) ? existing : [];
+    const merged     = Array.from(new Set([...validExisting, ...deletedIds]));
     writeStored(DELETED_KEY(accountId), merged);
     setNotifsByAccount((prev) => ({ ...prev, [accountId]: [] }));
     writeStored(NOTIF_KEY(accountId), []);
@@ -230,18 +266,23 @@ export const NotificationProvider = ({ children }) => {
     loadForAccount(activeAccount);
   }, [activeAccount, loadForAccount]);
 
+  // Memoize provider value to prevent extra renders
+  const contextValue = useMemo(() => ({
+    notifications,
+    unreadCount,
+    readIds,
+    loading,
+    markAsRead,
+    markAllRead,
+    removeNotif,
+    clearAll,
+    refresh,
+  }), [notifications, unreadCount, readIds, loading, markAsRead, markAllRead, removeNotif, clearAll, refresh]);
+
   return (
-    <NotificationContext.Provider value={{
-      notifications,
-      unreadCount,
-      readTimestamp,
-      loading,
-      markAllRead,
-      clearAll,
-      refresh,
-    }}>
-      {children}
-    </NotificationContext.Provider>
+      <NotificationContext.Provider value={contextValue}>
+        {children}
+      </NotificationContext.Provider>
   );
 };
 

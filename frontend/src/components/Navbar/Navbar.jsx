@@ -12,11 +12,11 @@ import {
 import "./Navbar.css";
 
 const authLinks = [
-  { path: "/dashboard",  label: "Dashboard" },
-  { path: "/nepse",      label: "Nepse"      },
-  { path: "/ipo/apply",  label: "Apply IPO"  },
-  { path: "/ipo/result", label: "Results"    },
-  { path: "/portfolio",  label: "Portfolio"  },
+  { path: "/dashboard", label: "Dashboard" },
+  { path: "/nepse",     label: "Nepse"     },
+  { path: "/ipo/apply", label: "Apply IPO" },
+  { path: "/ipo/result", label: "Results"   },
+  { path: "/portfolio", label: "Portfolio" },
 ];
 
 const secondaryLinks = [
@@ -103,7 +103,7 @@ const ProfileDropdown = ({ onClose }) => {
 const BellButton = () => {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
-  const { unreadCount, readTimestamp, markAllRead } = useNotifications();
+  const { unreadCount } = useNotifications();
 
   useEffect(() => {
     if (!open) return;
@@ -121,18 +121,16 @@ const BellButton = () => {
     return () => document.removeEventListener("keydown", handler);
   }, [open]);
 
-  const handleOpen = () => {
-    setOpen((v) => {
-      if (!v) markAllRead();
-      return !v;
-    });
+  // Clean state toggle without automatic read side-effects
+  const handleToggle = () => {
+    setOpen((prev) => !prev);
   };
 
   return (
       <div className="bell-btn-wrap" ref={wrapRef}>
         <button
             className={`navbar-bell-btn${open ? " active" : ""}`}
-            onClick={handleOpen}
+            onClick={handleToggle}
             aria-label={`Notifications${unreadCount ? ` (${unreadCount} unread)` : ""}`}
             aria-expanded={open}
             aria-haspopup="true"
@@ -146,7 +144,7 @@ const BellButton = () => {
           {open && <span className="navbar-indicator-dot" aria-hidden="true" />}
         </button>
         {open && (
-            <NotificationPanel readTimestamp={readTimestamp} onClose={() => setOpen(false)} />
+            <NotificationPanel onClose={() => setOpen(false)} />
         )}
       </div>
   );

@@ -1,7 +1,9 @@
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useNotifications } from "../../context/NotificationContext.jsx";
 import {
   IconBell, IconBellOff, IconRefresh, IconTrash,
-  IconAlertCircle, IconCalendarClock, IconSparkle,
+  IconAlertCircle, IconCalendarClock, IconSparkle, IconX
 } from "../Icons.jsx";
 import "./NotificationPanel.css";
 
@@ -40,85 +42,128 @@ const fmtRelative = (iso) => {
   }
 };
 
-const NotificationPanel = ({ readTimestamp, onClose }) => {
-  const { notifications, loading, markAllRead, clearAll, refresh } = useNotifications();
+const NotificationPanel = ({ onClose }) => {
+  const { notifications, loading, readIds, markAsRead, markAllRead, removeNotif, clearAll, refresh } = useNotifications();
+  const navigate = useNavigate();
+  const [, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   const handleClear = () => {
     clearAll();
-    onClose();
+    if (onClose) onClose();
+  };
+
+  const handleItemClick = (n) => {
+    markAsRead(n.id);
+    if (n.targetUrl) {
+      navigate(n.targetUrl);
+      if (onClose) onClose();
+    }
+  };
+
+  // Keyboard accessibility helper
+  const handleKeyDown = (e, callback) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      callback();
+    }
+  };
+
+  const handleDismissOne = (e, id) => {
+    e.stopPropagation();
+    removeNotif(id);
   };
 
   return (
-    <div className="notif-panel" role="dialog" aria-label="Notifications">
-      <div className="notif-panel-header">
-        <span className="notif-panel-title">Notifications</span>
-        <div className="notif-panel-actions">
-          <button
-            className="notif-action-btn"
-            onClick={refresh}
-            disabled={loading}
-            title="Refresh"
-            aria-label="Refresh notifications"
-          >
-            <IconRefresh spinning={loading} />
-          </button>
-          {notifications.length > 0 && (
-            <>
-              <button
+      <div className="notif-panel" role="dialog" aria-label="Notifications">
+        <div className="notif-panel-header">
+          <span className="notif-panel-title">Notifications</span>
+          <div className="notif-panel-actions">
+            <button
                 className="notif-action-btn"
-                onClick={markAllRead}
-                title="Mark all read"
-                aria-label="Mark all as read"
-              >
-                <IconBell />
-              </button>
-              <button
-                className="notif-action-btn notif-action-danger"
-                onClick={handleClear}
-                title="Clear all"
-                aria-label="Clear all notifications"
-              >
-                <IconTrash />
-              </button>
-            </>
+                onClick={refresh}
+                disabled={loading}
+                title="Refresh"
+                aria-label="Refresh notifications"
+            >
+              <IconRefresh spinning={loading} />
+            </button>
+            {notifications.length > 0 && (
+                <>
+                  <button
+                      className="notif-action-btn"
+                      onClick={markAllRead}
+                      title="Mark all read"
+                      aria-label="Mark all as read"
+                  >
+                    <IconBell />
+                  </button>
+                  <button
+                      className="notif-action-btn notif-action-danger"
+                      onClick={handleClear}
+                      title="Clear all"
+                      aria-label="Clear all notifications"
+                  >
+                    <IconTrash />
+                  </button>
+                </>
+            )}
+          </div>
+        </div>
+
+        <div className="notif-list">
+          {notifications.length === 0 ? (
+              <div className="notif-empty">
+                <IconBellOff />
+                <p>No notifications</p>
+              </div>
+          ) : (
+              notifications.map((n) => {
+                const meta     = TYPE_META[n.type] || TYPE_META.NEW_IPO;
+                const isUnread = !readIds.has(n.id);
+
+                return (
+                    <div
+                        key={n.id}
+                        className={`notif-item${isUnread ? " notif-item-unread" : ""}`}
+                        onClick={() => handleItemClick(n)}
+                        onKeyDown={(e) => handleKeyDown(e, () => handleItemClick(n))}
+                        role="button"
+                        tabIndex={0}
+                    >
+                      <div
+                          className="notif-icon-wrap"
+                          style={{ color: meta.colorVar, background: meta.dimVar }}
+                      >
+                        {meta.icon}
+                      </div>
+                      <div className="notif-content">
+                        <p className="notif-title">{n.title}</p>
+                        <p className="notif-body">{n.body}</p>
+                        {n.detail && <p className="notif-detail">{n.detail}</p>}
+                      </div>
+                      <div className="notif-meta">
+                        <button
+                            className="notif-dismiss-btn"
+                            onClick={(e) => handleDismissOne(e, n.id)}
+                            title="Dismiss"
+                            aria-label="Dismiss notification"
+                        >
+                          <IconX />
+                        </button>
+                        <span className="notif-time">{fmtRelative(n.timestamp)}</span>
+                      </div>
+                      {isUnread && <span className="notif-dot" aria-hidden="true" />}
+                    </div>
+                );
+              })
           )}
         </div>
       </div>
-
-      <div className="notif-list">
-        {notifications.length === 0 ? (
-          <div className="notif-empty">
-            <IconBellOff />
-            <p>No notifications</p>
-          </div>
-        ) : (
-          notifications.map((n) => {
-            const meta    = TYPE_META[n.type] || TYPE_META.NEW_IPO;
-            const isUnread = new Date(n.timestamp).getTime() > readTimestamp;
-            return (
-              <div
-                key={n.id}
-                className={`notif-item${isUnread ? " notif-item-unread" : ""}`}
-              >
-                <div
-                  className="notif-icon-wrap"
-                  style={{ color: meta.colorVar, background: meta.dimVar }}
-                >
-                  {meta.icon}
-                </div>
-                <div className="notif-content">
-                  <p className="notif-title">{n.title}</p>
-                  <p className="notif-body">{n.body}</p>
-                  {n.detail && <p className="notif-detail">{n.detail}</p>}
-                </div>
-                <span className="notif-time">{fmtRelative(n.timestamp)}</span>
-                {isUnread && <span className="notif-dot" aria-hidden="true" />}
-              </div>
-            );
-          })
-        )}
-      </div>
-    </div>
   );
 };
 
