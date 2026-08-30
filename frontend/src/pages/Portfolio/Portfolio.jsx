@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
 import { getPortfolioApi } from "../../api/accounts";
 import { useAccount } from "../../context/AccountContext";
@@ -14,6 +14,8 @@ import {
     IconArrowUp,
     IconArrowDown,
     IconUser,
+    IconDownload,
+    IconShare,
 } from "../../components/Icons.jsx";
 import "./Portfolio.css";
 
@@ -30,6 +32,49 @@ const gainClass = (ltp, prev) => {
     return ltp > prev ? "positive" : ltp < prev ? "negative" : "";
 };
 
+// generic message shown to the user, never the raw error object
+const FALLBACK_ERROR = "Failed to load portfolio. Please try again.";
+
+const getErrorMessage = (e) => {
+    const msg = e?.response?.data?.message;
+    return typeof msg === "string" && msg.trim() ? msg : FALLBACK_ERROR;
+};
+
+// cache helpers, keyed per account
+const CACHE_PREFIX = "portfolio_cache_";
+
+const readCache = (id) => {
+    try {
+        const raw = localStorage.getItem(CACHE_PREFIX + id);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed.ts !== "number") return null;
+        return parsed;
+    } catch {
+        return null;
+    }
+};
+
+const writeCache = (id, data) => {
+    try {
+        localStorage.setItem(CACHE_PREFIX + id, JSON.stringify({ data, ts: Date.now() }));
+    } catch {
+        // storage full or blocked, ignore
+    }
+};
+
+const timeAgo = (ts) => {
+    if (!ts) return "";
+    const diff = Math.max(0, Date.now() - ts);
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "just now";
+    if (mins === 1) return "1 min ago";
+    if (mins < 60) return `${mins} mins ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs === 1) return "1 hour ago";
+    return `${hrs} hours ago`;
+};
+
 const Skeleton = ({ h = 14, w = "100%", style = {} }) => (
     <div className="skeleton" style={{ height: h, width: w, borderRadius: 4, ...style }} />
 );
@@ -38,52 +83,92 @@ const Portfolio = () => {
     const { activeAccount, loading: accountLoading } = useAccount();
     const [portfolio, setPortfolio] = useState(null);
     const [portfolioLoading, setPortfolioLoading] = useState(false);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const [refreshFailed, setRefreshFailed] = useState(false);
+    const [lastUpdated, setLastUpdated] = useState(null);
     const [error, setError] = useState(null);
     const [sortKey, setSortKey] = useState("script");
     const [sortAsc, setSortAsc] = useState(true);
+    const [shareCopied, setShareCopied] = useState(false);
+    const shareTimeoutRef = useRef(null);
 
-    const loadPortfolio = useCallback(async (id) => {
+    // tracks which account the latest request belongs to, so a slow
+    // response for an account the user has since switched away from
+    // is dropped instead of overwriting the current view
+    const activeAccountIdRef = useRef(null);
+
+    // single fetch path used by both auto load and manual refresh, so
+    // there is one place that owns loading state and stale-response checks
+    const fetchPortfolio = useCallback(async (id, { background = false } = {}) => {
         if (!id) return;
-        setPortfolioLoading(true);
-        setError(null);
+
+        if (background) {
+            setIsRefreshing(true);
+            setRefreshFailed(false);
+        } else {
+            setPortfolioLoading(true);
+            setError(null);
+            setRefreshFailed(false);
+        }
+
         try {
             const res = await getPortfolioApi(id);
-            setPortfolio(res?.data ?? null);
+            if (activeAccountIdRef.current !== id) return;
+            const data = res?.data ?? null;
+            setPortfolio(data);
+            setLastUpdated(Date.now());
+            setError(null);
+            setRefreshFailed(false);
+            writeCache(id, data);
         } catch (e) {
-            setError(e?.response?.data?.message || "Failed to load portfolio. Please try again.");
+            if (activeAccountIdRef.current !== id) return;
+            if (background) {
+                // keep showing cached data, just flag that the refresh failed
+                setRefreshFailed(true);
+            } else {
+                setError(getErrorMessage(e));
+            }
         } finally {
-            setPortfolioLoading(false);
+            if (activeAccountIdRef.current === id) {
+                setPortfolioLoading(false);
+                setIsRefreshing(false);
+            }
         }
     }, []);
 
     useEffect(() => {
         if (accountLoading) return;
 
-        let isCurrent = true;
-        if (activeAccount?.id) {
-            setPortfolioLoading(true);
-            setError(null);
-            getPortfolioApi(activeAccount.id)
-                .then((res) => {
-                    if (isCurrent) setPortfolio(res?.data ?? null);
-                })
-                .catch((e) => {
-                    if (isCurrent) {
-                        setError(e?.response?.data?.message || "Failed to load portfolio. Please try again.");
-                    }
-                })
-                .finally(() => {
-                    if (isCurrent) setPortfolioLoading(false);
-                });
-        } else {
+        const id = activeAccount?.id ?? null;
+        activeAccountIdRef.current = id;
+
+        if (!id) {
             setPortfolio(null);
             setError(null);
+            setLastUpdated(null);
+            setRefreshFailed(false);
+            return;
         }
 
+        const cached = readCache(id);
+        if (cached) {
+            // instant load from cache, then refresh quietly in the background
+            setPortfolio(cached.data);
+            setLastUpdated(cached.ts);
+            setError(null);
+            fetchPortfolio(id, { background: true });
+        } else {
+            setPortfolio(null);
+            setLastUpdated(null);
+            fetchPortfolio(id, { background: false });
+        }
+    }, [activeAccount?.id, accountLoading, fetchPortfolio]);
+
+    useEffect(() => {
         return () => {
-            isCurrent = false;
+            if (shareTimeoutRef.current) clearTimeout(shareTimeoutRef.current);
         };
-    }, [activeAccount?.id, accountLoading]);
+    }, []);
 
     const handleSort = (key) => {
         if (sortKey === key) {
@@ -110,6 +195,74 @@ const Portfolio = () => {
     const totalPnL = portfolio
         ? (portfolio.totalValueLTP ?? 0) - (portfolio.totalValuePrevClose ?? 0)
         : 0;
+
+    const hasHoldings = !!portfolio && sortedItems.length > 0;
+    const isBusy = portfolioLoading || isRefreshing;
+
+    // csv export of current sorted holdings
+    const exportCSV = () => {
+        if (!sortedItems.length) return;
+        try {
+            const headers = ["Scrip", "Description", "Units", "LTP", "Prev Close", "LTP Value", "Prev Value"];
+            const rows = sortedItems.map((it) => [
+                it.script ?? "",
+                it.scriptDesc ?? "",
+                it.currentBalance ?? "",
+                it.lastTransactionPrice ?? "",
+                it.previousClosingPrice ?? "",
+                it.valueAsOfLTP ?? "",
+                it.valueAsOfPrevClose ?? "",
+            ]);
+            const csv = [headers, ...rows]
+                .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+                .join("\n");
+            const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            const stamp = new Date().toISOString().slice(0, 10);
+            const who = (activeAccount?.fullName || "portfolio").replace(/\s+/g, "_");
+            a.href = url;
+            a.download = `${who}_${stamp}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch {
+            // export is best effort, fail silently rather than break the page
+        }
+    };
+
+    // share summary via native share sheet or clipboard fallback
+    const sharePortfolio = async () => {
+        if (!portfolio) return;
+        const lines = [
+            "Portfolio Summary",
+            `Scrips: ${portfolio.totalItems ?? 0}`,
+            `Value at LTP: Rs ${fmt(portfolio.totalValueLTP)}`,
+            `Day change: ${totalPnL >= 0 ? "+" : ""}Rs ${fmt(Math.abs(totalPnL))}`,
+        ];
+        const text = lines.join("\n");
+
+        if (navigator.share) {
+            try {
+                await navigator.share({ title: "My Portfolio", text });
+            } catch {
+                // share cancelled or failed, no action needed
+            }
+            return;
+        }
+
+        if (navigator.clipboard) {
+            try {
+                await navigator.clipboard.writeText(text);
+                setShareCopied(true);
+                if (shareTimeoutRef.current) clearTimeout(shareTimeoutRef.current);
+                shareTimeoutRef.current = setTimeout(() => setShareCopied(false), 2000);
+            } catch {
+                // clipboard blocked, no action needed
+            }
+        }
+    };
 
     const SortIcon = ({ col }) => {
         if (sortKey !== col) return <span className="sort-icon sort-icon-idle" />;
@@ -143,25 +296,56 @@ const Portfolio = () => {
                 <div className="portfolio-header">
                     <div>
                         <h1 className="page-title">Portfolio</h1>
-                        <p className="page-subtitle" style={{ marginBottom: 0 }}>
+                        <p className="page-subtitle portfolio-subtitle" style={{ marginBottom: 0 }}>
                             {activeAccount
                                 ? `Demat holdings for ${activeAccount.fullName}`
                                 : "Select an account to view holdings"}
                         </p>
+                        {activeAccount && lastUpdated && (
+                            <p className={`portfolio-updated ${refreshFailed ? "portfolio-updated-warn" : ""}`}>
+                                {isRefreshing
+                                    ? "Updating…"
+                                    : refreshFailed
+                                        ? "Couldn't refresh, showing saved data"
+                                        : `Updated ${timeAgo(lastUpdated)}`}
+                            </p>
+                        )}
                     </div>
                     {activeAccount && (
-                        <button
-                            type="button"
-                            className="btn btn-secondary btn-sm btn-refresh"
-                            onClick={() => loadPortfolio(activeAccount.id)}
-                            disabled={portfolioLoading}
-                            aria-label="Refresh portfolio"
-                        >
-                            <span className={portfolioLoading ? "spin" : ""}>
-                                <IconRefresh />
-                            </span>
-                            Refresh
-                        </button>
+                        <div className="portfolio-toolbar">
+                            <button
+                                type="button"
+                                className="btn btn-secondary btn-sm btn-toolbar"
+                                onClick={exportCSV}
+                                disabled={!hasHoldings}
+                                aria-label="Export as CSV"
+                            >
+                                <IconDownload />
+                                <span className="btn-label">Export</span>
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-secondary btn-sm btn-toolbar"
+                                onClick={sharePortfolio}
+                                disabled={!portfolio}
+                                aria-label="Share portfolio summary"
+                            >
+                                <IconShare />
+                                <span className="btn-label">{shareCopied ? "Copied" : "Share"}</span>
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-secondary btn-sm btn-toolbar btn-refresh"
+                                onClick={() => fetchPortfolio(activeAccount.id, { background: !!portfolio })}
+                                disabled={isBusy}
+                                aria-label="Refresh portfolio"
+                            >
+                                <span className={isBusy ? "spin" : ""}>
+                                    <IconRefresh />
+                                </span>
+                                <span className="btn-label">Refresh</span>
+                            </button>
+                        </div>
                     )}
                 </div>
 
@@ -222,7 +406,7 @@ const Portfolio = () => {
                                 <button
                                     type="button"
                                     className="btn btn-secondary btn-sm"
-                                    onClick={() => loadPortfolio(activeAccount?.id)}
+                                    onClick={() => fetchPortfolio(activeAccount?.id)}
                                 >
                                     Try again
                                 </button>
