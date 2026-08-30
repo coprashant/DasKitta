@@ -55,10 +55,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.HEAD, "/api/ping").permitAll()
 
                         .requestMatchers(HttpMethod.GET, "/api/ipo/shares").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/ipo/result/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/accounts/dp-list").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/accounts/bank-by-dp/**").permitAll()
 
+                        // ipo result and stream now require login guest checking removed
                         .anyRequest().authenticated()
                 )
                 // Filter ordering: Rate limit -> Auth evaluation -> Authentication Filter
@@ -71,11 +71,11 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        
+
         List<String> origins = Arrays.stream(allowedOrigins.split(","))
-                                    .map(String::trim)
-                                    .filter(s -> !s.isEmpty())
-                                    .toList();
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
 
         config.setAllowedOrigins(origins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));

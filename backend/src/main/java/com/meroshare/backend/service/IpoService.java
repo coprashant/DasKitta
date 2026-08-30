@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -71,7 +72,7 @@ public class IpoService {
             log.error("[DECRYPT] Failed for {} of '{}': {}", fieldName, username, e.getMessage());
             throw new RuntimeException(
                     "Could not decrypt " + fieldName + " for account '" + username +
-                    "'. Please remove and re-add this Meroshare account.", e);
+                            "'. Please remove and re-add this Meroshare account.", e);
         }
     }
 
@@ -190,7 +191,7 @@ public class IpoService {
                     return buildResult(account.getId(), account.getUsername(),
                             account.getFullName(), "FAILED",
                             "No bank linked to Meroshare account: " + account.getUsername() +
-                            ". Please link a bank in Meroshare and try again.");
+                                    ". Please link a bank in Meroshare and try again.");
                 }
 
                 // id from the bank list is used as bankId in the apply body
@@ -243,7 +244,7 @@ public class IpoService {
                 return buildResult(account.getId(), account.getUsername(),
                         account.getFullName(), "FAILED",
                         "Could not decrypt PIN for account '" + account.getUsername() +
-                        "'. Please remove and re-add this Meroshare account.");
+                                "'. Please remove and re-add this Meroshare account.");
             }
         } else {
             decryptedPin = "";
@@ -323,22 +324,24 @@ public class IpoService {
             throw new RuntimeException("Bank ID not set for account: " + account.getUsername());
     }
 
-    public List<IpoApplicationResponse> checkResults(String shareId, String username) {
+    // streams one result at a time instead of collecting the whole list first
+    public void checkResultsStream(String shareId, String username, Consumer<IpoApplicationResponse> onResult) {
         AppUser appUser = getAppUser(username);
         List<MeroshareAccount> accounts = accountRepository.findByAppUserId(appUser.getId());
         if (accounts.isEmpty()) throw new RuntimeException("Add at least one Meroshare account first");
 
-        List<IpoApplicationResponse> responses = new ArrayList<>();
         for (int i = 0; i < accounts.size(); i++) {
-            responses.add(checkResultForAccount(accounts.get(i), shareId));
+            IpoApplicationResponse res = checkResultForAccount(accounts.get(i), shareId);
+            onResult.accept(res);
             if (i < accounts.size() - 1) {
-                try { Thread.sleep(1500); } catch (InterruptedException ie) {
+                try {
+                    Thread.sleep(1500);
+                } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
                     break;
                 }
             }
         }
-        return responses;
     }
 
     private IpoApplicationResponse checkResultForAccount(MeroshareAccount account, String shareId) {
@@ -400,17 +403,6 @@ public class IpoService {
                     .accountFullName(account.getFullName())
                     .build();
         }
-    }
-
-    public List<IpoApplicationResponse> checkResultByBoid(String shareId, String boid) {
-        return List.of(IpoApplicationResponse.builder()
-                .shareId(shareId)
-                .resultStatus(IpoApplication.ResultStatus.UNKNOWN.name())
-                .statusMessage("Guest result checking is disabled. Please sign in to check results.")
-                .allottedKitta(0)
-                .accountUsername(boid)
-                .accountFullName("Guest")
-                .build());
     }
 
     @Transactional(readOnly = true)
@@ -508,7 +500,7 @@ public class IpoService {
 
                 boolean alreadyResolved = cached != null &&
                         ("ALLOTTED".equals(cached.getResultStatus()) ||
-                         "NOT_ALLOTTED".equals(cached.getResultStatus()));
+                                "NOT_ALLOTTED".equals(cached.getResultStatus()));
 
                 if (alreadyResolved) {
                     resultStatus  = cached.getResultStatus();
