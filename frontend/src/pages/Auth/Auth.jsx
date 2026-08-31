@@ -1,6 +1,5 @@
-// Auth.jsx (only handleSubmit changed)
 import { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import OtpInput from "../../components/OtpInput/OtpInput";
 import { EyeIcon, EyeOffIcon, CloseIcon, SpinnerIcon } from "../../components/Icons";
@@ -198,6 +197,7 @@ const Auth = () => {
                     <CloseIcon />
                 </button>
 
+                {/* Compact header with resized brand logo */}
                 <div className="auth-header">
                     <button type="button" onClick={handleClose} className="auth-brand-link auth-inline-btn">
                         <img src="/favicon.png" alt="" className="auth-brand-icon" />
@@ -315,10 +315,22 @@ const Auth = () => {
                                 isLogin ? "Sign in" : "Create account"
                             )}
                         </button>
+
+                        {/* Implicit agreement text */}
+                        {!isLogin && (
+                            <p className="auth-legal-notice">
+                                By creating an account, you agree to our{" "}
+                                <Link to="/terms" className="auth-link" target="_blank" rel="noopener noreferrer">
+                                    Terms of Service
+                                </Link>{" "}
+                                and{" "}
+                                <Link to="/privacy" className="auth-link" target="_blank" rel="noopener noreferrer">
+                                    Privacy Policy
+                                </Link>.
+                            </p>
+                        )}
                     </form>
                 )}
-
-                <div className="auth-sep" />
 
                 <div className="auth-footer-text">
                     {isOtpStage ? (
