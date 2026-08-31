@@ -6,12 +6,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 
-/**
- * Stores one time verification codes in Redis instead of Postgres.
- * The redis key ttl acts as the expiry, so no manual expiry checks
- * or cleanup jobs are needed. A short lived cooldown key blocks
- * repeated resend requests for the same email.
- */
 @Service
 public class OtpService {
 
@@ -30,38 +24,48 @@ public class OtpService {
         this.resendCooldown = Duration.ofSeconds(resendCooldownSeconds);
     }
 
+    private String normalizeEmail(String email) {
+        if (email == null) {
+            throw new IllegalArgumentException("Email cannot be null");
+        }
+        return email.trim().toLowerCase();
+    }
+
     private String otpKey(String email) {
-        return OTP_KEY_PREFIX + email;
+        return OTP_KEY_PREFIX + normalizeEmail(email);
     }
 
     private String cooldownKey(String email) {
-        return COOLDOWN_KEY_PREFIX + email;
+        return COOLDOWN_KEY_PREFIX + normalizeEmail(email);
     }
 
-    // Stores a new otp code for the email. Throws if a resend was just sent
     public void storeOtp(String email, String otpCode) {
         Boolean coolingDown = redisTemplate.hasKey(cooldownKey(email));
         if (Boolean.TRUE.equals(coolingDown)) {
             throw new RuntimeException("Please wait a bit before requesting another code");
         }
-        redisTemplate.opsForValue().set(otpKey(email), otpCode, otpTtl);
+
+        String key = otpKey(email);
+        String sanitizedCode = otpCode != null ? otpCode.trim() : "";
+
+        redisTemplate.opsForValue().set(key, sanitizedCode, otpTtl);
         redisTemplate.opsForValue().set(cooldownKey(email), "1", resendCooldown);
     }
 
-    // Verifies the code. Deletes the stored code only on a successful match,
-    // so the caller can retry a wrong code until it expires
     public void verifyOtp(String email, String code) {
-        String stored = redisTemplate.opsForValue().get(otpKey(email));
+        String key = otpKey(email);
+        String stored = redisTemplate.opsForValue().get(key);
+        String sanitizedCode = code != null ? code.trim() : "";
+
         if (stored == null) {
             throw new RuntimeException("Invalid or expired verification code");
         }
-        if (!stored.equals(code)) {
+        if (!stored.equals(sanitizedCode)) {
             throw new RuntimeException("Incorrect verification code");
         }
-        redisTemplate.delete(otpKey(email));
+        redisTemplate.delete(key);
     }
 
-    // Clears any pending otp and cooldown state for the email
     public void clearOtp(String email) {
         redisTemplate.delete(otpKey(email));
         redisTemplate.delete(cooldownKey(email));

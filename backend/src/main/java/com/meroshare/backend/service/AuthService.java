@@ -30,9 +30,22 @@ public class AuthService {
 
     private final SecureRandom secureRandom = new SecureRandom();
 
+    private String cleanEmail(String email) {
+        if (email == null) return null;
+        return email.trim().toLowerCase();
+    }
+
+    private String cleanInput(String input) {
+        if (input == null) return null;
+        return input.trim();
+    }
+
     @Transactional
     public AuthResponse register(RegisterRequest request) {
-        Optional<AppUser> existingByEmail = appUserRepository.findByEmail(request.getEmail());
+        String sanitizedEmail = cleanEmail(request.getEmail());
+        String sanitizedUsername = cleanInput(request.getUsername());
+
+        Optional<AppUser> existingByEmail = appUserRepository.findByEmail(sanitizedEmail);
 
         if (existingByEmail.isPresent()) {
             AppUser existing = existingByEmail.get();
@@ -41,47 +54,49 @@ public class AuthService {
                 throw new RuntimeException("Email already registered");
             }
 
-            boolean usernameTakenByOther = appUserRepository.existsByUsername(request.getUsername())
-                    && !existing.getUsername().equals(request.getUsername());
+            boolean usernameTakenByOther = appUserRepository.existsByUsername(sanitizedUsername)
+                    && !existing.getUsername().equalsIgnoreCase(sanitizedUsername);
             if (usernameTakenByOther) {
                 throw new RuntimeException("Username already taken");
             }
 
-            existing.setUsername(request.getUsername());
+            existing.setUsername(sanitizedUsername);
             existing.setPassword(passwordEncoder.encode(request.getPassword()));
             appUserRepository.save(existing);
 
-            sendRegistrationOtp(existing.getEmail());
+            sendRegistrationOtp(sanitizedEmail);
             return new AuthResponse(null, existing.getUsername(), existing.getEmail());
         }
 
-        if (appUserRepository.existsByUsername(request.getUsername())) {
+        if (appUserRepository.existsByUsername(sanitizedUsername)) {
             throw new RuntimeException("Username already taken");
         }
 
         AppUser user = AppUser.builder()
-                .username(request.getUsername())
-                .email(request.getEmail())
+                .username(sanitizedUsername)
+                .email(sanitizedEmail)
                 .password(passwordEncoder.encode(request.getPassword()))
                 .enabled(false)
                 .build();
 
         appUserRepository.save(user);
 
-        sendRegistrationOtp(user.getEmail());
+        sendRegistrationOtp(sanitizedEmail);
 
         return new AuthResponse(null, user.getUsername(), user.getEmail());
     }
 
     public AuthResponse login(LoginRequest request) {
+        String sanitizedUsername = cleanInput(request.getUsername());
+
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
-                        request.getUsername(),
+                        sanitizedUsername,
                         request.getPassword()
                 )
         );
 
-        AppUser user = appUserRepository.findByUsername(request.getUsername())
+        AppUser user = appUserRepository.findByUsername(sanitizedUsername)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         if (!user.isEnabled()) {
@@ -94,31 +109,35 @@ public class AuthService {
 
     @Transactional
     public void resendOtp(String email) {
-        AppUser user = appUserRepository.findByEmail(email)
+        String sanitizedEmail = cleanEmail(email);
+
+        AppUser user = appUserRepository.findByEmail(sanitizedEmail)
                 .orElseThrow(() -> new RuntimeException("No pending registration found for this email"));
 
         if (user.isEnabled()) {
             throw new RuntimeException("Account is already verified");
         }
 
-        sendRegistrationOtp(email);
+        sendRegistrationOtp(sanitizedEmail);
     }
 
     public void sendRegistrationOtp(String email) {
+        String sanitizedEmail = cleanEmail(email);
         String otpCode = generateSecureOtp();
-        otpService.storeOtp(email, otpCode);
+        otpService.storeOtp(sanitizedEmail, otpCode);
 
-        String subject = "DasKitta Verify Your Account";
-        String textBody = "Welcome to DasKitta\n\n"
-                + "Your 6 digit verification code is: " + otpCode + "\n\n"
-                + "This code is valid for 5 minutes. Do not share this code with anyone.\n"
+        String subject = "Verify your DasKitta account";
+        String textBody = "Welcome to DasKitta!\n\n"
+                + "Your 6-digit verification code is: " + otpCode + "\n\n"
+                + "This code expires in 5 minutes. Do not share this code with anyone.\n"
                 + "If you did not request this, please ignore this message.";
+
         String htmlBody = buildOtpEmailHtml(
                 "Verify your account",
-                "Welcome to DasKitta. Enter the code below to verify your email address.",
+                "Welcome to DasKitta! Use the verification code below to complete your registration.",
                 otpCode);
 
-        emailServiceClient.sendEmail(email, subject, textBody, htmlBody, "DasKitta Support");
+        emailServiceClient.sendEmail(sanitizedEmail, subject, textBody, htmlBody, "DasKitta Support");
     }
 
     private String generateSecureOtp() {
@@ -128,19 +147,20 @@ public class AuthService {
 
     @Transactional
     public void verifyOtp(String email, String code) {
-        otpService.verifyOtp(email, code);
+        String sanitizedEmail = cleanEmail(email);
 
-        AppUser user = appUserRepository.findByEmail(email)
+        otpService.verifyOtp(sanitizedEmail, code);
+
+        AppUser user = appUserRepository.findByEmail(sanitizedEmail)
                 .orElseThrow(() -> new RuntimeException("User profile not found"));
 
         user.setEnabled(true);
         appUserRepository.save(user);
     }
 
-    // updates the password for a logged in user
     @Transactional
     public void updatePassword(String username, String oldPassword, String newPassword) {
-        AppUser user = appUserRepository.findByUsername(username)
+        AppUser user = appUserRepository.findByUsername(cleanInput(username))
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         boolean matches = passwordEncoder.matches(oldPassword, user.getPassword());
@@ -152,86 +172,89 @@ public class AuthService {
         appUserRepository.save(user);
     }
 
-    // updates the username for a logged in user
     @Transactional
     public void updateUsername(String currentUsername, String newUsername) {
-        AppUser user = appUserRepository.findByUsername(currentUsername)
+        String sanitizedCurrent = cleanInput(currentUsername);
+        String sanitizedNew = cleanInput(newUsername);
+
+        AppUser user = appUserRepository.findByUsername(sanitizedCurrent)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        if (currentUsername.equals(newUsername)) {
+        if (sanitizedCurrent.equalsIgnoreCase(sanitizedNew)) {
             throw new RuntimeException("New username must be different from current username");
         }
 
-        if (appUserRepository.existsByUsername(newUsername)) {
+        if (appUserRepository.existsByUsername(sanitizedNew)) {
             throw new RuntimeException("Username already taken");
         }
 
-        user.setUsername(newUsername);
+        user.setUsername(sanitizedNew);
         appUserRepository.save(user);
     }
 
-    // starts an email change by sending an otp to the new email
     @Transactional
     public void requestEmailChange(String currentUsername, String newEmail) {
-        AppUser user = appUserRepository.findByUsername(currentUsername)
+        String sanitizedNewEmail = cleanEmail(newEmail);
+
+        AppUser user = appUserRepository.findByUsername(cleanInput(currentUsername))
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        if (user.getEmail().equals(newEmail)) {
+        if (user.getEmail().equalsIgnoreCase(sanitizedNewEmail)) {
             throw new RuntimeException("New email must be different from current email");
         }
 
-        boolean emailTakenByOther = appUserRepository.findByEmail(newEmail)
+        boolean emailTakenByOther = appUserRepository.findByEmail(sanitizedNewEmail)
                 .filter(AppUser::isEnabled)
                 .isPresent();
         if (emailTakenByOther) {
             throw new RuntimeException("Email already registered");
         }
 
-        sendEmailChangeOtp(newEmail);
+        sendEmailChangeOtp(sanitizedNewEmail);
     }
 
-    // sends an otp code to the new email for confirmation
     public void sendEmailChangeOtp(String newEmail) {
+        String sanitizedNewEmail = cleanEmail(newEmail);
         String otpCode = generateSecureOtp();
-        otpService.storeOtp(newEmail, otpCode);
+        otpService.storeOtp(sanitizedNewEmail, otpCode);
 
-        String subject = "DasKitta Confirm Your New Email";
-        String textBody = "From DasKitta\n\n"
-                + "Your 6 digit code to confirm this new email is: " + otpCode + "\n\n"
-                + "This code is valid for 5 minutes. Do not share this code with anyone.\n"
-                + "If you did not request this, please ignore this message.";
+        String subject = "Confirm your new DasKitta email address";
+        String textBody = "DasKitta Security Notification\n\n"
+                + "Your 6-digit code to confirm this email address is: " + otpCode + "\n\n"
+                + "This code expires in 5 minutes. Do not share this code with anyone.\n"
+                + "If you did not request this change, please contact support immediately.";
+
         String htmlBody = buildOtpEmailHtml(
                 "Confirm your new email",
-                "Enter the code below to confirm this email change on your DasKitta account.",
+                "You requested to update your DasKitta account email address. Use the code below to complete this change.",
                 otpCode);
 
-        emailServiceClient.sendEmail(newEmail, subject, textBody, htmlBody, "DasKitta Support");
+        emailServiceClient.sendEmail(sanitizedNewEmail, subject, textBody, htmlBody, "DasKitta Support");
     }
 
-    // confirms the email change once the correct otp is given
     @Transactional
     public void confirmEmailChange(String currentUsername, String newEmail, String code) {
-        AppUser user = appUserRepository.findByUsername(currentUsername)
+        String sanitizedNewEmail = cleanEmail(newEmail);
+
+        AppUser user = appUserRepository.findByUsername(cleanInput(currentUsername))
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        otpService.verifyOtp(newEmail, code);
+        otpService.verifyOtp(sanitizedNewEmail, code);
 
-        user.setEmail(newEmail);
+        user.setEmail(sanitizedNewEmail);
         appUserRepository.save(user);
     }
 
-    // returns saved details for a logged in user
     public UserDetailsResponse getUserDetails(String username) {
-        AppUser user = appUserRepository.findByUsername(username)
+        AppUser user = appUserRepository.findByUsername(cleanInput(username))
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         return new UserDetailsResponse(user.getUsername(), user.getEmail(), user.isEnabled());
     }
 
-    // deletes the logged in user and all related data via cascade
     @Transactional
     public void deleteAccount(String username, String password) {
-        AppUser user = appUserRepository.findByUsername(username)
+        AppUser user = appUserRepository.findByUsername(cleanInput(username))
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         boolean matches = passwordEncoder.matches(password, user.getPassword());
@@ -243,27 +266,42 @@ public class AuthService {
         appUserRepository.delete(user);
     }
 
-    // builds the html otp email template used for registration and email change
     private String buildOtpEmailHtml(String heading, String introText, String otpCode) {
         return "<!DOCTYPE html>"
-                + "<html><body style=\"margin:0;padding:0;background-color:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;\">"
-                + "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background-color:#f4f5f7;padding:32px 16px;\">"
+                + "<html lang=\"en\">"
+                + "<head>"
+                + "<meta charset=\"UTF-8\">"
+                + "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+                + "<title>" + heading + "</title>"
+                + "</head>"
+                + "<body style=\"margin:0; padding:0; background-color:#F3F4F6; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;\">"
+                + "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background-color:#F3F4F6; padding:40px 16px;\">"
                 + "<tr><td align=\"center\">"
-                + "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:480px;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);\">"
-                + "<tr><td style=\"background-color:#111827;padding:24px 32px;\">"
-                + "<span style=\"color:#ffffff;font-size:20px;font-weight:700;letter-spacing:0.3px;\">DasKitta</span>"
+                + "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:512px; background-color:#FFFFFF; border-radius:16px; overflow:hidden; border:1px solid #E5E7EB; box-shadow:0 10px 15px -3px rgba(0, 0, 0, 0.05);\">"
+                + "<tr><td style=\"background-color:#0F172A; padding:28px 36px; text-align:left;\">"
+                + "<span style=\"color:#FFFFFF; font-size:22px; font-weight:800; letter-spacing:-0.5px;\">DasKitta</span>"
                 + "</td></tr>"
-                + "<tr><td style=\"padding:32px;\">"
-                + "<h1 style=\"margin:0 0 12px;font-size:20px;color:#111827;\">" + heading + "</h1>"
-                + "<p style=\"margin:0 0 24px;font-size:14px;line-height:1.6;color:#4b5563;\">" + introText + "</p>"
-                + "<div style=\"text-align:center;margin:0 0 24px;\">"
-                + "<span style=\"display:inline-block;font-size:32px;font-weight:700;letter-spacing:8px;color:#111827;background-color:#f4f5f7;padding:16px 24px;border-radius:8px;\">" + otpCode + "</span>"
+                + "<tr><td style=\"padding:40px 36px 32px 36px;\">"
+                + "<h1 style=\"margin:0 0 12px 0; font-size:22px; font-weight:700; color:#0F172A; line-height:1.3;\">" + heading + "</h1>"
+                + "<p style=\"margin:0 0 28px 0; font-size:15px; line-height:1.6; color:#475569;\">" + introText + "</p>"
+                + "<div style=\"text-align:center; margin:0 0 28px 0; background-color:#F8FAFC; border:1px dashed #CBD5E1; border-radius:12px; padding:20px;\">"
+                + "<span style=\"display:block; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:1px; color:#64748B; margin-bottom:8px;\">Verification Code</span>"
+                + "<span style=\"display:inline-block; font-family: 'Courier New', Courier, monospace; font-size:36px; font-weight:800; letter-spacing:10px; color:#0F172A;\">" + otpCode + "</span>"
                 + "</div>"
-                + "<p style=\"margin:0 0 8px;font-size:13px;color:#6b7280;\">This code expires in <strong>5 minutes</strong>. Do not share it with anyone.</p>"
-                + "<p style=\"margin:0;font-size:13px;color:#9ca3af;\">If you did not request this, you can safely ignore this email.</p>"
+                + "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background-color:#FEF2F2; border-left:4px solid #EF4444; border-radius:4px; margin-bottom:24px;\">"
+                + "<tr><td style=\"padding:12px 16px;\">"
+                + "<p style=\"margin:0; font-size:13px; line-height:1.5; color:#991B1B;\">"
+                + "⏱️ Code expires in <strong>5 minutes</strong>. Never share this code with anyone."
+                + "</p>"
                 + "</td></tr>"
-                + "<tr><td style=\"padding:20px 32px;background-color:#f9fafb;border-top:1px solid #e5e7eb;\">"
-                + "<p style=\"margin:0;font-size:12px;color:#9ca3af;\">Sent by DasKitta Support. This is an automated message.</p>"
+                + "</table>"
+                + "<p style=\"margin:20px 0 0 0; font-size:13px; line-height:1.5; color:#94A3B8;\">"
+                + "If you did not request this code, please ignore this email or reach out to support if you have concerns."
+                + "</p>"
+                + "</td></tr>"
+                + "<tr><td style=\"padding:24px 36px; background-color:#F8FAFC; border-top:1px solid #F1F5F9; text-align:center;\">"
+                + "<p style=\"margin:0 0 4px 0; font-size:12px; font-weight:500; color:#64748B;\">&copy; " + java.time.Year.now().getValue() + " DasKitta. All rights reserved.</p>"
+                + "<p style=\"margin:0; font-size:12px; color:#94A3B8;\">Automated transactional email. Please do not reply directly to this message.</p>"
                 + "</td></tr>"
                 + "</table>"
                 + "</td></tr>"
