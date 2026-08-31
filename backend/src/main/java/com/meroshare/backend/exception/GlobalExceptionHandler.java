@@ -1,3 +1,4 @@
+// GlobalExceptionHandler.java
 package com.meroshare.backend.exception;
 
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +20,19 @@ import java.util.Map;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    // unverified account trying to login, frontend uses code to route to otp screen
+    @ExceptionHandler(UnverifiedAccountException.class)
+    public ResponseEntity<Map<String, Object>> handleUnverified(UnverifiedAccountException ex) {
+        log.debug("[EXCEPTION] Unverified account login attempt");
+        Map<String, Object> body = new HashMap<>();
+        body.put("timestamp", LocalDateTime.now().toString());
+        body.put("status", HttpStatus.FORBIDDEN.value());
+        body.put("message", ex.getMessage());
+        body.put("code", "UNVERIFIED_ACCOUNT");
+        body.put("email", ex.getEmail());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
+    }
 
     /**
      * Handles all untyped business logic errors (RuntimeException).

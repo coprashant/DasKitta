@@ -1,3 +1,4 @@
+// Auth.jsx (only handleSubmit changed)
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
@@ -18,6 +19,7 @@ const Auth = () => {
     const background = location.state?.background;
 
     const [form, setForm] = useState({ username: "", email: "", password: "" });
+    const [submittedEmail, setSubmittedEmail] = useState("");
     const [otpCode, setOtpCode] = useState("");
     const [isOtpStage, setIsOtpStage] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -75,6 +77,7 @@ const Auth = () => {
         setErrorMessage("");
         setIsOtpStage(false);
         setOtpCode("");
+        setSubmittedEmail("");
         setTimer(0);
     }, [location.pathname]);
 
@@ -113,11 +116,20 @@ const Auth = () => {
                 handleClose();
             } else {
                 await register(form);
+                setSubmittedEmail(form.email.trim().toLowerCase());
                 setIsOtpStage(true);
                 setTimer(RESEND_COOLDOWN);
             }
         } catch (err) {
-            setErrorMessage(sanitizeErrorMessage(err, "Unable to authenticate. Please try again."));
+            if (err?.response?.data?.code === "UNVERIFIED_ACCOUNT") {
+                const email = err.response.data.email || form.email;
+                setSubmittedEmail(email.trim().toLowerCase());
+                setIsOtpStage(true);
+                setTimer(RESEND_COOLDOWN);
+                setErrorMessage("Your account is not verified yet. A new code has been sent to your email.");
+            } else {
+                setErrorMessage(sanitizeErrorMessage(err, "Unable to authenticate. Please try again."));
+            }
         } finally {
             setLoading(false);
         }
@@ -129,8 +141,10 @@ const Auth = () => {
         setErrorMessage("");
         setLoading(true);
 
+        const targetEmail = (submittedEmail || form.email).trim().toLowerCase();
+
         try {
-            await verifyOtpApi(form.email, otpCode);
+            await verifyOtpApi(targetEmail, otpCode.trim());
             await login({ username: form.username, password: form.password });
             setIsOtpStage(false);
             handleClose();
@@ -147,8 +161,10 @@ const Auth = () => {
         setErrorMessage("");
         setResending(true);
 
+        const targetEmail = (submittedEmail || form.email).trim().toLowerCase();
+
         try {
-            await resendOtpApi(form.email);
+            await resendOtpApi(targetEmail);
             setTimer(RESEND_COOLDOWN);
         } catch (err) {
             setErrorMessage(sanitizeErrorMessage(err, "Could not resend code. Please try again."));
@@ -156,6 +172,8 @@ const Auth = () => {
             setResending(false);
         }
     };
+
+    const activeEmail = submittedEmail || form.email;
 
     return (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="auth-title">
@@ -190,7 +208,7 @@ const Auth = () => {
                     </h1>
                     <p className="auth-sub">
                         {isOtpStage ? (
-                            <>Enter the code sent to <strong className="auth-sub-highlight">{form.email}</strong></>
+                            <>Enter the code sent to <strong className="auth-sub-highlight">{activeEmail}</strong></>
                         ) : isLogin ? (
                             "Enter your credentials to access your account"
                         ) : (

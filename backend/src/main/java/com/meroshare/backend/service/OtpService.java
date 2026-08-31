@@ -1,7 +1,9 @@
 package com.meroshare.backend.service;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -14,12 +16,24 @@ public class OtpService {
     private final Duration resendCooldown;
 
     private static final String OTP_KEY_PREFIX      = "otp:code:";
-    private static final String COOLDOWN_KEY_PREFIX  = "otp:cooldown:";
+    private static final String COOLDOWN_KEY_PREFIX = "otp:cooldown:";
 
-    public OtpService(StringRedisTemplate redisTemplate,
+    public OtpService(RedisConnectionFactory connectionFactory,
                       @Value("${otp.ttl-seconds:300}") long otpTtlSeconds,
                       @Value("${otp.resend-cooldown-seconds:60}") long resendCooldownSeconds) {
-        this.redisTemplate  = redisTemplate;
+
+        // 1. Instantiate StringRedisTemplate directly
+        StringRedisTemplate template = new StringRedisTemplate(connectionFactory);
+
+        // 2. FORCE StringRedisSerializer on all operations to override Spring Cache/Context defaults
+        StringRedisSerializer stringSerializer = new StringRedisSerializer();
+        template.setKeySerializer(stringSerializer);
+        template.setValueSerializer(stringSerializer);
+        template.setHashKeySerializer(stringSerializer);
+        template.setHashValueSerializer(stringSerializer);
+        template.afterPropertiesSet();
+
+        this.redisTemplate = template;
         this.otpTtl         = Duration.ofSeconds(otpTtlSeconds);
         this.resendCooldown = Duration.ofSeconds(resendCooldownSeconds);
     }

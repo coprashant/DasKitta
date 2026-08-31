@@ -1,3 +1,4 @@
+// AuthService.java
 package com.meroshare.backend.service;
 
 import com.meroshare.backend.dto.AuthResponse;
@@ -5,9 +6,11 @@ import com.meroshare.backend.dto.LoginRequest;
 import com.meroshare.backend.dto.RegisterRequest;
 import com.meroshare.backend.dto.UserDetailsResponse;
 import com.meroshare.backend.entity.AppUser;
+import com.meroshare.backend.exception.UnverifiedAccountException;
 import com.meroshare.backend.repository.AppUserRepository;
 import com.meroshare.backend.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -15,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 @Service
@@ -29,6 +33,10 @@ public class AuthService {
     private final EmailServiceClient emailServiceClient;
 
     private final SecureRandom secureRandom = new SecureRandom();
+
+    // hours an unverified account can sit before its username and email are freed
+    @Value("${account.unverified-expiry-hours:24}")
+    private long unverifiedExpiryHours;
 
     private String cleanEmail(String email) {
         if (email == null) return null;
@@ -54,6 +62,8 @@ public class AuthService {
                 throw new RuntimeException("Email already registered");
             }
 
+            releaseUsernameIfStale(sanitizedUsername, existing.getId());
+
             boolean usernameTakenByOther = appUserRepository.existsByUsername(sanitizedUsername)
                     && !existing.getUsername().equalsIgnoreCase(sanitizedUsername);
             if (usernameTakenByOther) {
@@ -67,6 +77,8 @@ public class AuthService {
             sendRegistrationOtp(sanitizedEmail);
             return new AuthResponse(null, existing.getUsername(), existing.getEmail());
         }
+
+        releaseUsernameIfStale(sanitizedUsername, null);
 
         if (appUserRepository.existsByUsername(sanitizedUsername)) {
             throw new RuntimeException("Username already taken");
@@ -86,6 +98,26 @@ public class AuthService {
         return new AuthResponse(null, user.getUsername(), user.getEmail());
     }
 
+    // deletes a stale unverified account holding this username so it can be reused
+    private void releaseUsernameIfStale(String username, Long excludeUserId) {
+        Optional<AppUser> holder = appUserRepository.findByUsername(username);
+        if (holder.isEmpty()) {
+            return;
+        }
+        AppUser candidate = holder.get();
+        if (excludeUserId != null && candidate.getId().equals(excludeUserId)) {
+            return;
+        }
+        if (candidate.isEnabled()) {
+            return;
+        }
+        LocalDateTime cutoff = LocalDateTime.now().minusHours(unverifiedExpiryHours);
+        if (candidate.getCreatedAt() != null && candidate.getCreatedAt().isBefore(cutoff)) {
+            otpService.clearOtp(candidate.getEmail());
+            appUserRepository.delete(candidate);
+        }
+    }
+
     public AuthResponse login(LoginRequest request) {
         String sanitizedUsername = cleanInput(request.getUsername());
 
@@ -100,7 +132,15 @@ public class AuthService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         if (!user.isEnabled()) {
-            throw new RuntimeException("Account is not verified. Please verify your email.");
+            // credentials are correct so send a fresh code, ignore cooldown failure
+            try {
+                sendRegistrationOtp(user.getEmail());
+            } catch (RuntimeException ignored) {
+                // resend cooldown active, user can use the manual resend button
+            }
+            throw new UnverifiedAccountException(
+                    "Account is not verified. A new code has been sent to your email.",
+                    user.getEmail());
         }
 
         String token = jwtUtil.generateToken(user.getUsername());

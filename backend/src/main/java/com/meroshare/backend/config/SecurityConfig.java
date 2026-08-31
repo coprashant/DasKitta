@@ -46,7 +46,8 @@ public class SecurityConfig {
                                 HttpMethod.POST,
                                 "/api/auth/login",
                                 "/api/auth/register",
-                                "/api/auth/resend-otp"
+                                "/api/auth/resend-otp",
+                                "/api/auth/verify-otp"
                         ).permitAll()
 
                         .requestMatchers("/api/nepse/**").permitAll()
