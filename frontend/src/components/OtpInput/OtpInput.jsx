@@ -3,7 +3,13 @@ import "./OtpInput.css";
 
 const OTP_LENGTH = 6;
 
-const OtpInput = ({ value = "", onChange = () => {}, disabled = false }) => {
+const OtpInput = ({
+                      value = "",
+                      onChange = () => {},
+                      disabled = false,
+                      onResend = null,
+                      helperText = "Didn't receive the code? Check your spam or junk folder."
+                  }) => {
     const inputRefs = useRef([]);
     const safeValue = String(value || "");
     const otpArray = Array.from({ length: OTP_LENGTH }, (_, i) => safeValue[i] || "");
@@ -76,24 +82,50 @@ const OtpInput = ({ value = "", onChange = () => {}, disabled = false }) => {
         inputRefs.current[nextIndex]?.focus();
     };
 
+    const handleResendClick = () => {
+        // Clear input value
+        onChange("");
+        // Focus back to the first input field
+        inputRefs.current[0]?.focus();
+        // Trigger resend callback if provided
+        if (onResend) {
+            onResend();
+        }
+    };
+
     return (
-        <div className="otp-container" onPaste={handlePaste}>
-            {otpArray.map((digit, index) => (
-                <input
-                    key={index}
-                    ref={(el) => (inputRefs.current[index] = el)}
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={1}
-                    value={digit}
-                    onChange={(e) => handleChange(e, index)}
-                    onKeyDown={(e) => handleKeyDown(e, index)}
+        <div className="otp-wrapper">
+            <div className="otp-container" onPaste={handlePaste}>
+                {otpArray.map((digit, index) => (
+                    <input
+                        key={index}
+                        ref={(el) => (inputRefs.current[index] = el)}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={digit}
+                        onChange={(e) => handleChange(e, index)}
+                        onKeyDown={(e) => handleKeyDown(e, index)}
+                        disabled={disabled}
+                        className={`otp-slot ${digit ? "otp-slot--filled" : ""}`}
+                        aria-label={`Digit ${index + 1} of ${OTP_LENGTH}`}
+                        autoComplete="one-time-code"
+                    />
+                ))}
+            </div>
+
+            <p className="otp-helper-text">{helperText}</p>
+
+            {onResend && (
+                <button
+                    type="button"
+                    className="otp-resend-btn"
+                    onClick={handleResendClick}
                     disabled={disabled}
-                    className={`otp-slot ${digit ? "otp-slot--filled" : ""}`}
-                    aria-label={`Digit ${index + 1} of ${OTP_LENGTH}`}
-                    autoComplete="one-time-code"
-                />
-            ))}
+                >
+                    Resend Code
+                </button>
+            )}
         </div>
     );
 };

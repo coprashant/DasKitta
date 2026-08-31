@@ -1,9 +1,16 @@
+.otp-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}
+
 .otp-container {
     display: flex;
     gap: 8px;
     justify-content: center;
     align-items: center;
-    margin: 12px 0;
+    margin: 12px 0 6px 0;
 }
 
 .otp-slot {
@@ -47,4 +54,34 @@
     opacity: 0.6;
     cursor: not-allowed;
     background: var(--surface-2, #f1f5f9);
+}
+
+/* UX Helper text and resend styling */
+.otp-helper-text {
+    margin: 4px 0 0 0;
+    font-size: 13px;
+    color: var(--text-muted, #64748b);
+    text-align: center;
+}
+
+.otp-resend-btn {
+    margin-top: 8px;
+    background: transparent;
+    border: none;
+    color: var(--accent, #3b82f6);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: opacity 0.15s ease;
+}
+
+.otp-resend-btn:hover:not(:disabled) {
+    text-decoration: underline;
+}
+
+.otp-resend-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
