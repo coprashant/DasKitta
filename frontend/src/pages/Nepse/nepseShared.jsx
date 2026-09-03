@@ -225,8 +225,8 @@ export function HeroChart({
     const positive = changeVal >= 0;
 
     const lineColor = chart?.positive
-        ? "var(--term-emerald)"
-        : "var(--term-crimson)";
+        ? "var(--success)"
+        : "var(--danger)";
 
     return (
         <div className="hero-canvas">
@@ -329,8 +329,8 @@ export function MiniSpark({
     const hover = getHover(chart, hoverIndex);
 
     const lineColor = chart.positive
-        ? "var(--term-emerald)"
-        : "var(--term-crimson)";
+        ? "var(--success)"
+        : "var(--danger)";
 
     return (
         <div
