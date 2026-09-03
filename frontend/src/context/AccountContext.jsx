@@ -33,10 +33,19 @@ const applyOrder = (list, order) => {
   return [...ordered, ...appended];
 };
 
+// no response means the request never reached the server, ie offline
+const resolveErrorMessage = (error, fallback) => {
+  if (!error?.response) {
+    return "No internet connection. Check your network and try again.";
+  }
+  return error?.response?.data?.message || fallback;
+};
+
 export const AccountProvider = ({ children }) => {
   const [accounts, setAccounts] = useState([]);
   const [activeAccount, setActiveAccountState] = useState(readStored);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const setActiveAccount = useCallback((acc) => {
     setActiveAccountState(acc);
@@ -52,9 +61,11 @@ export const AccountProvider = ({ children }) => {
     localStorage.setItem(ORDER_KEY, JSON.stringify(newList.map((a) => a.id)));
   }, []);
 
+  // deliberate logout, not a fetch failure, so this clears everything
   const resetAccounts = useCallback(() => {
     setAccounts([]);
     setActiveAccountState(null);
+    setError(null);
     localStorage.removeItem(STORAGE_KEY);
     setLoading(false);
   }, []);
@@ -67,6 +78,8 @@ export const AccountProvider = ({ children }) => {
     }
 
     setLoading(true);
+    setError(null);
+
     try {
       const res = await getAccountsApi();
       const list = Array.isArray(res?.data) ? res.data : [];
@@ -89,10 +102,10 @@ export const AccountProvider = ({ children }) => {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
         return next;
       });
-    } catch {
-      setAccounts([]);
-      setActiveAccountState(null);
-      localStorage.removeItem(STORAGE_KEY);
+    } catch (err) {
+      // keep whatever accounts and active account were already loaded
+      // a failed refresh should not erase good state, only flag the error
+      setError(resolveErrorMessage(err, "Could not load accounts"));
     } finally {
       setLoading(false);
     }
@@ -108,7 +121,9 @@ export const AccountProvider = ({ children }) => {
       activeAccount,
       setActiveAccount,
       loading,
+      error,
       refreshAccounts,
+      refetch: refreshAccounts,
       resetAccounts,
       reorderAccounts,
     }}>

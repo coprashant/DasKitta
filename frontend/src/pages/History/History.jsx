@@ -189,7 +189,7 @@ const History = () => {
                 <div className="card empty-state">
                   <div className="history-empty-icon"><IconUser /></div>
                   <p>No account selected. Add an account to get started.</p>
-                  <Link to="/accounts/add" className="btn btn-primary btn-sm" style={{ marginTop: 8 }}>
+                  <Link to="/settings/accounts/add" className="btn btn-primary btn-sm" style={{ marginTop: 8 }}>
                     <IconPlus /> Add account
                   </Link>
                 </div>

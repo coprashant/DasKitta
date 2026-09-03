@@ -26,6 +26,14 @@ const STATUS_BADGE_MAP = {
 
 const statusBadge = (s) => STATUS_BADGE_MAP[s] || "badge-muted";
 
+// no response means the request never reached the server, ie offline
+const resolveErrorMessage = (error, fallback) => {
+  if (!error?.response) {
+    return "No internet connection. Check your network and try again.";
+  }
+  return error?.response?.data?.message || fallback;
+};
+
 const msToDhm = (ms) => {
   const totalMins = Math.floor(ms / 60000);
   return {
@@ -126,6 +134,7 @@ const IPOApply = () => {
   const [kitta, setKitta] = useState(10);
   const [loading, setLoading] = useState(true);
   const [ipoError, setIpoError] = useState(null);
+  const [accountsError, setAccountsError] = useState(null);
   const [applying, setApplying] = useState(false);
   const [results, setResults] = useState([]);
   const [showOthers, setShowOthers] = useState(false);
@@ -136,6 +145,7 @@ const IPOApply = () => {
   const fetchData = useCallback(async (isMounted = true) => {
     setLoading(true);
     setIpoError(null);
+    setAccountsError(null);
     try {
       const [ipoRes, accRes] = await Promise.allSettled([getOpenIposApi(), getAccountsApi()]);
 
@@ -144,7 +154,7 @@ const IPOApply = () => {
       if (ipoRes.status === "fulfilled") {
         setIpos(Array.isArray(ipoRes.value?.data) ? ipoRes.value.data : []);
       } else {
-        const m = ipoRes.reason?.response?.data?.message || "Failed to load open IPOs";
+        const m = resolveErrorMessage(ipoRes.reason, "Failed to load open IPOs");
         setIpoError(m);
         toast.error(m);
       }
@@ -152,11 +162,13 @@ const IPOApply = () => {
       if (accRes.status === "fulfilled") {
         setAccounts(Array.isArray(accRes.value?.data) ? accRes.value.data : []);
       } else {
-        toast.error("Failed to load accounts");
+        const m = resolveErrorMessage(accRes.reason, "Failed to load accounts");
+        setAccountsError(m);
+        toast.error(m);
       }
     } catch (err) {
       if (isMounted) {
-        setIpoError("An unexpected error occurred while fetching data.");
+        setIpoError(resolveErrorMessage(err, "An unexpected error occurred while fetching data."));
       }
     } finally {
       if (isMounted) {
@@ -261,7 +273,7 @@ const IPOApply = () => {
       const ok = data.filter((r) => r.status === "SUCCESS").length;
       if (ok > 0) toast.success(`Applied for ${ok} account(s)`);
     } catch (err) {
-      toast.error(err.response?.data?.message || "Apply failed");
+      toast.error(resolveErrorMessage(err, "Apply failed"));
     } finally {
       setApplying(false);
     }
@@ -323,7 +335,7 @@ const IPOApply = () => {
         <div className="ipo-accounts-head">
           <span className="ipo-section-label ipo-section-label--inline">Accounts</span>
 
-          {accounts.length > 3 && (
+          {!accountsError && accounts.length > 3 && (
               <div className={`ipo-search-inline${searchOpen ? " open" : ""}`}>
                 {searchOpen ? (
                     <>
@@ -351,7 +363,7 @@ const IPOApply = () => {
               </div>
           )}
 
-          {!searchOpen && filteredAccounts.length > 0 && (
+          {!accountsError && !searchOpen && filteredAccounts.length > 0 && (
               <button className="ipo-sel-all" onClick={selectAll}>
                 {allVisibleSelected ? "Deselect all" : "Select all"}
               </button>
@@ -359,9 +371,20 @@ const IPOApply = () => {
         </div>
 
         <div className="ipo-acc-list">
-          {filteredAccounts.length === 0 ? (
+          {accountsError ? (
               <div className="empty-state">
-                <p>No accounts match your search.</p>
+                <p style={{ color: "var(--danger)" }}>{accountsError}</p>
+                <button className="btn btn-secondary" onClick={() => fetchData(true)}>
+                  Retry
+                </button>
+              </div>
+          ) : filteredAccounts.length === 0 ? (
+              <div className="empty-state">
+                <p>
+                  {accounts.length === 0
+                      ? "No accounts connected."
+                      : "No accounts match your search."}
+                </p>
               </div>
           ) : (
               filteredAccounts.map((acc) => {

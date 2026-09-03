@@ -49,6 +49,15 @@ const MAX_ACTUAL_SECTORS = 5;
 const numberFormat = new Intl.NumberFormat("en-US");
 const fmt = (n) => numberFormat.format(n ?? 0);
 
+// no response means the request never reached the server, ie offline
+const resolveErrorMessage = (error, fallback) => {
+  if (!error?.response) {
+    return "No internet connection. Check your network and try again.";
+  }
+
+  return error?.response?.data?.message || fallback;
+};
+
 const Skeleton = ({ h = 16, w = "100%", style = {} }) => (
     <div className="skeleton" style={{ height: h, width: w, ...style }} />
 );
@@ -236,11 +245,15 @@ const Dashboard = () => {
   const {
     activeAccount,
     accounts,
-    loading: accountLoading
+    loading: accountLoading,
+    error: accountError,
+    refetch: refetchAccounts
   } = useAccount();
 
   const [allHistory, setAllHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState(null);
+  const [historyReloadKey, setHistoryReloadKey] = useState(0);
 
   const [cdscSummary, setCdscSummary] = useState(null);
   const [cdscLoading, setCdscLoading] = useState(false);
@@ -249,6 +262,7 @@ const Dashboard = () => {
   const [cdscExpanded, setCdscExpanded] = useState(false);
   const [portfolio, setPortfolio] = useState(null);
   const [portfolioLoading, setPortfolioLoading] = useState(false);
+  const [portfolioError, setPortfolioError] = useState(null);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [chartMode, setChartMode] = useState("portfolio");
@@ -296,10 +310,12 @@ const Dashboard = () => {
     };
   }, []);
 
+  // reload key lets the retry button retrigger this effect
   useEffect(() => {
     let cancelled = false;
 
     setHistoryLoading(true);
+    setHistoryError(null);
 
     (async () => {
       try {
@@ -316,9 +332,12 @@ const Dashboard = () => {
             );
 
         setAllHistory(sorted);
-      } catch {
+      } catch (error) {
         if (!cancelled) {
           setAllHistory([]);
+          setHistoryError(
+              resolveErrorMessage(error, "Could not load platform activity")
+          );
         }
       } finally {
         if (!cancelled) {
@@ -330,7 +349,7 @@ const Dashboard = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [historyReloadKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -356,6 +375,7 @@ const Dashboard = () => {
 
         setSectorMap(map);
       } catch {
+        // non critical enrichment, sectors just fall back to uncategorized
         if (!cancelled) {
           setSectorMap({});
         }
@@ -387,8 +407,7 @@ const Dashboard = () => {
           setCdscSummary(res.data);
         } catch (error) {
           setCdscError(
-              error?.response?.data?.message ||
-              "Could not synchronize CDSC history"
+              resolveErrorMessage(error, "Could not synchronize CDSC history")
           );
         } finally {
           setCdscLoading(false);
@@ -405,12 +424,16 @@ const Dashboard = () => {
         }
 
         setPortfolioLoading(true);
+        setPortfolioError(null);
 
         try {
           const res = await getPortfolioApi(accountId);
           setPortfolio(res?.data || null);
-        } catch {
+        } catch (error) {
           setPortfolio(null);
+          setPortfolioError(
+              resolveErrorMessage(error, "Could not load portfolio")
+          );
         } finally {
           setPortfolioLoading(false);
         }
@@ -429,6 +452,7 @@ const Dashboard = () => {
       setCdscSummary(null);
       setCdscError(null);
       setPortfolio(null);
+      setPortfolioError(null);
       return;
     }
 
@@ -774,6 +798,24 @@ const Dashboard = () => {
   const analyticsLoading = isPortfolioMode ? portfolioLoading : cdscLoading;
   const hasActiveChartData = isPortfolioMode ? hasPortfolioData : hasAnalyticsData;
 
+  // only surface a chart level error if there is no cached data to fall
+  // back on, same rule the log table below already follows
+  const chartError = isPortfolioMode
+      ? (portfolioError && !hasPortfolioData ? portfolioError : null)
+      : (cdscError && !hasAnalyticsData ? cdscError : null);
+
+  const retryActiveChart = () => {
+    if (!activeAccount) {
+      return;
+    }
+
+    if (isPortfolioMode) {
+      fetchPortfolio(activeAccount.id);
+    } else {
+      fetchCdscSummary(activeAccount.id, false);
+    }
+  };
+
   return (
       <Layout>
         <SEO
@@ -815,7 +857,29 @@ const Dashboard = () => {
 
           <AccountSwitcher />
 
-          {!activeAccount && !accountLoading ? (
+          {accountError ? (
+              /* account list itself failed to load, eg offline, this is
+                 not the same as having no accounts connected */
+              <div className="dash-no-account is-error">
+                <IconX />
+
+                <div>
+                  <h3>Could Not Load Accounts</h3>
+                  <p>{accountError}</p>
+                </div>
+
+                <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() =>
+                        refetchAccounts
+                            ? refetchAccounts()
+                            : window.location.reload()
+                    }
+                >
+                  Retry
+                </button>
+              </div>
+          ) : !activeAccount && !accountLoading ? (
               <div className="dash-no-account">
                 <IconUser />
 
@@ -828,7 +892,7 @@ const Dashboard = () => {
                 </div>
 
                 <Link
-                    to="/accounts/add"
+                    to="/settings/accounts/add"
                     className="btn btn-primary btn-sm"
                 >
                   Connect
@@ -1082,6 +1146,16 @@ const Dashboard = () => {
                           <div className="dash-multi-chart-wrapper">
                             <Skeleton h={230} style={{ borderRadius: 10 }} />
                             <Skeleton h={230} style={{ borderRadius: 10 }} />
+                          </div>
+                      ) : chartError ? (
+                          <div className="dash-empty dash-empty-tall dash-empty-error">
+                            <span>{chartError}</span>
+                            <button
+                                className="dash-retry-btn"
+                                onClick={retryActiveChart}
+                            >
+                              Retry
+                            </button>
                           </div>
                       ) : !hasActiveChartData ? (
                           <div className="dash-empty dash-empty-tall">
@@ -1532,6 +1606,18 @@ const Dashboard = () => {
                       <div className="dash-card">
                         {localLoading ? (
                             <Skeleton h={80} />
+                        ) : historyError ? (
+                            <div className="dash-empty dash-empty-error">
+                              <span>{historyError}</span>
+                              <button
+                                  className="dash-retry-btn"
+                                  onClick={() =>
+                                      setHistoryReloadKey((k) => k + 1)
+                                  }
+                              >
+                                Retry
+                              </button>
+                            </div>
                         ) : recent.length === 0 ? (
                             <div className="dash-empty">
                               No platform activity recorded
@@ -1578,7 +1664,7 @@ const Dashboard = () => {
 
                       <div className="dash-card">
                         <div className="dash-sidebar-list">
-                          {accounts.map((account) => (
+                          {(accounts || []).map((account) => (
                               <div
                                   key={account.id}
                                   className={`sidebar-account-row ${

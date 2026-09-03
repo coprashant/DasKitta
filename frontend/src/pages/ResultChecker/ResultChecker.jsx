@@ -18,15 +18,24 @@ const resolveShareId = (ipo) =>
 const getIpoName = (ipo) =>
     ipo?.companyName || ipo?.name || `Share #${resolveShareId(ipo)}`;
 
+// no response means the request never reached the server, ie offline
+const resolveErrorMessage = (error, fallback) => {
+    if (!error?.response) {
+        return "No internet connection. Check your network and try again.";
+    }
+    return error?.response?.data?.message || error?.message || fallback;
+};
+
 const ResultChecker = () => {
     const { user } = useAuth();
     const [shareId, setShareId] = useState("");
     const [results, setResults] = useState([]);
     const [loading, setLoading] = useState(false);
     const [checked, setChecked] = useState(false);
+    const [checkError, setCheckError] = useState(null);
     const [ipoList, setIpoList] = useState([]);
     const [ipoListLoading, setIpoListLoading] = useState(true);
-    const [ipoListError, setIpoListError] = useState(false);
+    const [ipoListError, setIpoListError] = useState(null);
     const nextKeyRef = useRef(0);
 
     const fetchIpoList = useCallback(async () => {
@@ -35,7 +44,7 @@ const ResultChecker = () => {
             return;
         }
         setIpoListLoading(true);
-        setIpoListError(false);
+        setIpoListError(null);
         setShareId("");
         try {
             const res = await getAppliedCompaniesApi();
@@ -44,9 +53,10 @@ const ResultChecker = () => {
             if (shares.length > 0) {
                 setShareId(resolveShareId(shares[0]));
             }
-        } catch {
-            setIpoListError(true);
-            toast.error("Failed to load IPO list");
+        } catch (err) {
+            const msg = resolveErrorMessage(err, "Failed to load IPO list");
+            setIpoListError(msg);
+            toast.error(msg);
         } finally {
             setIpoListLoading(false);
         }
@@ -60,6 +70,7 @@ const ResultChecker = () => {
         setLoading(true);
         setResults([]);
         setChecked(true);
+        setCheckError(null);
         nextKeyRef.current = 0;
 
         await checkResultStreamApi(
@@ -70,7 +81,9 @@ const ResultChecker = () => {
             },
             () => setLoading(false),
             (err) => {
-                toast.error(err.message || "Failed to check result");
+                const msg = resolveErrorMessage(err, "Failed to check result");
+                setCheckError(msg);
+                toast.error(msg);
                 setLoading(false);
             }
         );
@@ -86,7 +99,7 @@ const ResultChecker = () => {
     };
 
     const selectedIpo = ipoList.find((ipo) => resolveShareId(ipo) === shareId);
-    const formDisabled = ipoListLoading || ipoListError || !ipoList.length;
+    const formDisabled = ipoListLoading || Boolean(ipoListError) || !ipoList.length;
 
     const allottedCount = results.filter((r) => r.resultStatus === "ALLOTTED").length;
     const totalKitta = results.reduce((acc, curr) => acc + (Number(curr.allottedKitta) || 0), 0);
@@ -141,7 +154,7 @@ const ResultChecker = () => {
                                     </label>
                                     {ipoListError ? (
                                         <div className="form-error-fallback">
-                                            <span>Failed to load IPOs</span>
+                                            <span>{ipoListError}</span>
                                             <button
                                                 type="button"
                                                 className="btn-retry-inline"
@@ -233,15 +246,30 @@ const ResultChecker = () => {
 
                             {!results.length && !loading && (
                                 <div className="card empty-card">
-                                    <p>No results found for this selection.</p>
-                                    <a
-                                        href="https://iporesult.cdsc.com.np"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="btn-cdsc"
-                                    >
-                                        Check on CDSC Portal &rarr;
-                                    </a>
+                                    {checkError ? (
+                                        <>
+                                            <p style={{ color: "var(--danger)" }}>{checkError}</p>
+                                            <button
+                                                type="button"
+                                                className="btn-retry-inline"
+                                                onClick={() => runCheck(shareId)}
+                                            >
+                                                Retry
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <p>No results found for this selection.</p>
+                                            <a
+                                                href="https://iporesult.cdsc.com.np"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="btn-cdsc"
+                                            >
+                                                Check on CDSC Portal &rarr;
+                                            </a>
+                                        </>
+                                    )}
                                 </div>
                             )}
 

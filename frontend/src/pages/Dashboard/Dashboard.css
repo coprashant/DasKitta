@@ -71,6 +71,11 @@
   flex-shrink: 0;
 }
 
+/* offline or fetch failure, distinct from a genuinely empty account list */
+.dash-no-account.is-error > svg {
+  color: var(--danger);
+}
+
 .dash-no-account > div {
   flex: 1;
   min-width: 0;
