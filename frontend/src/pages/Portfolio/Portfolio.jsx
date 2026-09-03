@@ -5,6 +5,7 @@ import { useAccount } from "../../context/AccountContext";
 import Layout from "../../components/Layout/Layout.jsx";
 import AccountSwitcher from "../../components/AccountSwitcher/AccountSwitcher.jsx";
 import SEO from "../../seo/SEO.jsx";
+import { exportPortfolioCSV, exportPortfolioPDF } from "./portfolioExports.jsx";
 import {
     IconBriefcase,
     IconTrendUp,
@@ -88,11 +89,13 @@ const Portfolio = () => {
     const [error, setError] = useState(null);
     const [sortKey, setSortKey] = useState("script");
     const [sortAsc, setSortAsc] = useState(true);
+    const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
 
     // tracks which account the latest request belongs to, so a slow
     // response for an account the user has since switched away from
     // is dropped instead of overwriting the current view
     const activeAccountIdRef = useRef(null);
+    const exportMenuRef = useRef(null);
 
     // single fetch path used by both auto load and manual refresh, so
     // there is one place that owns loading state and stale-response checks
@@ -162,8 +165,25 @@ const Portfolio = () => {
     }, [activeAccount?.id, accountLoading, fetchPortfolio]);
 
     useEffect(() => {
+        const handleOutsideClick = (event) => {
+            if (!exportMenuRef.current) return;
+            if (!exportMenuRef.current.contains(event.target)) {
+                setIsExportMenuOpen(false);
+            }
+        };
+
+        const handleEsc = (event) => {
+            if (event.key === "Escape") {
+                setIsExportMenuOpen(false);
+            }
+        };
+
+        document.addEventListener("mousedown", handleOutsideClick);
+        document.addEventListener("keydown", handleEsc);
+
         return () => {
-            if (shareTimeoutRef.current) clearTimeout(shareTimeoutRef.current);
+            document.removeEventListener("mousedown", handleOutsideClick);
+            document.removeEventListener("keydown", handleEsc);
         };
     }, []);
 
@@ -196,37 +216,19 @@ const Portfolio = () => {
     const hasHoldings = !!portfolio && sortedItems.length > 0;
     const isBusy = portfolioLoading || isRefreshing;
 
-    // csv export of current sorted holdings
     const exportCSV = () => {
-        if (!sortedItems.length) return;
-        try {
-            const headers = ["Scrip", "Description", "Units", "LTP", "Prev Close", "LTP Value", "Prev Value"];
-            const rows = sortedItems.map((it) => [
-                it.script ?? "",
-                it.scriptDesc ?? "",
-                it.currentBalance ?? "",
-                it.lastTransactionPrice ?? "",
-                it.previousClosingPrice ?? "",
-                it.valueAsOfLTP ?? "",
-                it.valueAsOfPrevClose ?? "",
-            ]);
-            const csv = [headers, ...rows]
-                .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
-                .join("\n");
-            const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            const stamp = new Date().toISOString().slice(0, 10);
-            const who = (activeAccount?.fullName || "portfolio").replace(/\s+/g, "_");
-            a.href = url;
-            a.download = `${who}_${stamp}.csv`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            URL.revokeObjectURL(url);
-        } catch {
-            // export is best effort, fail silently rather than break the page
-        }
+        exportPortfolioCSV({ items: sortedItems, activeAccount });
+    };
+
+    const exportPDF = async () => {
+        await exportPortfolioPDF({
+            items: sortedItems,
+            activeAccount,
+            portfolio,
+            totalPnL,
+            fmt,
+            fmtUnits,
+        });
     };
 
     const SortIcon = ({ col }) => {
@@ -278,16 +280,48 @@ const Portfolio = () => {
                     </div>
                     {activeAccount && (
                         <div className="portfolio-toolbar">
-                            <button
-                                type="button"
-                                className="btn btn-secondary btn-sm btn-toolbar"
-                                onClick={exportCSV}
-                                disabled={!hasHoldings}
-                                aria-label="Export as CSV"
-                            >
-                                <IconDownload />
-                                <span className="btn-label">Export</span>
-                            </button>
+                            <div className="portfolio-export-menu" ref={exportMenuRef}>
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary btn-sm btn-toolbar btn-export-toggle"
+                                    onClick={() => setIsExportMenuOpen((prev) => !prev)}
+                                    disabled={!hasHoldings}
+                                    aria-label="Export options"
+                                    aria-haspopup="menu"
+                                    aria-expanded={isExportMenuOpen}
+                                >
+                                    <IconDownload />
+                                    <span className="btn-label">Export</span>
+                                    <span className="export-caret" aria-hidden="true" />
+                                </button>
+
+                                {isExportMenuOpen && (
+                                    <div className="export-dropdown" role="menu" aria-label="Export portfolio">
+                                        <button
+                                            type="button"
+                                            className="export-dropdown-item"
+                                            role="menuitem"
+                                            onClick={() => {
+                                                exportCSV();
+                                                setIsExportMenuOpen(false);
+                                            }}
+                                        >
+                                            Export as .csv
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="export-dropdown-item"
+                                            role="menuitem"
+                                            onClick={() => {
+                                                exportPDF();
+                                                setIsExportMenuOpen(false);
+                                            }}
+                                        >
+                                            Export as .pdf
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                             <button
                                 type="button"
                                 className="btn btn-secondary btn-sm btn-toolbar btn-refresh"

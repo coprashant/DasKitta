@@ -33,6 +33,64 @@
   gap: 6px;
   flex-wrap: wrap;
 }
+
+.portfolio-export-menu {
+  position: relative;
+}
+
+.btn-export-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.export-caret {
+  width: 8px;
+  height: 8px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg) translateY(-1px);
+  transition: transform var(--t-fast) var(--ease);
+}
+
+.btn-export-toggle[aria-expanded="true"] .export-caret {
+  transform: rotate(225deg) translateY(-1px);
+}
+
+.export-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 170px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-sm);
+  z-index: 15;
+  overflow: hidden;
+}
+
+.export-dropdown-item {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--text-2);
+  font-size: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+
+.export-dropdown-item:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--text);
+}
+
+.export-dropdown-item + .export-dropdown-item {
+  border-top: 1px solid var(--border);
+}
+
 .portfolio-toolbar .btn-toolbar {
   background: transparent;
   border: none;
@@ -83,6 +141,19 @@
   }
   .portfolio-toolbar .btn-label {
     display: none;
+  }
+
+  .btn-export-toggle {
+    gap: 0;
+  }
+
+  .export-caret {
+    display: none;
+  }
+
+  .export-dropdown {
+    right: 0;
+    min-width: 148px;
   }
 }
 
