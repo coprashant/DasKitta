@@ -31,7 +31,7 @@ public class NepseClient {
     public Mono<Object> get(String path) {
         return doGet(path)
                 .onErrorResume(WebClientResponseException.Unauthorized.class, e -> {
-                    log.warn("[NEPSE] 401 on GET {}, refreshing token and retrying...", path);
+                    log.warn("[NEPSE] 401 on GET {}, refreshing token and retrying", path);
                     return tokenManager.forceRefreshAsync().then(doGet(path));
                 })
                 .onErrorResume(WebClientResponseException.class, ex -> {
@@ -59,7 +59,7 @@ public class NepseClient {
         String body = "{\"id\":" + payloadId + "}";
         return doPost(path, body)
                 .onErrorResume(WebClientResponseException.Unauthorized.class, e -> {
-                    log.warn("[NEPSE] 401 on POST {}, refreshing token and retrying...", path);
+                    log.warn("[NEPSE] 401 on POST {}, refreshing token and retrying", path);
                     return tokenManager.forceRefreshAsync().then(doPost(path, body));
                 })
                 .onErrorResume(WebClientResponseException.class, ex -> {
@@ -96,36 +96,29 @@ public class NepseClient {
 
     private void logHttpError(String method, String path, WebClientResponseException ex) {
         if (ex instanceof WebClientResponseException.Forbidden) {
-            // 403 from nepalstock.com/nginx has repeatedly turned out to be an
-            // upstream WAF/infra block, not a client-side bug (formulas, headers,
-            // and query strings have all been verified correct against the API
-            // reference). Confirmed by reproducing the identical 403 directly on
-            // nepalstock.com itself, outside this codebase. Check upstream status
-            // before re-investigating payload IDs / headers here.
-            log.error("[NEPSE] {} {} -> 403 Forbidden (likely upstream WAF/infra block, not a client bug). Body: {}",
+            log.error("[NEPSE] {} {} -> 403 Forbidden likely upstream block. Body: {}",
                     method, path, safeBody(ex));
         } else {
-            log.error("[NEPSE] {} {} failed: {} {} — body: {}",
+            log.error("[NEPSE] {} {} failed: {} {} body: {}",
                     method, path, ex.getStatusCode().value(), ex.getStatusText(), safeBody(ex));
         }
     }
 
     private void logGenericError(String method, String path, Exception ex) {
-        log.error("[NEPSE] {} {} failed with non-HTTP error: {}", method, path, ex.toString());
+        log.error("[NEPSE] {} {} failed with non http error: {}", method, path, ex.toString());
     }
 
     private String safeBody(WebClientResponseException ex) {
         try {
             String b = ex.getResponseBodyAsString();
-            return (b == null || b.isBlank()) ? "(empty)" : b;
+            return (b == null || b.isBlank()) ? "empty" : b;
         } catch (Exception e) {
-            return "(unavailable)";
+            return "unavailable";
         }
     }
 
-    // Builds a soft-fail payload so callers/UI get a predictable shape instead
-    // of a raw 500. Frontend can check `error` to show a "temporarily
-    // unavailable" state instead of crashing.
+    // Soft fail payload so callers get a predictable shape instead of a 500
+    // frontend can check error field to show unavailable state
     private Object fallback(String path, Exception ex) {
         ObjectNode node = mapper.createObjectNode();
         node.put("error", true);
@@ -141,7 +134,7 @@ public class NepseClient {
         return node;
     }
 
-    // Payload ID formulas (unchanged)
+    // Payload id formulas unchanged
 
     public long getPostPayloadId(int dummyId, int dummyValue) {
         int day = LocalDate.now().getDayOfMonth();

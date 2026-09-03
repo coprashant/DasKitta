@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 export const fmt = (n, dec = 2) =>
-    n == null
+    n == null || n === ""
         ? "--"
         : Number(n).toLocaleString("en-NP", {
             minimumFractionDigits: dec,
@@ -9,10 +9,13 @@ export const fmt = (n, dec = 2) =>
         });
 
 export const fmtCompact = (n) => {
-    if (n == null) return "--";
+    if (n == null || n === "") return "--";
 
     const num = Number(n);
     if (Number.isNaN(num)) return "--";
+
+    // fix: compare magnitude so negative values pick a unit too
+    const abs = Math.abs(num);
 
     const units = [
         [1e12, "T"],
@@ -21,7 +24,7 @@ export const fmtCompact = (n) => {
         [1e3, "K"],
     ];
 
-    const unit = units.find(([size]) => num >= size);
+    const unit = units.find(([size]) => abs >= size);
     return unit
         ? `${(num / unit[0]).toFixed(2)}${unit[1]}`
         : String(num);
@@ -40,6 +43,8 @@ function pickValue(point) {
         point.value ??
         point.close ??
         point.index ??
+        point.currentValue ??
+        point.y ??
         Object.values(point)[1]
     );
 }
@@ -54,9 +59,22 @@ function getValues(raw) {
     return values.length >= 2 ? values : null;
 }
 
+// fix: loop instead of Math.min/max(...values), a big intraday series
+// can blow the call stack when spread as arguments
+function minMax(values) {
+    let min = Infinity;
+    let max = -Infinity;
+
+    for (const v of values) {
+        if (v < min) min = v;
+        if (v > max) max = v;
+    }
+
+    return [min, max];
+}
+
 function buildPoints(values, width, height, padding = 0) {
-    const min = Math.min(...values);
-    const max = Math.max(...values);
+    const [min, max] = minMax(values);
     const range = max - min || 1;
     const step = width / (values.length - 1);
     const usableHeight = height - padding * 2;

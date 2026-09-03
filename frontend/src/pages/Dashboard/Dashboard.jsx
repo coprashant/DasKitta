@@ -1,131 +1,243 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useAccount } from "../../context/AccountContext";
+import { getPortfolioApi } from "../../api/accounts";
 import { getHistoryApi, getCdscSummaryApi } from "../../api/ipo";
+import { getCompanySectors, isNepseError } from "../../api/nepse";
 import Layout from "../../components/Layout/Layout.jsx";
 import AccountSwitcher from "../../components/AccountSwitcher/AccountSwitcher.jsx";
 import SEO from "../../seo/SEO.jsx";
 import {
-  IconUser, IconPlus, IconFile, IconRefresh,
-  IconStack, IconCheck, IconX, IconClock
+  IconUser,
+  IconPlus,
+  IconFile,
+  IconRefresh,
+  IconStack,
+  IconCheck,
+  IconX,
+  IconClock,
+  IconChevronDown
 } from "../../components/Icons";
 import {
-  AreaChart, Area, PieChart, Pie, Cell,
-  ResponsiveContainer, Tooltip,
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  Tooltip
 } from "recharts";
 import "./Dashboard.css";
 
 const CDSC_MOBILE_LIMIT = 5;
-const PIE_COLORS = ["var(--success)", "var(--danger)", "var(--border-strong)"];
-const TOOLTIP_STYLE = {
-  background: "var(--surface)",
-  border: "1px solid var(--border)",
-  borderRadius: 8,
-  fontSize: 11,
-  boxShadow: "var(--shadow-lg)",
-  padding: "6px 10px",
-};
+const UNKNOWN_SECTOR = "Uncategorized";
+const OTHERS_SECTOR = "Others";
+
+// months visible by default before the user scrolls left for older history
+const VISIBLE_MONTHS = 12;
+const MIN_MONTH_WIDTH = 46;
+
+// show up to five real sectors and optionally one aggregated others bar
+const MAX_ACTUAL_SECTORS = 5;
+
+const numberFormat = new Intl.NumberFormat("en-US");
+const fmt = (n) => numberFormat.format(n ?? 0);
 
 const Skeleton = ({ h = 16, w = "100%", style = {} }) => (
     <div className="skeleton" style={{ height: h, width: w, ...style }} />
 );
 
 const cdscResultBadgeClass = (s) =>
-    s === "ALLOTTED" ? "badge-success" :
-        s === "NOT_ALLOTTED" ? "badge-danger" : "badge-muted";
+    s === "ALLOTTED"
+        ? "badge-success"
+        : s === "NOT_ALLOTTED"
+            ? "badge-danger"
+            : "badge-muted";
 
 const deriveStatus = (item) => {
   if (item.status === "SUCCESS") {
     const r = item.resultStatus;
-    if (r === "ALLOTTED") return { label: `Allotted · ${item.allottedKitta} kitta`, variant: "allotted" };
-    if (r === "NOT_ALLOTTED") return { label: "Amount released", variant: "released" };
-    return { label: "Amount blocked", variant: "blocked" };
+
+    if (r === "ALLOTTED") {
+      return {
+        label: `Allotted · ${item.allottedKitta} kitta`,
+        variant: "allotted"
+      };
+    }
+
+    if (r === "NOT_ALLOTTED") {
+      return {
+        label: "Released",
+        variant: "released"
+      };
+    }
+
+    return {
+      label: "Blocked",
+      variant: "blocked"
+    };
   }
-  if (item.status === "ALREADY_APPLIED") return { label: "Already applied", variant: "warning" };
-  if (item.status === "FAILED") return { label: "Failed", variant: "failed" };
-  if (item.status === "PENDING") return { label: "Pending", variant: "pending" };
-  return { label: item.status ?? "—", variant: "pending" };
+
+  if (item.status === "ALREADY_APPLIED") {
+    return {
+      label: "Applied",
+      variant: "warning"
+    };
+  }
+
+  if (item.status === "FAILED") {
+    return {
+      label: "Failed",
+      variant: "failed"
+    };
+  }
+
+  if (item.status === "PENDING") {
+    return {
+      label: "Pending",
+      variant: "pending"
+    };
+  }
+
+  return {
+    label: item.status ?? "—",
+    variant: "pending"
+  };
 };
 
-const NoAccountBanner = () => (
-    <div className="dash-no-account">
-      <div className="dash-no-account-icon"><IconUser /></div>
-      <p className="dash-no-account-title">No account connected</p>
-      <p className="dash-no-account-desc">Link a Meroshare account to see your IPO stats.</p>
-      <Link to="/accounts/add" className="btn btn-primary btn-sm"><IconPlus /> Add account</Link>
-    </div>
-);
+const CustomTooltip = ({ active, payload }) => {
+  if (!active || !payload || !payload.length) {
+    return null;
+  }
 
-const StatCard = ({ icon, label, value, color, loading, delay }) => (
-    <div className="stat-card anim-fade-up" style={{ animationDelay: delay }}>
-      <div className={`stat-icon-wrap stat-icon-${color}`}>{icon}</div>
-      <div className="stat-body">
-        <p className="stat-label">{label}</p>
-        {loading ? (
-            <Skeleton h={36} w="52px" style={{ marginTop: 6, borderRadius: 6 }} />
-        ) : (
-            <p className={`stat-value stat-value-${color}`}>{value ?? "—"}</p>
-        )}
+  const item = payload[0];
+  const label =
+      item.payload?.label ||
+      item.payload?.name ||
+      item.payload?.sector ||
+      item.name;
+
+  return (
+      <div className="dash-custom-tooltip">
+        <p className="tooltip-label">{label}</p>
+        <p className="tooltip-value">{fmt(item.value)} Applications</p>
+      </div>
+  );
+};
+
+const TypeOutcomeTooltip = ({ active, payload, label }) => {
+  if (!active || !payload || !payload.length) {
+    return null;
+  }
+
+  const allotted = payload.find((p) => p.dataKey === "allotted")?.value || 0;
+  const notAllotted = payload.find((p) => p.dataKey === "notAllotted")?.value || 0;
+  const pending = payload.find((p) => p.dataKey === "pending")?.value || 0;
+  const total = allotted + notAllotted + pending;
+
+  return (
+      <div className="dash-custom-tooltip">
+        <p className="tooltip-label">{label || "Share Type"}</p>
+        <p className="tooltip-value">Total: {fmt(total)}</p>
+        <p className="tooltip-value">Allotted: {fmt(allotted)}</p>
+        <p className="tooltip-value">Not Allotted: {fmt(notAllotted)}</p>
+        <p className="tooltip-value">Pending: {fmt(pending)}</p>
+      </div>
+  );
+};
+
+const PortfolioTooltip = ({ active, payload }) => {
+  if (!active || !payload || !payload.length) {
+    return null;
+  }
+
+  const item = payload[0]?.payload;
+
+  return (
+      <div className="dash-custom-tooltip">
+        <p className="tooltip-label">{item?.name || "Holding"}</p>
+        <p className="tooltip-value">Value: Rs {fmt(item?.value || 0)}</p>
+        <p className="tooltip-value">Units: {fmt(item?.units || 0)}</p>
+      </div>
+  );
+};
+
+// pie colors read from theme vars so this stays in sync with badges/kpis
+const PieChartWidget = ({ pieData, cdscSummary }) => (
+    <div className="pie-container">
+      <ResponsiveContainer width="100%" height={140}>
+        <PieChart>
+          <Pie
+              data={pieData}
+              dataKey="value"
+              outerRadius={48}
+              innerRadius={30}
+              stroke="none"
+          >
+            {pieData.map((entry) => (
+                <Cell key={entry.name} fill={`var(${entry.colorVar})`} />
+            ))}
+          </Pie>
+
+          <Tooltip content={<CustomTooltip />} />
+        </PieChart>
+      </ResponsiveContainer>
+
+      <div className="pie-legend">
+        <span>
+          <i className="legend-dot legend-dot-success" />
+          Allotted ({fmt(cdscSummary?.allotted)})
+        </span>
+
+        <span>
+          <i className="legend-dot legend-dot-danger" />
+          Not Allotted ({fmt(cdscSummary?.failed)})
+        </span>
+
+        <span>
+          <i className="legend-dot legend-dot-muted" />
+          Pending ({fmt(cdscSummary?.notPublished)})
+        </span>
       </div>
     </div>
 );
 
-const CdscTable = ({ items, isMobile, expanded, onExpand, onCollapse }) => {
-  const visible = isMobile && !expanded ? items.slice(0, CDSC_MOBILE_LIMIT) : items;
-  const showSeeAll = isMobile && !expanded && items.length > CDSC_MOBILE_LIMIT;
-  const showLess = isMobile && expanded && items.length > CDSC_MOBILE_LIMIT;
+const getMonthKey = (value) => {
+  if (!value) {
+    return null;
+  }
 
-  return (
-      <>
-        <div className="table-scroll">
-          <table className="dash-table">
-            <thead>
-            <tr>
-              <th>Company</th>
-              <th className="col-type">Type</th>
-              <th>Result</th>
-            </tr>
-            </thead>
-            <tbody>
-            {visible.map((item, i) => (
-                <tr key={item.applicantFormId ?? i}>
-                  <td>
-                    <span className="cell-primary">{item.companyName}</span>
-                    {item.scrip && <span className="cell-scrip">{item.scrip}</span>}
-                  </td>
-                  <td className="col-type">
-                    <span className="cell-type">{item.shareTypeName || "—"}</span>
-                  </td>
-                  <td>
-                  <span className={`badge ${cdscResultBadgeClass(item.resultStatus)}`}>
-                    {item.resultStatus === "ALLOTTED" && <span className="badge-dot badge-dot-success" />}
-                    {item.resultStatus === "NOT_ALLOTTED" && <span className="badge-dot badge-dot-danger" />}
-                    {item.resultStatus?.replace(/_/g, " ") ?? "—"}
-                  </span>
-                  </td>
-                </tr>
-            ))}
-            </tbody>
-          </table>
-        </div>
-        {showSeeAll && (
-            <button className="cdsc-see-all-btn" onClick={onExpand}>
-              See all {items.length} applications
-            </button>
-        )}
-        {showLess && (
-            <button className="cdsc-see-all-btn" onClick={onCollapse}>
-              Show less
-            </button>
-        )}
-      </>
-  );
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+};
+
+const formatMonth = (key) => {
+  const [year, month] = key.split("-").map(Number);
+
+  return new Date(year, month - 1, 1).toLocaleDateString("en-US", {
+    month: "short",
+    year: "numeric"
+  });
 };
 
 const Dashboard = () => {
   const { user } = useAuth();
-  const { activeAccount, accounts, loading: accountLoading } = useAccount();
+  const {
+    activeAccount,
+    accounts,
+    loading: accountLoading
+  } = useAccount();
 
   const [allHistory, setAllHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -135,324 +247,1315 @@ const Dashboard = () => {
   const [cdscError, setCdscError] = useState(null);
   const [cdscRefreshing, setCdscRefreshing] = useState(false);
   const [cdscExpanded, setCdscExpanded] = useState(false);
+  const [portfolio, setPortfolio] = useState(null);
+  const [portfolioLoading, setPortfolioLoading] = useState(false);
 
-  /* Viewport query */
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 480);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [chartMode, setChartMode] = useState("portfolio");
+  const [sectorMap, setSectorMap] = useState({});
+  const [isMobile, setIsMobile] = useState(() =>
+      typeof window !== "undefined" ? window.innerWidth < 768 : false
+  );
+
+  const chartScrollRef = useRef(null);
+  const [chartTrackWidth, setChartTrackWidth] = useState(0);
+
   useEffect(() => {
-    const mq = window.matchMedia("(max-width: 479px)");
-    const handler = (e) => setIsMobile(e.matches);
+    const mq = window.matchMedia("(max-width: 767px)");
+
+    const handler = (event) => {
+      setIsMobile(event.matches);
+    };
+
+    setIsMobile(mq.matches);
     mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
+
+    return () => {
+      mq.removeEventListener("change", handler);
+    };
   }, []);
 
-  /* Fetch global history once */
+  // tracks visible width of the scroll container so chart fits 12 months
+  useEffect(() => {
+    const el = chartScrollRef.current;
+
+    if (!el || typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setChartTrackWidth(entry.contentRect.width);
+      }
+    });
+
+    observer.observe(el);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
+
     setHistoryLoading(true);
+
     (async () => {
       try {
         const res = await getHistoryApi();
-        if (cancelled) return;
+
+        if (cancelled) {
+          return;
+        }
+
         const sorted = (Array.isArray(res?.data) ? res.data : [])
-            .sort((a, b) => new Date(b.appliedAt) - new Date(a.appliedAt));
+            .sort(
+                (a, b) =>
+                    new Date(b.appliedAt) - new Date(a.appliedAt)
+            );
+
         setAllHistory(sorted);
       } catch {
-        if (!cancelled) setAllHistory([]);
+        if (!cancelled) {
+          setAllHistory([]);
+        }
       } finally {
-        if (!cancelled) setHistoryLoading(false);
+        if (!cancelled) {
+          setHistoryLoading(false);
+        }
       }
     })();
-    return () => { cancelled = true; };
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  /* CDSC Data Fetcher */
-  const fetchCdscSummary = useCallback(async (accountId, isRefresh = false) => {
-    if (!accountId) return;
-    if (isRefresh) {
-      setCdscRefreshing(true);
-    } else {
-      setCdscLoading(true);
-      setCdscSummary(null);
-    }
-    setCdscError(null);
-    try {
-      const res = await getCdscSummaryApi(accountId);
-      setCdscSummary(res.data);
-    } catch (e) {
-      setCdscError(e?.response?.data?.message || "Could not load data from CDSC");
-    } finally {
-      setCdscLoading(false);
-      setCdscRefreshing(false);
-    }
-  }, []);
-
-  /* Fetch CDSC summary when active account changes */
-  const activeAccountId = activeAccount?.id;
   useEffect(() => {
-    if (accountLoading) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await getCompanySectors();
+
+        if (cancelled || isNepseError(res?.data)) {
+          return;
+        }
+
+        const list = res?.data?.sectors || {};
+        const map = {};
+
+        Object.entries(list).forEach(([symbol, sector]) => {
+          const key = (symbol || "").trim().toUpperCase();
+
+          if (key) {
+            map[key] = sector || UNKNOWN_SECTOR;
+          }
+        });
+
+        setSectorMap(map);
+      } catch {
+        if (!cancelled) {
+          setSectorMap({});
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const fetchCdscSummary = useCallback(
+      async (accountId, isRefresh = false) => {
+        if (!accountId) {
+          return;
+        }
+
+        if (isRefresh) {
+          setCdscRefreshing(true);
+        } else {
+          setCdscLoading(true);
+          setCdscSummary(null);
+        }
+
+        setCdscError(null);
+
+        try {
+          const res = await getCdscSummaryApi(accountId);
+          setCdscSummary(res.data);
+        } catch (error) {
+          setCdscError(
+              error?.response?.data?.message ||
+              "Could not synchronize CDSC history"
+          );
+        } finally {
+          setCdscLoading(false);
+          setCdscRefreshing(false);
+        }
+      },
+      []
+  );
+
+  const fetchPortfolio = useCallback(
+      async (accountId) => {
+        if (!accountId) {
+          return;
+        }
+
+        setPortfolioLoading(true);
+
+        try {
+          const res = await getPortfolioApi(accountId);
+          setPortfolio(res?.data || null);
+        } catch {
+          setPortfolio(null);
+        } finally {
+          setPortfolioLoading(false);
+        }
+      },
+      []
+  );
+
+  const activeAccountId = activeAccount?.id;
+
+  useEffect(() => {
+    if (accountLoading) {
+      return;
+    }
+
     if (!activeAccountId) {
       setCdscSummary(null);
       setCdscError(null);
+      setPortfolio(null);
       return;
     }
+
     setCdscExpanded(false);
+    setChartMode("portfolio");
+    setSearchTerm("");
+
     fetchCdscSummary(activeAccountId, false);
-  }, [activeAccountId, accountLoading, fetchCdscSummary]);
+    fetchPortfolio(activeAccountId);
+  }, [
+    activeAccountId,
+    accountLoading,
+    fetchCdscSummary,
+    fetchPortfolio
+  ]);
+
+  useEffect(() => {
+    if (!isMobile && chartMode === "pie") {
+      setChartMode("portfolio");
+    }
+  }, [isMobile, chartMode]);
 
   const history = useMemo(() => {
-    if (!activeAccount) return [];
-    return allHistory.filter(h => h.accountUsername === activeAccount.username);
+    if (!activeAccount) {
+      return [];
+    }
+
+    return allHistory.filter(
+        (item) =>
+            item.accountUsername === activeAccount.username
+    );
   }, [allHistory, activeAccount]);
 
-  const recent = useMemo(() => history.slice(0, 5), [history]);
+  const recent = useMemo(
+      () => history.slice(0, 5),
+      [history]
+  );
 
-  const areaData = useMemo(() => {
-    if (!cdscSummary?.items?.length) return [];
-    return [...cdscSummary.items].reverse().reduce((acc, item, i) => {
-      acc.push({ name: item.scrip || String(i + 1), total: (acc[acc.length - 1]?.total ?? 0) + 1 });
-      return acc;
-    }, []);
+  // sectors grouped by real name from company list, others only used when
+  // total distinct sectors exceed five
+  const sectorData = useMemo(() => {
+    if (!cdscSummary?.items?.length) {
+      return [];
+    }
+
+    const counts = {};
+
+    cdscSummary.items.forEach((item) => {
+      const scripKey = (item.scrip || "").trim().toUpperCase();
+      const sector = sectorMap[scripKey] || UNKNOWN_SECTOR;
+      counts[sector] = (counts[sector] || 0) + 1;
+    });
+
+    const sorted = Object.entries(counts)
+        .map(([sector, count]) => ({ sector, count }))
+        .sort((a, b) => b.count - a.count);
+
+    if (sorted.length <= MAX_ACTUAL_SECTORS) {
+      return sorted;
+    }
+
+    const top = sorted.slice(0, MAX_ACTUAL_SECTORS);
+    const rest = sorted.slice(MAX_ACTUAL_SECTORS);
+    const restTotal = rest.reduce((sum, s) => sum + s.count, 0);
+
+    const othersIndex = top.findIndex((s) => s.sector === OTHERS_SECTOR);
+
+    if (othersIndex >= 0) {
+      top[othersIndex] = {
+        sector: OTHERS_SECTOR,
+        count: top[othersIndex].count + restTotal
+      };
+    } else {
+      top.push({ sector: OTHERS_SECTOR, count: restTotal });
+    }
+
+    return top.sort((a, b) => b.count - a.count);
+  }, [cdscSummary, sectorMap]);
+
+  const typeOutcomeData = useMemo(() => {
+    if (!cdscSummary?.items?.length) {
+      return [];
+    }
+
+    const map = {};
+
+    cdscSummary.items.forEach((item) => {
+      const type = item.shareTypeName || "Ordinary";
+
+      if (!map[type]) {
+        map[type] = {
+          name: type,
+          allotted: 0,
+          notAllotted: 0,
+          pending: 0,
+          total: 0
+        };
+      }
+
+      if (item.resultStatus === "ALLOTTED") {
+        map[type].allotted += 1;
+      } else if (item.resultStatus === "NOT_ALLOTTED") {
+        map[type].notAllotted += 1;
+      } else {
+        map[type].pending += 1;
+      }
+
+      map[type].total += 1;
+    });
+
+    return Object.values(map).sort((a, b) => b.total - a.total);
   }, [cdscSummary]);
 
-  const pieData = useMemo(() => cdscSummary ? [
-    { name: "Allotted", value: cdscSummary.allotted },
-    { name: "Not Allotted", value: cdscSummary.failed },
-    { name: "Pending", value: cdscSummary.notPublished },
-  ] : [], [cdscSummary]);
+  const portfolioData = useMemo(() => {
+    if (!portfolio?.items?.length) {
+      return [];
+    }
 
-  const statsLoading = accountLoading || cdscLoading;
-  const localLoading = accountLoading || historyLoading;
+    const items = portfolio.items
+        .map((item) => ({
+          name: item.script || "Unknown",
+          value: Number(item.valueAsOfLTP) || 0,
+          units: Number(item.currentBalance) || 0
+        }))
+        .filter((item) => item.value > 0)
+        .sort((a, b) => b.value - a.value);
+
+    const top = items.slice(0, 6);
+    const rest = items.slice(6);
+    const restValue = rest.reduce((sum, item) => sum + item.value, 0);
+    const restUnits = rest.reduce((sum, item) => sum + item.units, 0);
+
+    if (restValue > 0) {
+      top.push({
+        name: "Others",
+        value: restValue,
+        units: restUnits
+      });
+    }
+
+    return top;
+  }, [portfolio]);
+
+  // full month by month cumulative series, all history included
+  // chart scrolls to the latest 12 months by default, older data reachable
+  // by scrolling the chart left, kept deliberately off a range toggle so
+  // the analytics card does not add yet another control on small screens
+  const cumulativeData = useMemo(() => {
+    const items = cdscSummary?.items || [];
+    const months = {};
+
+    items.forEach((item) => {
+      const key = getMonthKey(item.appliedDate);
+
+      if (key) {
+        months[key] = (months[key] || 0) + 1;
+      }
+    });
+
+    const keys = Object.keys(months).sort();
+
+    if (!keys.length) {
+      return [];
+    }
+
+    const start = new Date(
+        Number(keys[0].split("-")[0]),
+        Number(keys[0].split("-")[1]) - 1,
+        1
+    );
+
+    const end = new Date(
+        Number(keys[keys.length - 1].split("-")[0]),
+        Number(keys[keys.length - 1].split("-")[1]) - 1,
+        1
+    );
+
+    const result = [];
+    let runningTotal = 0;
+
+    const cursor = new Date(start);
+
+    while (cursor <= end) {
+      const key = `${cursor.getFullYear()}-${String(
+          cursor.getMonth() + 1
+      ).padStart(2, "0")}`;
+
+      const count = months[key] || 0;
+
+      runningTotal += count;
+
+      result.push({
+        key,
+        label: formatMonth(key),
+        applications: runningTotal,
+        monthly: count
+      });
+
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+
+    return result;
+  }, [cdscSummary]);
+
+  const cumulativeCount = cumulativeData.length
+      ? cumulativeData[cumulativeData.length - 1].applications
+      : 0;
+
+  const unknownAppliedDateCount = Math.max(
+      0,
+      (cdscSummary?.total || 0) - cumulativeCount
+  );
+
+  // chart width fixed in px so track can be wider than container and
+  // scrolled, default view fits exactly 12 months
+  const monthWidth = Math.max(
+      MIN_MONTH_WIDTH,
+      chartTrackWidth ? chartTrackWidth / VISIBLE_MONTHS : MIN_MONTH_WIDTH
+  );
+
+  const cumulativeChartWidth = Math.max(
+      chartTrackWidth,
+      monthWidth * cumulativeData.length
+  );
+
+  // scroll to the most recent month whenever data or track size changes
+  useEffect(() => {
+    if (chartMode !== "cumulative") {
+      return;
+    }
+
+    const el = chartScrollRef.current;
+
+    if (el) {
+      el.scrollLeft = el.scrollWidth;
+    }
+  }, [cumulativeData, chartTrackWidth, chartMode]);
+
+  const pieData = useMemo(
+      () =>
+          cdscSummary
+              ? [
+                {
+                  name: "Allotted",
+                  value: cdscSummary.allotted || 0,
+                  colorVar: "--success"
+                },
+                {
+                  name: "Not Allotted",
+                  value: cdscSummary.failed || 0,
+                  colorVar: "--danger"
+                },
+                {
+                  name: "Pending",
+                  value: cdscSummary.notPublished || 0,
+                  colorVar: "--text-3"
+                }
+              ]
+              : [],
+      [cdscSummary]
+  );
+
+  const successRate = useMemo(() => {
+    if (!cdscSummary || !cdscSummary.total) {
+      return "0%";
+    }
+
+    const decided =
+        (cdscSummary.allotted || 0) +
+        (cdscSummary.failed || 0);
+
+    if (decided === 0) {
+      return "0%";
+    }
+
+    return `${Math.round(
+        (cdscSummary.allotted / decided) * 100
+    )}%`;
+  }, [cdscSummary]);
+
+  const notAllottedRate = useMemo(() => {
+    if (!cdscSummary || !cdscSummary.total) {
+      return "0%";
+    }
+
+    const decided =
+        (cdscSummary.allotted || 0) +
+        (cdscSummary.failed || 0);
+
+    if (decided === 0) {
+      return "0%";
+    }
+
+    return `${Math.round(
+        (cdscSummary.failed / decided) * 100
+    )}%`;
+  }, [cdscSummary]);
+
+  const filteredCdscItems = useMemo(() => {
+    if (!cdscSummary?.items) {
+      return [];
+    }
+
+    if (!searchTerm.trim()) {
+      return cdscSummary.items;
+    }
+
+    const term = searchTerm.toLowerCase();
+
+    return cdscSummary.items.filter(
+        (item) =>
+            item.companyName
+                ?.toLowerCase()
+                .includes(term) ||
+            item.scrip
+                ?.toLowerCase()
+                .includes(term)
+    );
+  }, [cdscSummary, searchTerm]);
+
+  const visibleCdscItems =
+      isMobile && !cdscExpanded
+          ? filteredCdscItems.slice(0, CDSC_MOBILE_LIMIT)
+          : filteredCdscItems;
+
+  const statsLoading =
+      accountLoading || cdscLoading;
+
+  const localLoading =
+      accountLoading || historyLoading;
+
+  // drives the status dot color and label in the merged status strip
+  const syncState = cdscError
+      ? "error"
+      : cdscRefreshing
+          ? "syncing"
+          : "idle";
+
+  const showAnalyticsCard = Boolean(activeAccount) && !accountLoading;
+  const hasAnalyticsData = cdscSummary && cdscSummary.total > 0;
+  const hasPortfolioData = portfolioData.length > 0;
+  const isPortfolioMode = chartMode === "portfolio";
+  const analyticsLoading = isPortfolioMode ? portfolioLoading : cdscLoading;
+  const hasActiveChartData = isPortfolioMode ? hasPortfolioData : hasAnalyticsData;
 
   return (
       <Layout>
         <SEO
             title="Dashboard"
-            description="Your IPO application dashboard — view allotment stats, recent applications, and CDSC summary across your Meroshare accounts."
+            description="IPO management overview."
             canonical="/dashboard"
             noindex={true}
         />
-        <div className="page">
-          <div className="dash-header">
+
+        <div className="dash-container">
+          <header className="dash-header">
             <div>
               <h1 className="page-title">Dashboard</h1>
-              <p className="page-subtitle">Welcome back, <strong>{user?.username}</strong></p>
+              <p className="page-subtitle">
+                Welcome, <strong>{user?.username}</strong>
+              </p>
             </div>
+
             <div className="dash-header-actions">
-              <Link to="/settings/accounts/add" className="btn btn-ghost btn-sm"><IconPlus /> Account</Link>
-              <Link to="/ipo/apply" className="btn btn-primary btn-sm"><IconFile /> Apply IPO</Link>
+              <Link
+                  to="/settings/accounts/add"
+                  className="btn btn-secondary btn-sm dash-add-account-btn"
+                  aria-label="Add Account"
+              >
+                <IconPlus />
+                Add Account
+              </Link>
+
+              <Link
+                  to="/ipo/apply"
+                  className="btn btn-primary btn-sm"
+                  aria-label="Apply IPO"
+              >
+                <IconFile />
+                Apply IPO
+              </Link>
             </div>
-          </div>
+          </header>
 
           <AccountSwitcher />
 
-          {!activeAccount && !accountLoading ? <NoAccountBanner /> : (
+          {!activeAccount && !accountLoading ? (
+              <div className="dash-no-account">
+                <IconUser />
+
+                <div>
+                  <h3>No Account Selected</h3>
+                  <p>
+                    Connect or select a Meroshare account to
+                    pull application telemetry.
+                  </p>
+                </div>
+
+                <Link
+                    to="/accounts/add"
+                    className="btn btn-primary btn-sm"
+                >
+                  Connect
+                </Link>
+              </div>
+          ) : (
               <>
-                <div className="dash-stats-bar">
-                  <div className="dash-stats-bar-left">
-                    <span className="dash-source-tag">CDSC · last 12 months</span>
-                    {cdscSummary && !cdscLoading && (
-                        <span className="dash-source-count">{cdscSummary.total} applications</span>
+                {/* single status strip, dot and copy reflect real state */}
+                <div className={`dash-status-bar status-${syncState}`}>
+                  <div className="dash-status-row">
+                    <div className="dash-status-info">
+                      <span className="dash-status-dot" />
+                      <span>
+                        CDSC Sync:{" "}
+                        {cdscError
+                            ? "Sync failed"
+                            : cdscSummary
+                                ? `${fmt(cdscSummary.total)} Records`
+                                : "Awaiting Data"}
+                      </span>
+                    </div>
+
+                    {activeAccount && (
+                        <button
+                            className="dash-sync-btn"
+                            onClick={() =>
+                              Promise.all([
+                                fetchCdscSummary(activeAccount.id, true),
+                                fetchPortfolio(activeAccount.id)
+                              ])
+                            }
+                            disabled={
+                                cdscLoading ||
+                                cdscRefreshing ||
+                              portfolioLoading ||
+                                accountLoading
+                            }
+                        >
+                          <IconRefresh
+                              spinning={cdscRefreshing}
+                          />
+
+                          <span>
+                            {cdscRefreshing
+                                ? "Syncing..."
+                                : "Sync"}
+                          </span>
+                        </button>
                     )}
                   </div>
-                  {activeAccount && (
-                      <button
-                          className="dash-refresh-btn"
-                          onClick={() => fetchCdscSummary(activeAccount.id, true)}
-                          disabled={cdscLoading || cdscRefreshing || accountLoading}
-                      >
-                        <IconRefresh spinning={cdscRefreshing} />
-                        {cdscRefreshing ? "Syncing" : "Sync"}
-                      </button>
+
+                  {cdscError && (
+                      <div className="dash-status-row dash-status-error-row">
+                        <span className="dash-error-text">
+                          {cdscError}
+                        </span>
+
+                        <button
+                            className="dash-retry-btn"
+                            onClick={() =>
+                                fetchCdscSummary(
+                                    activeAccount.id,
+                                    false
+                                )
+                            }
+                        >
+                          Retry
+                        </button>
+                      </div>
                   )}
                 </div>
 
-                {cdscError && (
-                    <div className="dash-error-bar">
-                      <span>{cdscError}</span>
-                      <button className="dash-error-retry" onClick={() => fetchCdscSummary(activeAccount.id, false)}>
-                        Retry
-                      </button>
-                    </div>
-                )}
+                <div className="dash-kpi-grid">
+                  <div className="kpi-card">
+                    <span className="kpi-label">
+                      <span className="kpi-icon" aria-hidden="true">
+                        <IconStack />
+                      </span>
+                      Total Applied
+                    </span>
 
-                <div className="dash-stats">
-                  <StatCard icon={<IconStack />} label="Total Applied" value={cdscSummary?.total} color="accent" loading={statsLoading} delay="0ms" />
-                  <StatCard icon={<IconCheck />} label="Allotted" value={cdscSummary?.allotted} color="success" loading={statsLoading} delay="60ms" />
-                  <StatCard icon={<IconX />} label="Not Allotted" value={cdscSummary?.failed} color="danger" loading={statsLoading} delay="120ms" />
-                  <StatCard icon={<IconClock />} label="Pending" value={cdscSummary?.notPublished} color="muted" loading={statsLoading} delay="180ms" />
+                    {statsLoading ? (
+                        <Skeleton h={28} w={60} />
+                    ) : (
+                        <div className="kpi-value">
+                          {fmt(cdscSummary?.total)}
+                        </div>
+                    )}
+                  </div>
+
+                  <div className="kpi-card">
+                    <span className="kpi-label">
+                      <span className="kpi-icon" aria-hidden="true">
+                        <IconCheck />
+                      </span>
+                      Allotted
+                    </span>
+
+                    {statsLoading ? (
+                        <Skeleton h={28} w={60} />
+                    ) : (
+                        <div className="kpi-value-row">
+                          <div className="kpi-value text-success">
+                            {fmt(cdscSummary?.allotted)}
+                          </div>
+
+                          <span className="kpi-rate">
+                            {successRate} Rate
+                          </span>
+                        </div>
+                    )}
+                  </div>
+
+                  <div className="kpi-card">
+                    <span className="kpi-label">
+                      <span className="kpi-icon" aria-hidden="true">
+                        <IconX />
+                      </span>
+                      Not Allotted
+                    </span>
+
+                    {statsLoading ? (
+                        <Skeleton h={28} w={60} />
+                    ) : (
+                        <div className="kpi-value-row">
+                          <div className="kpi-value text-danger">
+                            {fmt(cdscSummary?.failed)}
+                          </div>
+
+                          <span className="kpi-rate kpi-rate-danger">
+                            {notAllottedRate} Rate
+                          </span>
+                        </div>
+                    )}
+                  </div>
+
+                  <div className="kpi-card">
+                    <span className="kpi-label">
+                      <span className="kpi-icon" aria-hidden="true">
+                        <IconClock />
+                      </span>
+                      Pending
+                    </span>
+
+                    {statsLoading ? (
+                        <Skeleton h={28} w={60} />
+                    ) : (
+                        <div className="kpi-value text-muted">
+                          {fmt(cdscSummary?.notPublished)}
+                        </div>
+                    )}
+                  </div>
                 </div>
 
-                {cdscSummary && cdscSummary.total > 0 && (
-                    <div className="dash-charts">
-                      <div className="card dash-chart-card anim-fade-up" style={{ animationDelay: "200ms" }}>
-                        <p className="chart-label">Cumulative applications</p>
-                        <div style={{ width: "100%", height: 128 }}>
-                          <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={areaData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
-                              <defs>
-                                <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.2} />
-                                  <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
-                                </linearGradient>
-                              </defs>
-                              <Area type="monotone" dataKey="total" stroke="var(--accent)" strokeWidth={2} fill="url(#areaGrad)" dot={false} />
-                              <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={{ color: "var(--text-2)" }} />
-                            </AreaChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </div>
+                {/* card shell always renders once account is active, no
+                    layout jump when data or loading state changes */}
+                {showAnalyticsCard && (
+                    <div className="dash-card dash-analytics">
+                      <div className="dash-card-header">
+                        <div>
+                          <h2 className="dash-card-title">
+                            Application Analytics
+                          </h2>
 
-                      <div className="card dash-chart-card anim-fade-up" style={{ animationDelay: "260ms" }}>
-                        <p className="chart-label">Result breakdown</p>
-                        {pieData.every(p => p.value === 0) ? (
-                            <div className="inline-empty" style={{ height: 128 }}>No results yet</div>
+                          <p className="dash-card-subtitle">
+                            Track your IPO application history
+                          </p>
+                        </div>
+
+                        {isMobile ? (
+                            <div className="dash-chart-select-wrap">
+                              <div className="dash-chart-select-control">
+                                <select
+                                    id="chart-mode-select"
+                                    className="dash-chart-select"
+                                    value={chartMode}
+                                    onChange={(event) => setChartMode(event.target.value)}
+                                >
+                                  <option value="portfolio">Portfolio</option>
+                                  <option value="cumulative">Cumulative</option>
+                                  <option value="sector">Sectors</option>
+                                  <option value="type">Type</option>
+                                  <option value="pie">Results</option>
+                                </select>
+
+                                <span className="dash-chart-select-icon" aria-hidden="true">
+                                  <IconChevronDown />
+                                </span>
+                              </div>
+                            </div>
                         ) : (
-                            <>
-                              <div style={{ width: "100%", height: 100 }}>
-                                <ResponsiveContainer width="100%" height="100%">
-                                  <PieChart>
-                                    <Pie
-                                        data={pieData}
-                                        dataKey="value"
-                                        outerRadius={44}
-                                        innerRadius={26}
-                                        paddingAngle={2}
-                                    >
-                                      {pieData.map((entry, index) => (
-                                          <Cell key={entry.name} fill={PIE_COLORS[index]} />
-                                      ))}
-                                    </Pie>
-                                    <Tooltip contentStyle={TOOLTIP_STYLE} />
-                                  </PieChart>
-                                </ResponsiveContainer>
+                            <div className="dash-toggle-scroll">
+                              <div className="dash-toggle-group">
+                                <button
+                                    className={
+                                      chartMode === "portfolio"
+                                          ? "active"
+                                          : ""
+                                    }
+                                    onClick={() =>
+                                        setChartMode("portfolio")
+                                    }
+                                >
+                                  Portfolio
+                                </button>
+
+                                <button
+                                    className={
+                                      chartMode === "cumulative"
+                                          ? "active"
+                                          : ""
+                                    }
+                                    onClick={() =>
+                                        setChartMode("cumulative")
+                                    }
+                                >
+                                  Cumulative
+                                </button>
+
+                                <button
+                                    className={
+                                      chartMode === "sector"
+                                          ? "active"
+                                          : ""
+                                    }
+                                    onClick={() =>
+                                        setChartMode("sector")
+                                    }
+                                >
+                                  Sectors
+                                </button>
+
+                                <button
+                                    className={
+                                      chartMode === "type"
+                                          ? "active"
+                                          : ""
+                                    }
+                                    onClick={() =>
+                                        setChartMode("type")
+                                    }
+                                >
+                                  Type
+                                </button>
                               </div>
-                              <div className="pie-legend">
-                                <span className="pie-legend-item"><span className="pie-dot" style={{ background: "var(--success)" }} />Allotted</span>
-                                <span className="pie-legend-item"><span className="pie-dot" style={{ background: "var(--danger)" }} />Not allotted</span>
-                                <span className="pie-legend-item"><span className="pie-dot" style={{ background: "var(--border-strong)" }} />Pending</span>
-                              </div>
-                            </>
+                            </div>
                         )}
                       </div>
+
+                      {analyticsLoading ? (
+                          <div className="dash-multi-chart-wrapper">
+                            <Skeleton h={230} style={{ borderRadius: 10 }} />
+                            <Skeleton h={230} style={{ borderRadius: 10 }} />
+                          </div>
+                      ) : !hasActiveChartData ? (
+                          <div className="dash-empty dash-empty-tall">
+                            {isPortfolioMode ? "No portfolio data yet" : "No application data yet"}
+                          </div>
+                      ) : (
+                          <div
+                              className={`dash-multi-chart-wrapper ${isMobile ? "mobile" : ""} ${!isMobile && !hasAnalyticsData ? "single" : ""}`}
+                          >
+                            <div className="dash-primary-chart">
+                              {chartMode === "portfolio" && (
+                                  <ResponsiveContainer
+                                      width="100%"
+                                      height={230}
+                                  >
+                                    <BarChart
+                                        data={portfolioData}
+                                        margin={{
+                                          top: 10,
+                                          right: 8,
+                                          left: -18,
+                                          bottom: 0
+                                        }}
+                                    >
+                                      <XAxis
+                                          dataKey="name"
+                                          axisLine={false}
+                                          tickLine={false}
+                                          tick={{
+                                            fill: "var(--text-2)",
+                                            fontSize: 10
+                                          }}
+                                          interval={0}
+                                          angle={-25}
+                                          textAnchor="end"
+                                          height={52}
+                                      />
+
+                                      <YAxis
+                                          axisLine={false}
+                                          tickLine={false}
+                                          allowDecimals={false}
+                                          tick={{
+                                            fill: "var(--text-2)",
+                                            fontSize: 11
+                                          }}
+                                      />
+
+                                      <Tooltip
+                                          content={<PortfolioTooltip />}
+                                          cursor={{
+                                            fill: "rgba(255,255,255,0.025)"
+                                          }}
+                                      />
+
+                                      <Bar
+                                          dataKey="value"
+                                          fill="var(--accent)"
+                                          radius={[4, 4, 0, 0]}
+                                          barSize={24}
+                                      />
+                                    </BarChart>
+                                  </ResponsiveContainer>
+                              )}
+
+                              {chartMode === "type" && (
+                                  <ResponsiveContainer
+                                      width="100%"
+                                      height={230}
+                                  >
+                                    <BarChart
+                                        data={typeOutcomeData}
+                                        margin={{
+                                          top: 10,
+                                          right: 8,
+                                          left: -18,
+                                          bottom: 0
+                                        }}
+                                    >
+                                      <XAxis
+                                          dataKey="name"
+                                          axisLine={false}
+                                          tickLine={false}
+                                          tick={{
+                                            fill: "var(--text-2)",
+                                            fontSize: 10
+                                          }}
+                                          interval={0}
+                                          angle={-25}
+                                          textAnchor="end"
+                                          height={52}
+                                      />
+
+                                      <YAxis
+                                          axisLine={false}
+                                          tickLine={false}
+                                          allowDecimals={false}
+                                          tick={{
+                                            fill: "var(--text-2)",
+                                            fontSize: 11
+                                          }}
+                                      />
+
+                                      <Tooltip
+                                          content={<TypeOutcomeTooltip />}
+                                          cursor={{
+                                            fill: "rgba(255,255,255,0.025)"
+                                          }}
+                                      />
+
+                                      <Bar
+                                          dataKey="allotted"
+                                          stackId="outcome"
+                                          fill="var(--success)"
+                                          radius={[4, 4, 0, 0]}
+                                      />
+
+                                      <Bar
+                                          dataKey="notAllotted"
+                                          stackId="outcome"
+                                          fill="var(--danger)"
+                                      />
+
+                                      <Bar
+                                          dataKey="pending"
+                                          stackId="outcome"
+                                          fill="var(--text-3)"
+                                      />
+                                    </BarChart>
+                                  </ResponsiveContainer>
+                              )}
+
+                              {chartMode === "cumulative" && (
+                                  <div className="dash-chart-view">
+                                    <div className="dash-chart-meta">
+                                      <div>
+                                        <span className="dash-chart-value">
+                                          {fmt(cumulativeCount)}
+                                        </span>
+
+                                        <span className="dash-chart-label">
+                                          {unknownAppliedDateCount > 0
+                                              ? `${fmt(unknownAppliedDateCount)} applications have unknown applied date`
+                                              : cumulativeData.length <= 1
+                                                  ? "Only one month available so trend line is minimal"
+                                                  : "Applications over time, scroll for full history"}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    <div
+                                        className="dash-chart-scroll"
+                                        ref={chartScrollRef}
+                                    >
+                                      {/* fixed width track, responsivecontainer fills it */}
+                                      <div style={{ width: cumulativeChartWidth || "100%", height: 230 }}>
+                                        <ResponsiveContainer width="100%" height="100%">
+                                          <LineChart
+                                              data={cumulativeData}
+                                              margin={{
+                                                top: 10,
+                                                right: 12,
+                                                left: -18,
+                                                bottom: 0
+                                              }}
+                                          >
+                                            <CartesianGrid
+                                                stroke="var(--border)"
+                                                strokeDasharray="3 3"
+                                                vertical={false}
+                                            />
+
+                                            <XAxis
+                                                dataKey="label"
+                                                axisLine={false}
+                                                tickLine={false}
+                                                tick={{
+                                                  fill: "var(--text-2)",
+                                                  fontSize: 11
+                                                }}
+                                                interval={0}
+                                            />
+
+                                            <YAxis
+                                                axisLine={false}
+                                                tickLine={false}
+                                                allowDecimals={false}
+                                                tick={{
+                                                  fill: "var(--text-2)",
+                                                  fontSize: 11
+                                                }}
+                                            />
+
+                                            <Tooltip
+                                                content={
+                                                  <CustomTooltip />
+                                                }
+                                            />
+
+                                            <Line
+                                                type="monotone"
+                                                dataKey="applications"
+                                                stroke="var(--accent)"
+                                                strokeWidth={2.5}
+                                                dot={{
+                                                  r: cumulativeData.length <= 1 ? 6 : 3,
+                                                  fill: "var(--accent)",
+                                                  strokeWidth: 0
+                                                }}
+                                                activeDot={{
+                                                  r: cumulativeData.length <= 1 ? 8 : 5
+                                                }}
+                                            />
+                                          </LineChart>
+                                        </ResponsiveContainer>
+                                      </div>
+                                    </div>
+                                  </div>
+                              )}
+
+                              {/* vertical bars to maximize horizontal space for sector labels */}
+                              {chartMode === "sector" && (
+                                  <ResponsiveContainer
+                                      width="100%"
+                                      height={230}
+                                  >
+                                    <BarChart
+                                        data={sectorData}
+                                        margin={{
+                                          top: 10,
+                                          right: 8,
+                                          left: -18,
+                                          bottom: 0
+                                        }}
+                                    >
+                                      <XAxis
+                                          dataKey="sector"
+                                          axisLine={false}
+                                          tickLine={false}
+                                          tick={{
+                                            fill: "var(--text-2)",
+                                            fontSize: 10
+                                          }}
+                                          interval={0}
+                                          angle={-20}
+                                          textAnchor="end"
+                                          height={52}
+                                      />
+
+                                      <YAxis
+                                          axisLine={false}
+                                          tickLine={false}
+                                          allowDecimals={false}
+                                          tick={{
+                                            fill: "var(--text-2)",
+                                            fontSize: 11
+                                          }}
+                                      />
+
+                                      <Tooltip
+                                          content={
+                                            <CustomTooltip />
+                                          }
+                                          cursor={{
+                                            fill: "rgba(255,255,255,0.025)"
+                                          }}
+                                      />
+
+                                      <Bar
+                                          dataKey="count"
+                                          fill="var(--accent)"
+                                          radius={[4, 4, 0, 0]}
+                                          barSize={24}
+                                      />
+                                    </BarChart>
+                                  </ResponsiveContainer>
+                              )}
+
+                              {isMobile && chartMode === "pie" && (
+                                  <div className="dash-mobile-pie-panel">
+                                    <PieChartWidget
+                                        pieData={pieData}
+                                        cdscSummary={cdscSummary}
+                                    />
+                                  </div>
+                              )}
+                            </div>
+
+                            {!isMobile && hasAnalyticsData && (
+                                <div className="dash-fixed-pie-panel">
+                                  <PieChartWidget
+                                      pieData={pieData}
+                                      cdscSummary={cdscSummary}
+                                  />
+                                </div>
+                            )}
+                          </div>
+                      )}
                     </div>
                 )}
 
-                <div className="dash-main">
-                  <div className="dash-main-primary">
-                    <div className="section-head">
-                  <span className="section-title-sm">
-                    CDSC history
-                    {cdscSummary && <span className="section-count">{cdscSummary.total}</span>}
-                  </span>
+                <div className="dash-grid">
+                  <div className="dash-primary">
+                    <div className="dash-section-header">
+                      <h3>CDSC Application Log ({fmt(visibleCdscItems.length)})</h3>
+
+                      {cdscSummary?.items?.length > 0 && (
+                          <input
+                              type="text"
+                              placeholder="Search company..."
+                              aria-label="Search CDSC application log by company"
+                              value={searchTerm}
+                              onChange={(event) =>
+                                  setSearchTerm(event.target.value)
+                              }
+                              className="dash-filter-input"
+                          />
+                      )}
                     </div>
-                    <div className="card">
+
+                    <div className="dash-card">
                       {cdscLoading ? (
-                          <div className="table-skeleton">
-                            {[1, 2, 3, 4, 5].map(k => (
-                                <div key={k} className="table-skeleton-row">
-                                  <div style={{ flex: 1 }}>
-                                    <Skeleton h={12} w="60%" />
-                                    <Skeleton h={10} w="30%" style={{ marginTop: 5 }} />
-                                  </div>
-                                  <Skeleton h={12} w="50px" />
-                                  <Skeleton h={22} w="90px" style={{ borderRadius: 20 }} />
-                                </div>
+                          <div className="dash-skeleton-wrapper">
+                            {[1, 2, 3, 4].map((key) => (
+                                <Skeleton
+                                    key={key}
+                                    h={36}
+                                    style={{
+                                      marginBottom: 8
+                                    }}
+                                />
                             ))}
                           </div>
-                      ) : cdscError ? (
-                          <div className="inline-empty">
-                            Failed to load.{" "}
-                            <button className="inline-link-btn" onClick={() => fetchCdscSummary(activeAccount.id, false)}>Retry</button>
+                      ) : cdscError && !cdscSummary ? (
+                          <div className="dash-empty dash-empty-error">
+                            <span>Could not load application log</span>
+                            <button
+                                className="dash-retry-btn"
+                                onClick={() =>
+                                    fetchCdscSummary(
+                                        activeAccount.id,
+                                        false
+                                    )
+                                }
+                            >
+                              Retry
+                            </button>
                           </div>
-                      ) : cdscSummary?.items?.length === 0 ? (
-                          <div className="inline-empty">
-                            No applications in CDSC.{" "}
-                            <Link to="/ipo/apply" className="inline-link-btn">Apply now</Link>
+                      ) : filteredCdscItems.length === 0 ? (
+                          <div className="dash-empty">
+                            {searchTerm
+                                ? "No matching records found"
+                                : "No applications recorded yet"}
                           </div>
-                      ) : cdscSummary ? (
-                          <CdscTable
-                              items={cdscSummary.items}
-                              isMobile={isMobile}
-                              expanded={cdscExpanded}
-                              onExpand={() => setCdscExpanded(true)}
-                              onCollapse={() => setCdscExpanded(false)}
-                          />
-                      ) : null}
+                      ) : (
+                          <>
+                            <table className="dash-table">
+                              <thead>
+                              <tr>
+                                <th>Company</th>
+                                <th className="hide-mobile">
+                                  Type
+                                </th>
+                                <th className="text-right">
+                                  Status
+                                </th>
+                              </tr>
+                              </thead>
+
+                              <tbody>
+                              {visibleCdscItems.map(
+                                  (item, index) => (
+                                      <tr
+                                          key={
+                                              item.applicantFormId ??
+                                              index
+                                          }
+                                      >
+                                        <td>
+                                          <span className="cell-title">
+                                            {item.companyName}
+                                          </span>
+
+                                          {item.scrip && (
+                                              <span className="cell-sub">
+                                                {item.scrip}
+                                              </span>
+                                          )}
+                                        </td>
+
+                                        <td className="hide-mobile dash-cell-type">
+                                          {item.shareTypeName ||
+                                              "—"}
+                                        </td>
+
+                                        <td className="text-right">
+                                          <span
+                                              className={`status-pill ${cdscResultBadgeClass(
+                                                  item.resultStatus
+                                              )}`}
+                                          >
+                                            {item.resultStatus?.replace(
+                                                /_/g,
+                                                " "
+                                            ) ?? "—"}
+                                          </span>
+                                        </td>
+                                      </tr>
+                                  )
+                              )}
+                              </tbody>
+                            </table>
+
+                            {isMobile &&
+                                filteredCdscItems.length >
+                                CDSC_MOBILE_LIMIT && (
+                                    <button
+                                        className="dash-expand-btn"
+                                        onClick={() =>
+                                            setCdscExpanded(
+                                                !cdscExpanded
+                                            )
+                                        }
+                                    >
+                                      {cdscExpanded
+                                          ? "Show Less"
+                                          : `Show All (${fmt(filteredCdscItems.length)})`}
+                                    </button>
+                                )}
+                          </>
+                      )}
                     </div>
                   </div>
 
-                  <div className="dash-main-sidebar">
-                    <div>
-                      <div className="section-head">
-                        <span className="section-title-sm">Applied via app</span>
-                        <Link to="/history" className="section-link">View all</Link>
-                      </div>
-                      <div className="card">
-                        {localLoading ? (
-                            <div className="table-skeleton">
-                              {[1, 2, 3].map(k => (
-                                  <div key={k} className="table-skeleton-row">
-                                    <Skeleton h={12} w="55%" />
-                                    <Skeleton h={22} w="100px" style={{ borderRadius: 20 }} />
-                                  </div>
-                              ))}
-                            </div>
-                        ) : recent.length === 0 ? (
-                            <div className="inline-empty">
-                              No history yet.{" "}
-                              <Link to="/ipo/apply" className="inline-link-btn">Apply now</Link>
-                            </div>
-                        ) : (
-                            <div className="table-scroll">
-                              <table className="dash-table">
-                                <thead>
-                                <tr><th>Company</th><th>Status</th></tr>
-                                </thead>
-                                <tbody>
-                                {recent.map(item => {
-                                  const derived = deriveStatus(item);
-                                  return (
-                                      <tr key={item.id}>
-                                        <td><span className="cell-primary">{item.companyName}</span></td>
-                                        <td>
-                                    <span className={`h-status-badge h-status-${derived.variant}`}>
-                                      {derived.label}
-                                    </span>
-                                        </td>
-                                      </tr>
-                                  );
-                                })}
-                                </tbody>
-                              </table>
-                            </div>
-                        )}
-                      </div>
-                    </div>
+                  <aside className="dash-sidebar">
+                    <div className="dash-sidebar-block">
+                      <div className="dash-section-header">
+                        <h3>Platform Activity ({fmt(recent.length)})</h3>
 
-                    <div>
-                      <div className="section-head">
-                        <span className="section-title-sm">Accounts <span className="section-count">{accounts.length}</span></span>
-                        <Link to="/settings/accounts" className="section-link">Manage</Link>
+                        <Link
+                            to="/history"
+                            className="dash-link"
+                        >
+                          View All
+                        </Link>
                       </div>
-                      <div className="card">
-                        {accounts.length === 0 ? (
-                            <div className="inline-empty">
-                              <Link to="settings/accounts/add" className="inline-link-btn">Add an account</Link>
+
+                      <div className="dash-card">
+                        {localLoading ? (
+                            <Skeleton h={80} />
+                        ) : recent.length === 0 ? (
+                            <div className="dash-empty">
+                              No platform activity recorded
                             </div>
                         ) : (
-                            <div className="account-list">
-                              {accounts.map(acc => {
-                                const active = activeAccount?.id === acc.id;
+                            <div className="dash-sidebar-list">
+                              {recent.map((item) => {
+                                const derived =
+                                    deriveStatus(item);
+
                                 return (
-                                    <div key={acc.id} className="account-row">
-                                      <div className={`account-initial${active ? " active" : ""}`}>
-                                        {acc.fullName?.[0]?.toUpperCase() || "?"}
-                                      </div>
-                                      <div className="account-row-info">
-                                        <p className="account-name">{acc.fullName}</p>
-                                        <p className="account-meta">{acc.username}{acc.dpCode ? ` · DP ${acc.dpCode}` : ""}</p>
-                                      </div>
-                                      {active && <span className="account-active-badge">Active</span>}
+                                    <div
+                                        key={item.id}
+                                        className="sidebar-item"
+                                    >
+                                      <span className="sidebar-title">
+                                        {item.companyName}
+                                      </span>
+
+                                      <span
+                                          className={`status-tag status-${derived.variant}`}
+                                      >
+                                        {derived.label}
+                                      </span>
                                     </div>
                                 );
                               })}
@@ -460,7 +1563,50 @@ const Dashboard = () => {
                         )}
                       </div>
                     </div>
-                  </div>
+
+                    <div className="dash-sidebar-block">
+                      <div className="dash-section-header">
+                        <h3>Accounts ({fmt(accounts?.length || 0)})</h3>
+
+                        <Link
+                            to="/settings/accounts"
+                            className="dash-link"
+                        >
+                          Manage
+                        </Link>
+                      </div>
+
+                      <div className="dash-card">
+                        <div className="dash-sidebar-list">
+                          {accounts.map((account) => (
+                              <div
+                                  key={account.id}
+                                  className={`sidebar-account-row ${
+                                      activeAccount?.id ===
+                                      account.id
+                                          ? "active"
+                                          : ""
+                                  }`}
+                              >
+                                <div className="account-avatar">
+                                  {account.fullName?.[0]}
+                                </div>
+
+                                <div className="account-details">
+                                  <span className="account-name">
+                                    {account.fullName}
+                                  </span>
+
+                                  <span className="account-meta">
+                                    {account.username}
+                                  </span>
+                                </div>
+                              </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </aside>
                 </div>
               </>
           )}

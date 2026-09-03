@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
     getNepseIndex,
     isNepseOpen,
@@ -11,6 +11,9 @@ import {
     getSupplyDemand,
     getNepseSubIndices,
     getFloorsheet,
+    getGovernmentBonds,
+    getPromoterShares,
+    getShareGroups,
     getDailyNepseIndexGraph,
     getDailyBankSubindexGraph,
     getDailyDevBankSubindexGraph,
@@ -49,6 +52,11 @@ import { NEPSE_JSONLD } from "../../seo/jsonLd.js";
 import "./Nepse.css";
 
 const REFRESH_INTERVAL = 30000;
+const PROMOTER_PAGE_SIZE = 20;
+const GAINER_PAGE_SIZE = 5;
+const LOSER_PAGE_SIZE = 5;
+const BOND_PAGE_SIZE = 10;
+const CACHE_KEY = "nepse_cache_v1";
 
 const SECTOR_GRAPH_RULES = [
     { test: /development|dev bank/i, fetch: getDailyDevBankSubindexGraph },
@@ -65,7 +73,15 @@ const SECTOR_GRAPH_RULES = [
     { test: /trading/i, fetch: getDailyTradingSubindexGraph },
 ];
 
-const FEEDS = ["Movers", "Turnover", "Activity", "Sectors", "Floorsheet"];
+const FEEDS = [
+    "Movers",
+    "Turnover",
+    "Activity",
+    "Sectors",
+    "Bonds",
+    "Promoters",
+    "Floorsheet",
+];
 
 function safe(raw) {
     return isNepseError(raw) ? null : raw;
@@ -94,116 +110,230 @@ function matchSectorGraph(name = "") {
     );
 }
 
+// offline cache helpers, plain data only
+function loadCache() {
+    try {
+        const raw = window.localStorage.getItem(CACHE_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch {
+        return null;
+    }
+}
+
+function saveCache(data) {
+    try {
+        window.localStorage.setItem(
+            CACHE_KEY,
+            JSON.stringify({ ...data, savedAt: Date.now() })
+        );
+    } catch {
+        // storage unavailable or full, ignore silently
+    }
+}
+
+function timeAgo(ts) {
+    if (!ts) return "";
+    const sec = Math.floor((Date.now() - ts) / 1000);
+    if (sec < 60) return "just now";
+    const min = Math.floor(sec / 60);
+    if (min < 60) return `${min}m ago`;
+    const hr = Math.floor(min / 60);
+    return `${hr}h ago`;
+}
+
 function MoverRow({ item, tone }) {
     const pct = Number(item.percentageChange ?? 0);
 
     return (
-        <div className="ledger-row">
+        <div className="ledger-row ledger-row-movers">
             <span className="ledger-sym">{item.symbol}</span>
+            <span className="ledger-ltp">{fmt(item.ltp)}</span>
 
-            <span className="ledger-row-right">
-                <span className="ledger-ltp">{fmt(item.ltp)}</span>
-
-                <span className={`ledger-pct ${tone}`}>
-                    <Arrow up={tone === "up"} />
-                    {pct >= 0 ? "+" : ""}
-                    {fmt(pct)}%
-                </span>
+            <span className={`ledger-pct ${tone}`}>
+                <Arrow up={tone === "up"} />
+                {pct >= 0 ? "+" : ""}
+                {fmt(pct)}%
             </span>
         </div>
     );
 }
 
-function LedgerLimitControls({
-    total,
-    limit,
-    onMore,
-    onReset,
-}) {
-    return (
-        <div className="ledger-actions">
-            {total > limit && (
-                <button
-                    className="ledger-action-btn up"
-                    onClick={onMore}
-                >
-                    More <Arrow up={false} />
-                </button>
-            )}
+// generic prev next page control, replaces old more less buttons
+function Pagination({ page, totalPages, onChange, loading = false }) {
+    if (totalPages <= 1) return null;
 
-            {limit > 5 && (
-                <button
-                    className="ledger-action-btn down"
-                    onClick={onReset}
-                >
-                    Less <Arrow up={true} />
-                </button>
-            )}
+    return (
+        <div className="ledger-pagination" aria-label="Table pagination">
+            <button
+                className="page-btn page-btn-arrow"
+                disabled={page === 0 || loading}
+                onClick={() => onChange(page - 1)}
+                aria-label="Previous page"
+            >
+                <span aria-hidden="true">‹</span>
+            </button>
+
+            <span className="page-info">
+                {page + 1}/{totalPages}
+            </span>
+
+            <button
+                className="page-btn page-btn-arrow"
+                disabled={page >= totalPages - 1 || loading}
+                onClick={() => onChange(page + 1)}
+                aria-label="Next page"
+            >
+                <span aria-hidden="true">›</span>
+            </button>
         </div>
     );
 }
 
 function TickerItems({ summary }) {
-    return Object.entries(summary).map(([key, value]) => (
-        <span key={key} className="term-ticker-item">
-            <span className="ledger-label">{key}</span>
-            <span>
-                {fmtCompact(
-                    typeof value === "object"
-                        ? JSON.stringify(value)
-                        : value
-                )}
+    return Object.entries(summary).map(([key, value]) => {
+        // fix: do not pass stringified objects into a numeric formatter
+        const num =
+            typeof value === "object" && value !== null
+                ? value.value ?? value.currentValue ?? null
+                : value;
+
+        return (
+            <span key={key} className="term-ticker-item">
+                <span className="ledger-label">{key}</span>
+                <span>{num != null ? fmtCompact(num) : "--"}</span>
             </span>
-        </span>
-    ));
+        );
+    });
+}
+
+function GroupLegend({ groups, activeGroup, onSelect }) {
+    if (!groups.length) return null;
+
+    return (
+        <div className="group-legend">
+            <button
+                type="button"
+                className={`group-chip ${!activeGroup ? "active" : ""}`}
+                aria-pressed={!activeGroup}
+                onClick={() => onSelect(null)}
+            >
+                All
+            </button>
+
+            {groups.map((g) => (
+                <button
+                    key={g.id}
+                    type="button"
+                    className={`group-chip ${activeGroup === g.name ? "active" : ""}`}
+                    title={g.description}
+                    aria-pressed={activeGroup === g.name}
+                    onClick={() =>
+                        onSelect(activeGroup === g.name ? null : g.name)
+                    }
+                >
+                    {g.name}
+                </button>
+            ))}
+        </div>
+    );
 }
 
 export default function Nepse() {
     const clock = useClock();
+    const cacheRef = useRef(loadCache());
+    const initialCache = cacheRef.current;
 
     const [marketOpen, setMarketOpen] = useState(null);
-    const [indices, setIndices] = useState(null);
+    const [indices, setIndices] = useState(initialCache?.indices ?? null);
     const [summary, setSummary] = useState(null);
-    const [graphData, setGraphData] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [graphData, setGraphData] = useState(
+        initialCache?.graphData ?? []
+    );
+    const [loading, setLoading] = useState(!initialCache);
     const [error, setError] = useState(null);
+    const [isOffline, setIsOffline] = useState(false);
+    const [lastUpdated, setLastUpdated] = useState(
+        initialCache?.savedAt ?? null
+    );
 
     const [feed, setFeed] = useState("Movers");
-    const [gainerLimit, setGainerLimit] = useState(5);
-    const [loserLimit, setLoserLimit] = useState(5);
 
-    const [gainers, setGainers] = useState([]);
-    const [losers, setLosers] = useState([]);
+    const [gainers, setGainers] = useState(initialCache?.gainers ?? []);
+    const [losers, setLosers] = useState(initialCache?.losers ?? []);
+    const [gainerPage, setGainerPage] = useState(0);
+    const [loserPage, setLoserPage] = useState(0);
+
     const [turnover, setTurnover] = useState([]);
     const [topTrade, setTopTrade] = useState([]);
     const [topTransaction, setTopTransaction] = useState([]);
     const [supplyDemand, setSupplyDemand] = useState([]);
     const [sectors, setSectors] = useState([]);
+    const [bonds, setBonds] = useState([]);
+    const [bondPage, setBondPage] = useState(0);
     const [floorsheet, setFloorsheet] = useState(null);
     const [floorUnavailable, setFloorUnavailable] = useState(false);
     const [feedLoading, setFeedLoading] = useState(true);
+
+    const promoterCacheRef = useRef({});
+    const [promoterRows, setPromoterRows] = useState([]);
+    const [promoterPage, setPromoterPage] = useState(0);
+    const [promoterTotalPages, setPromoterTotalPages] = useState(1);
+    const [promoterLoading, setPromoterLoading] = useState(false);
+    const [shareGroups, setShareGroups] = useState([]);
+    const [selectedPromoterGroup, setSelectedPromoterGroup] =
+        useState(null);
 
     const [expandedSector, setExpandedSector] = useState(null);
     const [sectorGraphs, setSectorGraphs] = useState({});
 
     const fetchCore = useCallback(async () => {
         try {
-            const [openRes, indexRes, summaryRes, graphRes] =
-                await Promise.all([
-                    isNepseOpen(),
-                    getNepseIndex(),
-                    getSummary(),
-                    getDailyNepseIndexGraph(),
-                ]);
+            const [
+                openRes,
+                indexRes,
+                summaryRes,
+                graphRes,
+                gainerRes,
+                loserRes,
+            ] = await Promise.all([
+                isNepseOpen(),
+                getNepseIndex(),
+                getSummary(),
+                getDailyNepseIndexGraph(),
+                getTopGainers(),
+                getTopLosers(),
+            ]);
 
             const open = safe(openRes.data);
             const index = safe(indexRes.data);
             const summaryData = safe(summaryRes.data);
+            const graphList = toList(graphRes.data);
+            const gainerList = isNepseError(gainerRes.data)
+                ? []
+                : gainerRes.data ?? [];
+            const loserList = isNepseError(loserRes.data)
+                ? []
+                : loserRes.data ?? [];
 
             setMarketOpen(open);
             setIndices(index);
             setSummary(summaryData);
-            setGraphData(toList(graphRes.data));
+            setGraphData(graphList);
+            setGainers(gainerList);
+            setLosers(loserList);
+            setIsOffline(false);
+
+            if (index) {
+                saveCache({
+                    indices: index,
+                    graphData: graphList,
+                    gainers: gainerList.slice(0, 5),
+                    losers: loserList.slice(0, 5),
+                });
+                const now = Date.now();
+                cacheRef.current = { savedAt: now };
+                setLastUpdated(now);
+            }
 
             setError(
                 open == null || index == null || summaryData == null
@@ -211,29 +341,62 @@ export default function Nepse() {
                     : null
             );
         } catch {
-            setError("Data feed unavailable");
+            setIsOffline(true);
+            setError(
+                cacheRef.current
+                    ? "Connection unavailable, showing last saved data"
+                    : "Data feed unavailable"
+            );
         } finally {
             setLoading(false);
         }
     }, []);
 
     useEffect(() => {
-        const initialTimer = setTimeout(() => {
+        void fetchCore();
+
+        const interval = setInterval(() => {
             void fetchCore();
-        }, 0);
+        }, REFRESH_INTERVAL);
 
-        const interval = setInterval(
-            () => {
-                void fetchCore();
-            },
-            REFRESH_INTERVAL
-        );
-
-        return () => {
-            clearTimeout(initialTimer);
-            clearInterval(interval);
-        };
+        return () => clearInterval(interval);
     }, [fetchCore]);
+
+    const fetchPromoterPage = useCallback(async (page) => {
+        const cached = promoterCacheRef.current[page];
+
+        if (cached) {
+            setPromoterRows(cached);
+            setPromoterPage(page);
+            return;
+        }
+
+        setPromoterLoading(true);
+
+        try {
+            const response = await getPromoterShares(
+                page,
+                PROMOTER_PAGE_SIZE
+            );
+            const raw = response.data;
+
+            if (isNepseError(raw)) return;
+
+            const rows = raw?.content ?? [];
+            const total = raw?.totalElements ?? rows.length;
+
+            promoterCacheRef.current[page] = rows;
+            setPromoterRows(rows);
+            setPromoterTotalPages(
+                Math.max(1, Math.ceil(total / PROMOTER_PAGE_SIZE))
+            );
+            setPromoterPage(page);
+        } catch {
+            // keep previously shown rows on error
+        } finally {
+            setPromoterLoading(false);
+        }
+    }, []);
 
     useEffect(() => {
         let alive = true;
@@ -242,27 +405,6 @@ export default function Nepse() {
             setFeedLoading(true);
 
             try {
-                if (feed === "Movers" && (!gainers.length || !losers.length)) {
-                    const [gainerRes, loserRes] = await Promise.all([
-                        getTopGainers(),
-                        getTopLosers(),
-                    ]);
-
-                    if (!alive) return;
-
-                    setGainers(
-                        isNepseError(gainerRes.data)
-                            ? []
-                            : gainerRes.data ?? []
-                    );
-
-                    setLosers(
-                        isNepseError(loserRes.data)
-                            ? []
-                            : loserRes.data ?? []
-                    );
-                }
-
                 if (feed === "Turnover" && !turnover.length) {
                     const response = await getTopTurnover();
 
@@ -318,6 +460,30 @@ export default function Nepse() {
                     setSectors(toNamedList(response.data));
                 }
 
+                if (feed === "Bonds" && !bonds.length) {
+                    const response = await getGovernmentBonds();
+
+                    if (!alive) return;
+
+                    setBonds(toList(response.data));
+                }
+
+                if (feed === "Promoters" && !promoterRows.length) {
+                    await fetchPromoterPage(0);
+                }
+
+                if (feed === "Promoters" && !shareGroups.length) {
+                    const response = await getShareGroups();
+
+                    if (!alive) return;
+
+                    setShareGroups(
+                        isNepseError(response.data)
+                            ? []
+                            : response.data ?? []
+                    );
+                }
+
                 if (feed === "Floorsheet" && floorsheet === null) {
                     const response = await getFloorsheet();
 
@@ -343,29 +509,25 @@ export default function Nepse() {
         };
     }, [
         feed,
-        gainers.length,
-        losers.length,
         turnover.length,
         topTrade.length,
         topTransaction.length,
         sectors.length,
+        bonds.length,
+        promoterRows.length,
+        shareGroups.length,
+        fetchPromoterPage,
         floorsheet,
     ]);
 
     const heroKey = resolveHeroKey(indices);
     const heroEntry = heroKey ? indices?.[heroKey] : null;
 
-    const heroValue =
-        heroEntry?.currentValue ??
-        heroEntry?.value ??
-        0;
-
+    const heroValue = heroEntry?.currentValue ?? heroEntry?.value ?? 0;
     const heroChange = heroEntry?.change ?? 0;
 
     const heroPct =
-        heroEntry?.percentageChange ??
-        heroEntry?.perChange ??
-        0;
+        heroEntry?.percentageChange ?? heroEntry?.perChange ?? 0;
 
     const secondaryIndices = useMemo(
         () =>
@@ -379,10 +541,8 @@ export default function Nepse() {
 
     const openBool =
         typeof marketOpen === "object"
-            ? marketOpen?.isOpen === "OPEN" ||
-            marketOpen?.isOpen === true
-            : marketOpen === true ||
-            marketOpen === "OPEN";
+            ? marketOpen?.isOpen === "OPEN" || marketOpen?.isOpen === true
+            : marketOpen === true || marketOpen === "OPEN";
 
     const floorRows = useMemo(() => {
         if (Array.isArray(floorsheet)) return floorsheet;
@@ -395,10 +555,7 @@ export default function Nepse() {
             sectors.filter((sector) => {
                 if (!indices) return true;
 
-                const name =
-                    sector.name ??
-                    sector.index ??
-                    "";
+                const name = sector.name ?? sector.index ?? "";
 
                 return !Object.prototype.hasOwnProperty.call(
                     indices,
@@ -420,8 +577,7 @@ export default function Nepse() {
             if (sectorGraphs[name]) return;
 
             try {
-                const response =
-                    await matchSectorGraph(name)();
+                const response = await matchSectorGraph(name)();
 
                 setSectorGraphs((current) => ({
                     ...current,
@@ -430,12 +586,51 @@ export default function Nepse() {
             } catch {
                 setSectorGraphs((current) => ({
                     ...current,
-                    [name]: [],
+                    [name]: current[name] ?? [],
                 }));
             }
         },
         [expandedSector, sectorGraphs]
     );
+
+    // clamp pages so a shrinking dataset never leaves a page out of range
+    const gainerTotalPages = Math.max(
+        1,
+        Math.ceil(gainers.length / GAINER_PAGE_SIZE)
+    );
+    const gainerPageSafe = Math.min(gainerPage, gainerTotalPages - 1);
+    const gainerRows = gainers.slice(
+        gainerPageSafe * GAINER_PAGE_SIZE,
+        gainerPageSafe * GAINER_PAGE_SIZE + GAINER_PAGE_SIZE
+    );
+
+    const loserTotalPages = Math.max(
+        1,
+        Math.ceil(losers.length / LOSER_PAGE_SIZE)
+    );
+    const loserPageSafe = Math.min(loserPage, loserTotalPages - 1);
+    const loserRows = losers.slice(
+        loserPageSafe * LOSER_PAGE_SIZE,
+        loserPageSafe * LOSER_PAGE_SIZE + LOSER_PAGE_SIZE
+    );
+
+    const bondTotalPages = Math.max(
+        1,
+        Math.ceil(bonds.length / BOND_PAGE_SIZE)
+    );
+    const bondPageSafe = Math.min(bondPage, bondTotalPages - 1);
+    const bondRows = bonds.slice(
+        bondPageSafe * BOND_PAGE_SIZE,
+        bondPageSafe * BOND_PAGE_SIZE + BOND_PAGE_SIZE
+    );
+
+    const filteredPromoterRows = useMemo(() => {
+        if (!selectedPromoterGroup) return promoterRows;
+
+        return promoterRows.filter(
+            (row) => row.shareGroupId?.name === selectedPromoterGroup
+        );
+    }, [promoterRows, selectedPromoterGroup]);
 
     return (
         <Layout>
@@ -448,9 +643,7 @@ export default function Nepse() {
             <div className="term-shell">
                 <header className="term-header">
                     <div className="term-brand">
-                        <span className="term-brand-name">
-                            NEPSE
-                        </span>
+                        <span className="term-brand-name">NEPSE</span>
                         <span className="term-brand-tag">
                             live market feed
                         </span>
@@ -483,6 +676,12 @@ export default function Nepse() {
                 {error && (
                     <div className="term-alert">
                         {error}
+                        {isOffline && lastUpdated && (
+                            <span className="term-alert-time">
+                                {" "}
+                                last update {timeAgo(lastUpdated)}
+                            </span>
+                        )}
                     </div>
                 )}
 
@@ -503,8 +702,8 @@ export default function Nepse() {
                         )}
 
                         <div className="index-strip">
-                            {loading
-                                ? [1, 2, 3, 4].map((key) => (
+                            {loading && !secondaryIndices.length
+                                ? [1, 2, 3].map((key) => (
                                     <div
                                         key={key}
                                         className="skel index-skel"
@@ -522,35 +721,33 @@ export default function Nepse() {
                                                 key={name}
                                                 className="index-item"
                                             >
-                                                  <span className="index-name">
-                                                      {name}
-                                                  </span>
+                                                <span className="index-name">
+                                                    {name}
+                                                </span>
 
                                                 <span className="index-value">
-                                                      {fmt(
-                                                          data.currentValue ??
-                                                          data.value
-                                                      )}
-                                                  </span>
+                                                    {fmt(
+                                                        data.currentValue ??
+                                                        data.value
+                                                    )}
+                                                </span>
 
                                                 <span
                                                     className={`index-change ${dirClass(
                                                         change
                                                     )}`}
                                                 >
-                                                      <Arrow
-                                                          up={
-                                                              change >= 0
-                                                          }
-                                                          flat={
-                                                              change === 0
-                                                          }
-                                                      />
+                                                    <Arrow
+                                                        up={change >= 0}
+                                                        flat={
+                                                            change === 0
+                                                        }
+                                                    />
                                                     {change >= 0
                                                         ? "+"
                                                         : ""}
                                                     {fmt(change)}%
-                                                  </span>
+                                                </span>
                                             </div>
                                         );
                                     }
@@ -559,14 +756,12 @@ export default function Nepse() {
                     </div>
 
                     <aside className="term-ledger">
-                        <div className="ledger-tabs ledger-tabs-feeds">
+                        <div className="ledger-tabs">
                             {FEEDS.map((item) => (
                                 <button
                                     key={item}
                                     className={`ledger-tab ${
-                                        feed === item
-                                            ? "active"
-                                            : ""
+                                        feed === item ? "active" : ""
                                     }`}
                                     onClick={() => setFeed(item)}
                                 >
@@ -582,35 +777,30 @@ export default function Nepse() {
                                         gainers
                                     </p>
 
-                                    {feedLoading &&
-                                    !gainers.length ? (
-                                        <SkeletonRows count={3} />
+                                    <div className="ledger-header ledger-header-movers">
+                                        <span>Symbol</span>
+                                        <span style={{ textAlign: "right" }}>LTP</span>
+                                        <span style={{ textAlign: "right" }}>Change</span>
+                                    </div>
+
+                                    {loading && !gainers.length ? (
+                                        <SkeletonRows count={5} />
                                     ) : gainers.length ? (
                                         <>
-                                            {gainers
-                                                .slice(
-                                                    0,
-                                                    gainerLimit
-                                                )
-                                                .map((row) => (
-                                                    <MoverRow
-                                                        key={
-                                                            row.symbol
-                                                        }
-                                                        item={row}
-                                                        tone="up"
-                                                    />
-                                                ))}
+                                            {gainerRows.map((row) => (
+                                                <MoverRow
+                                                    key={row.symbol}
+                                                    item={row}
+                                                    tone="up"
+                                                />
+                                            ))}
 
-                                            <LedgerLimitControls
-                                                total={gainers.length}
-                                                limit={gainerLimit}
-                                                onMore={() =>
-                                                    setGainerLimit(
-                                                        (value) => value + 5
-                                                    )
+                                            <Pagination
+                                                page={gainerPageSafe}
+                                                totalPages={
+                                                    gainerTotalPages
                                                 }
-                                                onReset={() => setGainerLimit(5)}
+                                                onChange={setGainerPage}
                                             />
                                         </>
                                     ) : (
@@ -621,35 +811,30 @@ export default function Nepse() {
                                         losers
                                     </p>
 
-                                    {feedLoading &&
-                                    !losers.length ? (
-                                        <SkeletonRows count={3} />
+                                    <div className="ledger-header ledger-header-movers">
+                                        <span>Symbol</span>
+                                        <span style={{ textAlign: "right" }}>LTP</span>
+                                        <span style={{ textAlign: "right" }}>Change</span>
+                                    </div>
+
+                                    {loading && !losers.length ? (
+                                        <SkeletonRows count={5} />
                                     ) : losers.length ? (
                                         <>
-                                            {losers
-                                                .slice(
-                                                    0,
-                                                    loserLimit
-                                                )
-                                                .map((row) => (
-                                                    <MoverRow
-                                                        key={
-                                                            row.symbol
-                                                        }
-                                                        item={row}
-                                                        tone="down"
-                                                    />
-                                                ))}
+                                            {loserRows.map((row) => (
+                                                <MoverRow
+                                                    key={row.symbol}
+                                                    item={row}
+                                                    tone="down"
+                                                />
+                                            ))}
 
-                                            <LedgerLimitControls
-                                                total={losers.length}
-                                                limit={loserLimit}
-                                                onMore={() =>
-                                                    setLoserLimit(
-                                                        (value) => value + 5
-                                                    )
+                                            <Pagination
+                                                page={loserPageSafe}
+                                                totalPages={
+                                                    loserTotalPages
                                                 }
-                                                onReset={() => setLoserLimit(5)}
+                                                onChange={setLoserPage}
                                             />
                                         </>
                                     ) : (
@@ -664,9 +849,15 @@ export default function Nepse() {
                                         top turnover
                                     </p>
 
-                                    {feedLoading &&
-                                    !turnover.length ? (
-                                        <SkeletonRows count={4} />
+                                    <div className="ledger-header ledger-row-4">
+                                        <span>Symbol</span>
+                                        <span style={{ textAlign: "right" }}>Turnover</span>
+                                        <span style={{ textAlign: "right" }}>Shares</span>
+                                        <span style={{ textAlign: "right" }}>LTP</span>
+                                    </div>
+
+                                    {feedLoading && !turnover.length ? (
+                                        <SkeletonRows count={5} columns={4} />
                                     ) : turnover.length ? (
                                         turnover
                                             .slice(0, 10)
@@ -705,9 +896,13 @@ export default function Nepse() {
                                         top trade by volume
                                     </p>
 
-                                    {feedLoading &&
-                                    !topTrade.length ? (
-                                        <SkeletonRows count={3} />
+                                    <div className="ledger-header">
+                                        <span>Symbol</span>
+                                        <span style={{ marginLeft: "auto" }}>Volume</span>
+                                    </div>
+
+                                    {feedLoading && !topTrade.length ? (
+                                        <SkeletonRows count={4} />
                                     ) : topTrade.length ? (
                                         topTrade
                                             .slice(0, 6)
@@ -735,9 +930,13 @@ export default function Nepse() {
                                         top by transactions
                                     </p>
 
-                                    {feedLoading &&
-                                    !topTransaction.length ? (
-                                        <SkeletonRows count={3} />
+                                    <div className="ledger-header">
+                                        <span>Symbol</span>
+                                        <span style={{ marginLeft: "auto" }}>Trades</span>
+                                    </div>
+
+                                    {feedLoading && !topTransaction.length ? (
+                                        <SkeletonRows count={4} />
                                     ) : topTransaction.length ? (
                                         topTransaction
                                             .slice(0, 6)
@@ -765,9 +964,14 @@ export default function Nepse() {
                                         supply demand imbalance
                                     </p>
 
-                                    {feedLoading &&
-                                    !supplyDemand.length ? (
-                                        <SkeletonRows count={3} />
+                                    <div className="ledger-header ledger-row-3">
+                                        <span>Symbol</span>
+                                        <span style={{ textAlign: "right" }}>Buy Qty</span>
+                                        <span style={{ textAlign: "right" }}>Sell Qty</span>
+                                    </div>
+
+                                    {feedLoading && !supplyDemand.length ? (
+                                        <SkeletonRows count={4} columns={3} />
                                     ) : supplyDemand.length ? (
                                         supplyDemand
                                             .slice(0, 6)
@@ -796,20 +1000,14 @@ export default function Nepse() {
                                                         </span>
 
                                                         <span className="ledger-num">
-                                                            {buy !=
-                                                            null
-                                                                ? fmtCompact(
-                                                                    buy
-                                                                )
+                                                            {buy != null
+                                                                ? fmtCompact(buy)
                                                                 : "--"}
                                                         </span>
 
                                                         <span className="ledger-num">
-                                                            {sell !=
-                                                            null
-                                                                ? fmtCompact(
-                                                                    sell
-                                                                )
+                                                            {sell != null
+                                                                ? fmtCompact(sell)
                                                                 : "--"}
                                                         </span>
                                                     </div>
@@ -827,9 +1025,13 @@ export default function Nepse() {
                                         sector sub indices
                                     </p>
 
-                                    {feedLoading &&
-                                    !sectorRows.length ? (
-                                        <SkeletonRows count={4} />
+                                    <div className="ledger-header">
+                                        <span>Sector</span>
+                                        <span style={{ marginLeft: "auto" }}>Change</span>
+                                    </div>
+
+                                    {feedLoading && !sectorRows.length ? (
+                                        <SkeletonRows count={5} />
                                     ) : sectorRows.length ? (
                                         sectorRows.map((sector) => {
                                             const name =
@@ -844,8 +1046,7 @@ export default function Nepse() {
                                                 0;
 
                                             const expanded =
-                                                expandedSector ===
-                                                name;
+                                                expandedSector === name;
 
                                             return (
                                                 <div
@@ -878,6 +1079,9 @@ export default function Nepse() {
                                                         }}
                                                     >
                                                         <span className="ledger-sym">
+                                                            <span className="sector-chevron">
+                                                                {expanded ? "\u25be " : "\u25b8 "}
+                                                            </span>
                                                             {name}
                                                         </span>
 
@@ -888,34 +1092,35 @@ export default function Nepse() {
                                                         >
                                                             <Arrow
                                                                 up={
-                                                                    change >=
-                                                                    0
+                                                                    change >= 0
                                                                 }
                                                                 flat={
-                                                                    change ===
-                                                                    0
+                                                                    change === 0
                                                                 }
                                                             />
-                                                            {change >=
-                                                            0
+                                                            {change >= 0
                                                                 ? "+"
                                                                 : ""}
-                                                            {fmt(
-                                                                change
-                                                            )}
-                                                            %
+                                                            {fmt(change)}%
                                                         </span>
                                                     </div>
 
                                                     {expanded && (
                                                         <div className="sector-expand">
-                                                            <MiniSpark
-                                                                data={
-                                                                    sectorGraphs[
-                                                                        name
-                                                                        ]
-                                                                }
-                                                            />
+                                                            {sectorGraphs[
+                                                                name
+                                                                ] ===
+                                                            undefined ? (
+                                                                <div className="skel mini-spark-skel" />
+                                                            ) : (
+                                                                <MiniSpark
+                                                                    data={
+                                                                        sectorGraphs[
+                                                                            name
+                                                                            ]
+                                                                    }
+                                                                />
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>
@@ -927,30 +1132,133 @@ export default function Nepse() {
                                 </>
                             )}
 
+                            {feed === "Bonds" && (
+                                <>
+                                    <p className="ledger-heading">
+                                        government bonds
+                                    </p>
+
+                                    <div className="ledger-header ledger-row-3">
+                                        <span>Bond</span>
+                                        <span style={{ textAlign: "right" }}>Coupon</span>
+                                        <span style={{ textAlign: "right" }}>Maturity</span>
+                                    </div>
+
+                                    {feedLoading && !bonds.length ? (
+                                        <SkeletonRows count={5} columns={3} />
+                                    ) : bonds.length ? (
+                                        <>
+                                            {bondRows.map((bond) => (
+                                                <div
+                                                    className="ledger-row ledger-row-3"
+                                                    key={bond.id}
+                                                >
+                                                    <span className="ledger-sym">
+                                                        {bond.bondName}
+                                                    </span>
+                                                    <span className="ledger-num">
+                                                        {bond.couponRate}
+                                                    </span>
+                                                    <span className="ledger-num">
+                                                        {bond.maturityDate}
+                                                    </span>
+                                                </div>
+                                            ))}
+
+                                            <Pagination
+                                                page={bondPageSafe}
+                                                totalPages={bondTotalPages}
+                                                onChange={setBondPage}
+                                            />
+                                        </>
+                                    ) : (
+                                        <EmptyRow label="no bond data yet" />
+                                    )}
+                                </>
+                            )}
+
+                            {feed === "Promoters" && (
+                                <>
+                                    <p className="ledger-heading">
+                                        promoter shares
+                                    </p>
+
+                                    <GroupLegend
+                                        groups={shareGroups}
+                                        activeGroup={selectedPromoterGroup}
+                                        onSelect={setSelectedPromoterGroup}
+                                    />
+
+                                    <div className="ledger-header ledger-row-3">
+                                        <span>Symbol</span>
+                                        <span style={{ textAlign: "right" }}>Group</span>
+                                        <span style={{ textAlign: "right" }}>Listed</span>
+                                    </div>
+
+                                    {promoterLoading && !promoterRows.length ? (
+                                        <SkeletonRows count={5} columns={3} />
+                                    ) : filteredPromoterRows.length ? (
+                                        <>
+                                            {filteredPromoterRows.map((row) => (
+                                                <div
+                                                    className="ledger-row ledger-row-3"
+                                                    key={row.id}
+                                                >
+                                                    <span className="ledger-sym">
+                                                        {row.symbol}
+                                                    </span>
+                                                    <span className="ledger-num">
+                                                        {row.shareGroupId?.name ?? "--"}
+                                                    </span>
+                                                    <span className="ledger-num">
+                                                        {row.listingDate ?? "--"}
+                                                    </span>
+                                                </div>
+                                            ))}
+
+                                            <Pagination
+                                                page={promoterPage}
+                                                totalPages={promoterTotalPages}
+                                                onChange={fetchPromoterPage}
+                                                loading={promoterLoading}
+                                            />
+                                        </>
+                                    ) : (
+                                        <EmptyRow
+                                            label={
+                                                selectedPromoterGroup
+                                                    ? "no shares in this group on this page"
+                                                    : "no promoter share data yet"
+                                            }
+                                        />
+                                    )}
+                                </>
+                            )}
+
                             {feed === "Floorsheet" && (
                                 <>
                                     <p className="ledger-heading">
                                         live contracts
                                     </p>
 
-                                    {feedLoading &&
-                                    !floorRows.length ? (
-                                        <SkeletonRows count={4} />
+                                    <div className="ledger-header ledger-row-3">
+                                        <span>Symbol</span>
+                                        <span style={{ textAlign: "right" }}>Qty</span>
+                                        <span style={{ textAlign: "right" }}>Rate</span>
+                                    </div>
+
+                                    {feedLoading && !floorRows.length ? (
+                                        <SkeletonRows count={6} columns={3} />
                                     ) : floorRows.length ? (
                                         floorRows
                                             .slice(0, 14)
                                             .map((row, index) => (
                                                 <div
                                                     className="ledger-row ledger-row-3"
-                                                    key={
-                                                        row.id ??
-                                                        index
-                                                    }
+                                                    key={row.id ?? index}
                                                 >
                                                     <span className="ledger-sym">
-                                                        {
-                                                            row.stockSymbol
-                                                        }
+                                                        {row.stockSymbol}
                                                     </span>
 
                                                     <span className="ledger-num">

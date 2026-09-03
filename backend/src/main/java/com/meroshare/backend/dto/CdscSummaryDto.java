@@ -8,12 +8,10 @@ import java.util.List;
 @Data
 @Builder
 public class CdscSummaryDto {
-
     private int total;
     private int allotted;
     private int failed;
     private int notPublished;
-
     private List<Item> items;
 
     @Data
@@ -26,5 +24,6 @@ public class CdscSummaryDto {
         private String companyShareId;
         private String resultStatus;
         private int allottedKitta;
+        private String appliedDate;
     }
 }

@@ -11,14 +11,14 @@ import java.util.Optional;
 
 @Repository
 public interface IpoApplicationRepository extends JpaRepository<IpoApplication, Long> {
-
     boolean existsByMeroshareAccountIdAndShareId(Long meroshareAccountId, String shareId);
 
     Optional<IpoApplication> findByMeroshareAccountIdAndShareId(Long meroshareAccountId, String shareId);
+    List<IpoApplication> findByMeroshareAccountId(Long meroshareAccountId);
 
     @Query("SELECT ia FROM IpoApplication ia " +
-           "JOIN FETCH ia.meroshareAccount ma " +
-           "WHERE ma.appUser.id = :appUserId " +
-           "ORDER BY ia.appliedAt DESC")
+            "JOIN FETCH ia.meroshareAccount ma " +
+            "WHERE ma.appUser.id = :appUserId " +
+            "ORDER BY ia.appliedAt DESC")
     List<IpoApplication> findAllByAppUserId(@Param("appUserId") Long appUserId);
 }

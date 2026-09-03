@@ -7,6 +7,7 @@ import {
     getPriceVolumeHistory,
     getFloorsheetOf,
     getPriceVolume,
+    getCompanyClassification,
     isNepseError,
 } from "../../api/nepse";
 import Layout from "../../components/Layout/Layout.jsx";
@@ -51,6 +52,18 @@ function pickDetails(raw) {
     };
 }
 
+// Finds this symbol in a classification Page response and returns its group name
+function pickShareGroup(raw, symbol) {
+    if (isNepseError(raw)) return null;
+
+    const list = Array.isArray(raw) ? raw : raw?.content ?? [];
+    const match = list.find(
+        (row) => (row.symbol ?? "").toUpperCase() === symbol.toUpperCase()
+    );
+
+    return match?.shareGroupId?.name ?? null;
+}
+
 const COMPANY_TABS = ["Depth", "History", "Floorsheet"];
 
 function OverviewTickerItem({ label, value }) {
@@ -63,7 +76,7 @@ function OverviewTickerItem({ label, value }) {
 }
 
 /* overview items shared between the primary and duplicate scroll tracks */
-function OverviewItems({ info, weekStats }) {
+function OverviewItems({ info, weekStats, shareGroup }) {
     return (
         <>
             {info.open != null && (
@@ -77,6 +90,9 @@ function OverviewItems({ info, weekStats }) {
             )}
             {info.instrument && (
                 <OverviewTickerItem label="instrument" value={info.instrument} />
+            )}
+            {shareGroup && (
+                <OverviewTickerItem label="group" value={shareGroup} />
             )}
             {info.marketCap != null && (
                 <OverviewTickerItem label="market cap" value={fmtCompact(info.marketCap)} />
@@ -123,12 +139,12 @@ function DepthRow({ row }) {
 }
 
 function DepthSection({
-    heading,
-    headingTone,
-    rows,
-    loading,
-    emptyLabel,
-}) {
+                          heading,
+                          headingTone,
+                          rows,
+                          loading,
+                          emptyLabel,
+                      }) {
     return (
         <>
             <p className={`ledger-heading ${headingTone}`}>
@@ -136,7 +152,7 @@ function DepthSection({
             </p>
 
             {loading && !rows.length ? (
-                <SkeletonRows count={3} />
+                <SkeletonRows count={3} columns={2} />
             ) : rows.length ? (
                 rows.slice(0, 6).map((row, index) => (
                     <DepthRow row={row} key={index} />
@@ -157,6 +173,7 @@ export default function CompanyDetail() {
     const [depth, setDepth] = useState(null);
     const [history, setHistory] = useState([]);
     const [floor, setFloor] = useState([]);
+    const [shareGroup, setShareGroup] = useState(null);
 
     const [loading, setLoading] = useState(true);
     const [tab, setTab] = useState("Depth");
@@ -164,68 +181,77 @@ export default function CompanyDetail() {
     const [error, setError] = useState(null);
     const [floorUnavailable, setFloorUnavailable] = useState(false);
 
+    // range stat needs history, so fetch it up front, not only on tab click
     useEffect(() => {
         let alive = true;
 
-        const initialTimer = setTimeout(() => {
-            if (!alive) return;
+        setDetails(null);
+        setQuote(null);
+        setGraphData(null);
+        setDepth(null);
+        setHistory([]);
+        setFloor([]);
+        setShareGroup(null);
+        setFloorUnavailable(false);
+        setLoading(true);
+        setError(null);
 
-            setDetails(null);
-            setQuote(null);
-            setGraphData(null);
-            setDepth(null);
-            setHistory([]);
-            setFloor([]);
-            setFloorUnavailable(false);
-            setLoading(true);
-            setError(null);
+        const load = async () => {
+            try {
+                const [d, g, pv, cls, hist] = await Promise.all([
+                    getCompanyDetails(symbol),
+                    getDailyScripPriceGraph(symbol),
+                    getPriceVolume(),
+                    getCompanyClassification(),
+                    getPriceVolumeHistory(symbol),
+                ]);
 
-            Promise.all([
-                getCompanyDetails(symbol),
-                getDailyScripPriceGraph(symbol),
-                getPriceVolume(),
-            ])
-                .then(([d, g, pv]) => {
-                    if (!alive) return;
+                if (!alive) return;
 
-                    if (isNepseError(d.data)) {
-                        setError("Company data is temporarily unavailable");
-                        return;
-                    }
+                if (isNepseError(d.data)) {
+                    setError("Company data is temporarily unavailable");
+                    return;
+                }
 
-                    setDetails(d.data);
+                setDetails(d.data);
 
-                    const rawGraph = g.data;
+                const rawGraph = g.data;
 
-                    if (isNepseError(rawGraph)) {
-                        setGraphData([]);
-                    } else {
-                        setGraphData(
-                            Array.isArray(rawGraph)
-                                ? rawGraph
-                                : rawGraph?.data ?? Object.values(rawGraph ?? {})
-                        );
-                    }
+                setGraphData(
+                    isNepseError(rawGraph)
+                        ? []
+                        : Array.isArray(rawGraph)
+                            ? rawGraph
+                            : rawGraph?.data ?? Object.values(rawGraph ?? {})
+                );
 
-                    const rows = isNepseError(pv.data) ? [] : pv.data ?? [];
+                const rows = isNepseError(pv.data) ? [] : pv.data ?? [];
 
-                    const row = rows.find(
-                        (r) => (r.symbol ?? "").toUpperCase() === symbol.toUpperCase()
-                    );
+                const row = rows.find(
+                    (r) => (r.symbol ?? "").toUpperCase() === symbol.toUpperCase()
+                );
 
-                    setQuote(row ?? null);
-                })
-                .catch(() => {
-                    if (alive) setError("Could not load company data");
-                })
-                .finally(() => {
-                    if (alive) setLoading(false);
-                });
-        }, 0);
+                setQuote(row ?? null);
+                setShareGroup(pickShareGroup(cls.data, symbol));
+
+                setHistory(
+                    isNepseError(hist.data)
+                        ? []
+                        : Array.isArray(hist.data)
+                            ? hist.data
+                            : hist.data?.data ?? []
+                );
+            } catch {
+                if (alive) setError("Could not load company data");
+            } finally {
+                if (alive) setLoading(false);
+            }
+        };
+
+        load();
 
         return () => {
             alive = false;
-            clearTimeout(initialTimer);
         };
     }, [symbol]);
 
@@ -245,20 +271,6 @@ export default function CompanyDetail() {
                                 ? { unavailable: true }
                                 : r.data
                         );
-                    }
-                } else if (tab === "History" && !history.length) {
-                    const r = await getPriceVolumeHistory(symbol);
-
-                    if (alive) {
-                        if (isNepseError(r.data)) {
-                            setHistory([]);
-                        } else {
-                            setHistory(
-                                Array.isArray(r.data)
-                                    ? r.data
-                                    : r.data?.data ?? []
-                            );
-                        }
                     }
                 } else if (tab === "Floorsheet" && !floor.length) {
                     const r = await getFloorsheetOf(symbol);
@@ -292,7 +304,7 @@ export default function CompanyDetail() {
         return () => {
             alive = false;
         };
-    }, [tab, symbol, depth, history.length, floor.length]);
+    }, [tab, symbol, depth, floor.length]);
 
     const info = pickDetails(details);
     const heroEntry = details?.security ?? details ?? {};
@@ -367,6 +379,7 @@ export default function CompanyDetail() {
         info.faceValue != null ||
         info.publicShares != null ||
         info.promoterShares != null ||
+        shareGroup ||
         weekStats;
 
     return (
@@ -421,7 +434,11 @@ export default function CompanyDetail() {
 
                         {hasOverview && !loading && (
                             <ScrollTicker>
-                                <OverviewItems info={info} weekStats={weekStats} />
+                                <OverviewItems
+                                    info={info}
+                                    weekStats={weekStats}
+                                    shareGroup={shareGroup}
+                                />
                             </ScrollTicker>
                         )}
                     </div>
@@ -468,8 +485,8 @@ export default function CompanyDetail() {
                                         recent sessions
                                     </p>
 
-                                    {tabLoading && !history.length ? (
-                                        <SkeletonRows count={4} />
+                                    {loading && !history.length ? (
+                                        <SkeletonRows count={6} columns={3} />
                                     ) : history.length ? (
                                         history.slice(0, 12).map((r, i) => (
                                             <div
@@ -512,7 +529,7 @@ export default function CompanyDetail() {
                                     </p>
 
                                     {tabLoading && !floor.length ? (
-                                        <SkeletonRows count={4} />
+                                        <SkeletonRows count={6} columns={3} />
                                     ) : floor.length ? (
                                         floor.slice(0, 14).map((r, i) => (
                                             <div

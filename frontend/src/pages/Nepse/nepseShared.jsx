@@ -22,9 +22,27 @@ export function EmptyRow({ label }) {
     return <p className="ledger-empty">{label}</p>;
 }
 
-export function SkeletonRows({ count = 3 }) {
+// count only bar, or a grid matched skeleton when columns is given
+export function SkeletonRows({ count = 3, columns = 1 }) {
+    if (columns <= 1) {
+        return Array.from({ length: count }, (_, i) => (
+            <div key={i} className="skel ledger-skel" />
+        ));
+    }
+
+    const rowClass =
+        columns === 4
+            ? "ledger-row ledger-row-4"
+            : columns === 3
+                ? "ledger-row ledger-row-3"
+                : "ledger-row";
+
     return Array.from({ length: count }, (_, i) => (
-        <div key={i} className="skel ledger-skel" />
+        <div className={rowClass} key={i}>
+            {Array.from({ length: columns }, (_, j) => (
+                <span key={j} className="skel ledger-skel-cell" />
+            ))}
+        </div>
     ));
 }
 
@@ -191,7 +209,8 @@ export function HeroChart({
                               changePct,
                               eyebrow = "NEPSE INDEX",
                           }) {
-    const gradientId = useId();
+    // fix: useId returns colons, strip them so url(#id) stays safe everywhere
+    const gradientId = useId().replace(/:/g, "");
     const width = 1000;
     const height = 380;
     const chart = buildChart(data, width, height);
@@ -404,7 +423,8 @@ export function TermSearch({
     const goToCompany = (stock) => {
         setOpen(false);
         setQuery("");
-        navigate(`/nepse/company/${stock.symbol}`);
+        // fix: encode symbol in case it has special characters
+        navigate(`/nepse/company/${encodeURIComponent(stock.symbol)}`);
     };
 
     const clear = () => {

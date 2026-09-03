@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +40,9 @@ public class IpoService {
     private final EncryptionUtil encryptionUtil;
     private final IpoApplicationStore store;
     private final Random random = new Random();
+
+    private static final DateTimeFormatter APPLIED_DATE_FMT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
 
     private AppUser getAppUser(String username) {
         return appUserRepository.findByUsername(username)
@@ -480,6 +484,15 @@ public class IpoService {
                 .stream()
                 .collect(Collectors.toMap(CdscResultCache::getApplicantFormId, c -> c));
 
+        Map<String, LocalDateTime> localAppliedDates = ipoApplicationRepository
+                .findByMeroshareAccountId(accountId)
+                .stream()
+                .collect(Collectors.toMap(
+                        IpoApplication::getShareId,
+                        IpoApplication::getAppliedAt,
+                        (a, b) -> a
+                ));
+
         List<CdscSummaryDto.Item> items = new ArrayList<>();
         int allotted     = 0;
         int failed       = 0;
@@ -491,6 +504,18 @@ public class IpoService {
             String scrip           = safeStr(entry.get("scrip"), "");
             String shareTypeName   = safeStr(entry.get("shareTypeName"), "");
             String companyShareId  = safeStr(entry.get("companyShareId"), "");
+            LocalDateTime localDate = localAppliedDates.get(companyShareId);
+            String appliedDate = localDate != null ? localDate.format(APPLIED_DATE_FMT) : null;
+
+            // CDSC history may already carry applied date for entries that were
+            // not submitted through this app. Use it when local DB date is absent.
+            if (appliedDate == null || appliedDate.isBlank()) {
+                appliedDate = firstNonBlank(
+                        safeStr(entry.get("appliedDate"), null),
+                        safeStr(entry.get("applicationDate"), null),
+                        safeStr(entry.get("createdDate"), null)
+                );
+            }
 
             String resultStatus  = "NOT_PUBLISHED";
             int    allottedKitta = 0;
@@ -539,6 +564,7 @@ public class IpoService {
                     .companyShareId(companyShareId)
                     .resultStatus(resultStatus)
                     .allottedKitta(allottedKitta)
+                    .appliedDate(appliedDate)
                     .build());
         }
 
@@ -563,6 +589,16 @@ public class IpoService {
         if (obj == null) return defaultValue;
         String s = String.valueOf(obj);
         return s.equals("null") ? defaultValue : s;
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+
+        return null;
     }
 
     private IpoApplyResult buildResult(Long accountId, String username,

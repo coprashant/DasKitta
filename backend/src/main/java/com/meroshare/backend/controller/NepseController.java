@@ -1,6 +1,7 @@
 package com.meroshare.backend.controller;
 
 import com.meroshare.backend.service.NepseService;
+import com.meroshare.backend.service.nepse.CompanySectorSnapshotService;
 import com.meroshare.backend.service.nepse.NepseSymbolResolver;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -13,10 +14,15 @@ import java.time.LocalDate;
 public class NepseController {
 
     private final NepseService       nepseService;
+    private final CompanySectorSnapshotService companySectorSnapshotService;
     private final NepseSymbolResolver symbolResolver;
 
-    public NepseController(NepseService nepseService, NepseSymbolResolver symbolResolver) {
+    public NepseController(
+            NepseService nepseService,
+            CompanySectorSnapshotService companySectorSnapshotService,
+            NepseSymbolResolver symbolResolver) {
         this.nepseService   = nepseService;
+        this.companySectorSnapshotService = companySectorSnapshotService;
         this.symbolResolver = symbolResolver;
     }
 
@@ -94,6 +100,42 @@ public class NepseController {
     @GetMapping("/security-list")
     public Mono<ResponseEntity<Object>> getSecurityList() {
         return nepseService.getSecurityList().map(ResponseEntity::ok);
+    }
+
+    // Classification, share groups, promoter shares, government bonds
+
+    @GetMapping("/company-classification")
+    public Mono<ResponseEntity<Object>> getCompanyClassification(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "200") int size) {
+        return nepseService.getCompanyClassification(page, size).map(ResponseEntity::ok);
+    }
+
+    @GetMapping("/company-sectors")
+    public ResponseEntity<Object> getCompanySectorsSnapshot() {
+        return ResponseEntity.ok(companySectorSnapshotService.getSectorMapPayload());
+    }
+
+    @PostMapping("/company-sectors/refresh")
+    public Mono<ResponseEntity<Object>> refreshCompanySectorsSnapshot() {
+        return companySectorSnapshotService.refreshSnapshotNow().map(ResponseEntity::ok);
+    }
+
+    @GetMapping("/share-groups")
+    public Mono<ResponseEntity<Object>> getShareGroups() {
+        return nepseService.getShareGroups().map(ResponseEntity::ok);
+    }
+
+    @GetMapping("/promoter-shares")
+    public Mono<ResponseEntity<Object>> getPromoterShares(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return nepseService.getPromoterShares(page, size).map(ResponseEntity::ok);
+    }
+
+    @GetMapping("/bonds/government")
+    public Mono<ResponseEntity<Object>> getGovernmentBonds() {
+        return nepseService.getGovernmentBonds().map(ResponseEntity::ok);
     }
 
     // Symbol based endpoints resolve symbol to numeric id first

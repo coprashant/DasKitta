@@ -13,20 +13,15 @@ import reactor.core.publisher.Mono;
 import java.time.Duration;
 import java.time.LocalDate;
 
-/**
- * NEPSE market data service.
- * Calls nepalstock.com directly, no Python sidecar required.
- *
- * Base URL  : https://www.nepalstock.com
- * Auth      : Authorization: Salter <token>  (managed by NepseTokenManager)
- * GET calls : plain GET with auth header
- * POST calls: POST with JSON body {"id": <payloadId>} where payloadId is
- *             derived from salts + dummyId + today's date
- *
- * Responses are cached in Redis using a cache aside pattern. Most endpoints
- * use a short TTL since market data changes constantly. The security list
- * is closer to static metadata so it uses a much longer TTL.
- */
+// NEPSE market data service
+// Calls nepalstock.com directly, no python sidecar required
+// Auth: Authorization Salter token, managed by NepseTokenManager
+// GET calls plain GET with auth header
+// POST calls POST with json body id payloadId, payloadId derived from
+// salts plus dummyId plus todays date
+// Responses cached in redis cache aside pattern. Most endpoints use a short
+// ttl since market data changes constantly. Reference and static style data
+// use a much longer ttl
 @Service
 public class NepseService {
 
@@ -45,6 +40,12 @@ public class NepseService {
     private static final String COMPANY_LIST_URL          = "/api/nots/company/list";
     private static final String SECURITY_LIST_URL         = "/api/nots/security?nonDelisted=true";
     private static final String LIVE_MARKET_URL           = "/api/nots/lives-market";
+
+    // Reference and metadata endpoints, static ttl
+    private static final String COMPANY_CLASSIFICATION_URL = "/api/nots/security/classification";
+    private static final String SHARE_GROUPS_URL           = "/api/nots/security/shareGroup/";
+    private static final String PROMOTER_SHARES_URL        = "/api/nots/security/promoters";
+    private static final String GOV_BONDS_URL              = "/api/nots/company/debentureAndBond?type=govBonds";
 
     // Graph endpoints (POST)
     private static final String NEPSE_INDEX_GRAPH         = "/api/nots/graph/index/58";
@@ -65,7 +66,7 @@ public class NepseService {
     private static final String OTHERS_SUBINDEX_GRAPH     = "/api/nots/graph/index/53";
     private static final String TRADING_SUBINDEX_GRAPH    = "/api/nots/graph/index/61";
 
-    // Company-specific endpoints (POST, need company ID suffix)
+    // Company specific endpoints, POST, need company id suffix
     private static final String COMPANY_DAILY_GRAPH       = "/api/nots/market/graphdata/daily/";
     private static final String COMPANY_DETAILS           = "/api/nots/security/";
     private static final String COMPANY_PRICE_VOL_HIST    = "/api/nots/market/history/security/";
@@ -73,7 +74,7 @@ public class NepseService {
     private static final String FLOOR_SHEET               = "/api/nots/nepse-data/floorsheet";
     private static final String MARKET_DEPTH              = "/api/nots/nepse-data/marketdepth/";
 
-    // Redis cache key prefix and namespaces
+    // Redis cache key prefix
     private static final String CACHE_PREFIX = "nepse:";
 
     private final NepseClient         client;
@@ -97,14 +98,23 @@ public class NepseService {
     }
 
     // Cache aside helper
-
-    // Reads from redis first. On a miss, subscribes to the loader, stores the
-    // result with the given ttl, then returns it
+    // Reads redis first. On a miss subscribes to the loader, stores the result with the given ttl, then returns it
     private Mono<Object> cached(String cacheKey, Duration ttl, Mono<Object> loader) {
         String key = CACHE_PREFIX + cacheKey;
         return redisTemplate.opsForValue().get(key)
                 .switchIfEmpty(Mono.defer(() -> loader.flatMap(value ->
-                        redisTemplate.opsForValue().set(key, value, ttl).thenReturn(value))));
+                        isErrorResponse(value)
+                                ? Mono.just(value)
+                                : redisTemplate.opsForValue().set(key, value, ttl).thenReturn(value))));
+    }
+
+    // true if value is the NepseClient soft fail shape, used to skip caching it
+    private boolean isErrorResponse(Object value) {
+        try {
+            return mapper.valueToTree(value).path("error").asBoolean(false);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private Mono<Object> cachedLive(String cacheKey, Mono<Object> loader) {
@@ -182,13 +192,37 @@ public class NepseService {
         return cachedLive("companies", client.get(COMPANY_LIST_URL));
     }
 
-    // Security list is treated as static CDSC style metadata, long ttl
+    // Security list treated as static metadata, long ttl
     public Mono<Object> getSecurityList() {
         return cached("security-list", staticTtl, client.get(SECURITY_LIST_URL));
     }
 
     public Mono<Object> getPriceVolume() {
         return cachedLive("price-volume", client.get(PRICE_VOLUME_URL));
+    }
+
+    // Paginated, page of Security records with shareGroupId and companyId nested
+    public Mono<Object> getCompanyClassification(int page, int size) {
+        String key = "company-classification:" + page + ":" + size;
+        return cached(key, staticTtl,
+                client.get(COMPANY_CLASSIFICATION_URL + "?page=" + page + "&size=" + size));
+    }
+
+    // Flat list of share group reference data, id name capitalRangeMin isDefault
+    public Mono<Object> getShareGroups() {
+        return cached("share-groups", staticTtl, client.get(SHARE_GROUPS_URL));
+    }
+
+    // Paginated, same Security shape as classification but isPromoter true only
+    public Mono<Object> getPromoterShares(int page, int size) {
+        String key = "promoter-shares:" + page + ":" + size;
+        return cached(key, staticTtl,
+                client.get(PROMOTER_SHARES_URL + "?page=" + page + "&size=" + size));
+    }
+
+    // Flat list, about 65 records, dates are BS not AD
+    public Mono<Object> getGovernmentBonds() {
+        return cached("gov-bonds", staticTtl, client.get(GOV_BONDS_URL));
     }
 
     public Mono<Object> getCompanyDetails(long companyId) {
@@ -292,9 +326,9 @@ public class NepseService {
         return cachedLive("graph:trading", postWithPayload(TRADING_SUBINDEX_GRAPH));
     }
 
-    // Response transformers (mirror Python server's reshaping)
+    // Response transformers
 
-    /** [{detail:"Total Turnover Rs:", value:123}, ...] converts to {"Total Turnover Rs:": 123, ...} */
+    // detail value pairs converts to a map keyed by detail
     private Object summaryArrayToMap(Object raw) {
         try {
             JsonNode array = mapper.valueToTree(raw);
@@ -310,7 +344,7 @@ public class NepseService {
         } catch (Exception e) { return raw; }
     }
 
-    /** [{index:"NEPSE", ...}, ...] converts to {"NEPSE": {...}, ...} */
+    // index name value pairs converts to a map keyed by index
     private Object indexArrayToMap(Object raw) {
         try {
             JsonNode array = mapper.valueToTree(raw);
