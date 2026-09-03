@@ -3,12 +3,12 @@
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: var(--term-text-dim);
+    color: var(--text-3);
     text-decoration: none;
     margin-bottom: 4px;
     transition: color 0.15s ease;
 }
 
 .term-back:hover {
-    color: var(--term-accent);
+    color: var(--accent);
 }
