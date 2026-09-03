@@ -5,9 +5,10 @@ import { useTheme } from "../../context/ThemeContext";
 import { useAccount } from "../../context/AccountContext";
 import { useNotifications } from "../../context/NotificationContext";
 import NotificationPanel from "../NotificationPanel/NotificationPanel";
+import { PWAInstall } from "../PWAInstall";
 import {
   BellIcon, SunIcon, MoonIcon, ProfileIcon, CheckIcon,
-  PlusIcon, SettingsIcon, SignOutIcon, UsersIcon
+  PlusIcon, SettingsIcon, SignOutIcon, UsersIcon, IconDownload, IconShare, CloseIcon
 } from "../Icons";
 import "./Navbar.css";
 
@@ -27,7 +28,7 @@ const guestLinks = [
   { path: "/nepse", label: "Nepse" },
 ];
 
-const ProfileDropdown = ({ onClose }) => {
+const ProfileDropdown = ({ onClose, showDownloadApp, onDownloadApp }) => {
   const { user, logout } = useAuth();
   const { accounts = [], activeAccount, setActiveAccount } = useAccount() || {};
 
@@ -85,6 +86,11 @@ const ProfileDropdown = ({ onClose }) => {
           <Link to="/settings" className="profile-action-btn" onClick={onClose} role="menuitem">
             <SettingsIcon /><span>Settings</span>
           </Link>
+          {showDownloadApp && (
+              <button className="profile-action-btn" onClick={onDownloadApp} role="menuitem" type="button">
+                <IconDownload /><span>Download App</span>
+              </button>
+          )}
         </div>
 
         <div className="profile-dropdown-divider" />
@@ -156,7 +162,10 @@ const Navbar = () => {
   const location = useLocation();
   const { pathname } = location;
   const [profileOpen, setProfileOpen] = useState(false);
+  const [showInstallHelp, setShowInstallHelp] = useState(false);
   const profileRef = useRef(null);
+  const { isInstalled, canInstallNatively, isMobile, installGuide, handleInstallClick } = PWAInstall();
+  const showDownloadApp = !isInstalled && (canInstallNatively || isMobile);
 
   const desktopLinks = user ? [...authLinks, ...secondaryLinks] : guestLinks;
 
@@ -178,8 +187,32 @@ const Navbar = () => {
     return () => document.removeEventListener("mousedown", handler);
   }, [profileOpen]);
 
+  useEffect(() => {
+    if (!showInstallHelp) return;
+
+    const handler = (e) => {
+      if (e.key === "Escape") setShowInstallHelp(false);
+    };
+
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [showInstallHelp]);
+
+  const handleDownloadApp = async () => {
+    const result = await handleInstallClick();
+    setProfileOpen(false);
+
+    if (result?.status === "accepted" || result?.status === "already-installed") {
+      setShowInstallHelp(false);
+      return;
+    }
+
+    setShowInstallHelp(true);
+  };
+
   return (
-      <nav className="navbar" aria-label="Main navigation">
+      <>
+        <nav className="navbar" aria-label="Main navigation">
         <div className="navbar-inner">
           <Link to="/" className="navbar-brand">
             <img src="/favicon.png" className="navbar-logo" alt="DasKitta" />
@@ -226,7 +259,11 @@ const Navbar = () => {
                     {profileOpen && <span className="navbar-indicator-dot" aria-hidden="true" />}
                   </button>
                   {profileOpen && (
-                      <ProfileDropdown onClose={() => setProfileOpen(false)} />
+                      <ProfileDropdown
+                        onClose={() => setProfileOpen(false)}
+                        showDownloadApp={showDownloadApp}
+                        onDownloadApp={handleDownloadApp}
+                      />
                   )}
                 </div>
             ) : (
@@ -249,7 +286,40 @@ const Navbar = () => {
             )}
           </div>
         </div>
-      </nav>
+        </nav>
+
+        {showInstallHelp && (
+            <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Install app help">
+              <button
+                  type="button"
+                  className="modal-blur profile-install-help-blur"
+                  aria-label="Close install help"
+                  onClick={() => setShowInstallHelp(false)}
+              />
+
+              <div className="modal-box profile-install-help">
+                <button
+                    type="button"
+                    className="profile-install-help-close"
+                    onClick={() => setShowInstallHelp(false)}
+                    aria-label="Close"
+                >
+                  <CloseIcon />
+                </button>
+
+                <div className="profile-install-help-icon"><IconShare /></div>
+                <h2 className="profile-install-help-title">{installGuide.title}</h2>
+                <p className="profile-install-help-subtitle">Follow these steps to add DasKitta on your home screen.</p>
+
+                <ol className="profile-install-help-steps">
+                  {installGuide.steps.map((step) => (
+                      <li key={step}>{step}</li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+        )}
+      </>
   );
 };
 
