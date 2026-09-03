@@ -15,7 +15,6 @@ import {
     IconArrowDown,
     IconUser,
     IconDownload,
-    IconShare,
 } from "../../components/Icons.jsx";
 import "./Portfolio.css";
 
@@ -89,8 +88,6 @@ const Portfolio = () => {
     const [error, setError] = useState(null);
     const [sortKey, setSortKey] = useState("script");
     const [sortAsc, setSortAsc] = useState(true);
-    const [shareCopied, setShareCopied] = useState(false);
-    const shareTimeoutRef = useRef(null);
 
     // tracks which account the latest request belongs to, so a slow
     // response for an account the user has since switched away from
@@ -232,38 +229,6 @@ const Portfolio = () => {
         }
     };
 
-    // share summary via native share sheet or clipboard fallback
-    const sharePortfolio = async () => {
-        if (!portfolio) return;
-        const lines = [
-            "Portfolio Summary",
-            `Scrips: ${portfolio.totalItems ?? 0}`,
-            `Value at LTP: Rs ${fmt(portfolio.totalValueLTP)}`,
-            `Day change: ${totalPnL >= 0 ? "+" : ""}Rs ${fmt(Math.abs(totalPnL))}`,
-        ];
-        const text = lines.join("\n");
-
-        if (navigator.share) {
-            try {
-                await navigator.share({ title: "My Portfolio", text });
-            } catch {
-                // share cancelled or failed, no action needed
-            }
-            return;
-        }
-
-        if (navigator.clipboard) {
-            try {
-                await navigator.clipboard.writeText(text);
-                setShareCopied(true);
-                if (shareTimeoutRef.current) clearTimeout(shareTimeoutRef.current);
-                shareTimeoutRef.current = setTimeout(() => setShareCopied(false), 2000);
-            } catch {
-                // clipboard blocked, no action needed
-            }
-        }
-    };
-
     const SortIcon = ({ col }) => {
         if (sortKey !== col) return <span className="sort-icon sort-icon-idle" />;
         return (
@@ -322,16 +287,6 @@ const Portfolio = () => {
                             >
                                 <IconDownload />
                                 <span className="btn-label">Export</span>
-                            </button>
-                            <button
-                                type="button"
-                                className="btn btn-secondary btn-sm btn-toolbar"
-                                onClick={sharePortfolio}
-                                disabled={!portfolio}
-                                aria-label="Share portfolio summary"
-                            >
-                                <IconShare />
-                                <span className="btn-label">{shareCopied ? "Copied" : "Share"}</span>
                             </button>
                             <button
                                 type="button"

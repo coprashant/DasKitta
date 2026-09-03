@@ -177,6 +177,7 @@ button.btn-refresh:hover {
   color: var(--text-2);
   white-space: nowrap;
   user-select: none;
+  box-sizing: border-box;
 }
 
 .portfolio-table th.sortable {
@@ -202,6 +203,7 @@ button.btn-refresh:hover {
   border-radius: 0;
   -webkit-appearance: none;
   appearance: none;
+  box-sizing: border-box;
 }
 
 .th-btn:focus,
@@ -241,6 +243,13 @@ button.btn-refresh:hover {
   border-bottom: 1px solid var(--border);
   color: var(--text);
   vertical-align: middle;
+  box-sizing: border-box;
+}
+
+.portfolio-table th.col-num,
+.portfolio-table td.col-num {
+  padding-left: 16px;
+  padding-right: 4px;
 }
 .portfolio-table tbody tr:last-child td { border-bottom: none; }
 .portfolio-table tbody tr:hover td {
@@ -248,7 +257,7 @@ button.btn-refresh:hover {
   transition: background var(--t-fast) var(--ease);
 }
 
-.col-num   { width: 36px; text-align: left; padding-left: 16px; padding-right: 4px; color: var(--text-3); }
+.col-num   { width: 36px; min-width: 36px; text-align: left; padding-left: 16px; padding-right: 4px; color: var(--text-3); }
 .col-left  { text-align: left; }
 .col-right { text-align: right; }
 .col-dim   { color: var(--text-3); }
