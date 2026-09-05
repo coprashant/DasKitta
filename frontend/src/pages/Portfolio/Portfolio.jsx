@@ -344,7 +344,7 @@ const Portfolio = () => {
                             <IconUser />
                         </div>
                         <p>No account selected. Add an account to get started.</p>
-                        <Link to="/accounts/add" className="btn btn-primary btn-sm" style={{ marginTop: 4 }}>
+                        <Link to="/settings/accounts/add" className="btn btn-primary btn-sm" style={{ marginTop: 4 }}>
                             <IconPlus /> Add account
                         </Link>
                     </div>

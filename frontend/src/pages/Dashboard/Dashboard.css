@@ -53,46 +53,67 @@
   height: 15px;
 }
 
-.dash-no-account {
+/* centered empty state card, used for no account and account load error */
+.dash-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  max-width: 400px;
+  margin: 32px auto 0;
+  padding: 38px 30px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  text-align: center;
+}
+
+.dash-empty-state-icon {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 18px 20px;
-  margin-top: 18px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface);
+  justify-content: center;
+  width: 54px;
+  height: 54px;
+  margin-bottom: 16px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
 }
 
-.dash-no-account > svg {
-  width: 22px;
-  height: 22px;
-  color: var(--text-2);
-  flex-shrink: 0;
-}
-
-/* offline or fetch failure, distinct from a genuinely empty account list */
-.dash-no-account.is-error > svg {
+.dash-empty-state.is-error .dash-empty-state-icon {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
   color: var(--danger);
 }
 
-.dash-no-account > div {
-  flex: 1;
-  min-width: 0;
+.dash-empty-state-icon svg {
+  width: 24px;
+  height: 24px;
 }
 
-.dash-no-account h3 {
+.dash-empty-state h3 {
   margin: 0;
   color: var(--text-1);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 15px;
+  line-height: 1.3;
+  font-weight: 650;
 }
 
-.dash-no-account p {
-  margin: 4px 0 0;
+.dash-empty-state p {
+  margin: 8px 0 22px;
   color: var(--text-2);
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.dash-empty-state .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.dash-empty-state .btn svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* merged status and error strip, one box instead of two */
@@ -995,6 +1016,18 @@ select:focus-visible {
     height: 16px;
   }
 
+  .dash-empty-state {
+    margin-top: 22px;
+    padding: 30px 22px;
+    border-radius: 14px;
+  }
+
+  .dash-empty-state-icon {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 14px;
+  }
+
   .dash-status-row {
     min-height: 40px;
   }
@@ -1135,6 +1168,25 @@ select:focus-visible {
     min-height: 32px;
     padding: 0 8px;
     font-size: 11px;
+  }
+
+  .dash-empty-state {
+    max-width: 100%;
+    padding: 26px 18px;
+  }
+
+  .dash-empty-state-icon {
+    width: 44px;
+    height: 44px;
+    margin-bottom: 12px;
+  }
+
+  .dash-empty-state h3 {
+    font-size: 14px;
+  }
+
+  .dash-empty-state p {
+    font-size: 12px;
   }
 
   .kpi-card {
