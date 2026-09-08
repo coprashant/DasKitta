@@ -51,8 +51,10 @@ jobs:
           push: true
           tags: ghcr.io/${{ env.REPO }}:latest
 
-      # Trigger Render Deploy Hook
+      # Trigger Render Deploy
       - name: Trigger Render Deploy
-        if: ${{ secrets.RENDER_DEPLOY_HOOK != '' }}
+        env:
+          RENDER_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        if: ${{ env.RENDER_HOOK != '' }}
         run: |
-          curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK }}
+          curl -X POST "$RENDER_HOOK"
