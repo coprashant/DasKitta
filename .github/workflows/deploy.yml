@@ -28,6 +28,7 @@ jobs:
 
       # Build application JAR file
       - name: Build JAR with Maven
+        working-directory: ./backend
         run: mvn package -DskipTests -Dmaven.javadoc.skip=true
 
       # Log in to GitHub Container Registry (ghcr.io)
@@ -47,7 +48,7 @@ jobs:
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ./backend
           push: true
           tags: ghcr.io/${{ env.REPO }}:latest
 
