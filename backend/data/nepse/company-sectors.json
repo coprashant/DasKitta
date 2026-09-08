@@ -1,8 +1,8 @@
 {
-  "updatedAt" : "2026-09-06T07:33:11.845253836Z",
+  "updatedAt" : "2026-09-08T05:57:46.519393769Z",
   "source" : "/api/nots/security/classification",
   "pageSize" : 500,
-  "totalScrips" : 647,
+  "totalScrips" : 648,
   "sectors" : {
     "NABIL" : "Commercial Banks",
     "NIMB" : "Commercial Banks",
@@ -650,6 +650,7 @@
     "LSH12" : "Commercial Banks",
     "RSY2" : "Life Insurance",
     "MEPDL" : "Hydro Power",
-    "SAPIL" : "Manufacturing And Processing"
+    "SAPIL" : "Manufacturing And Processing",
+    "PBD93" : "Commercial Banks"
   }
 }
