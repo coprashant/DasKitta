@@ -57,25 +57,36 @@ public class IpoService {
     }
 
     private String loginAccount(MeroshareAccount account) {
-        String plainPassword = decryptField(account.getPassword(), "password", account.getUsername());
+        String plainPassword = decryptPasswordAndMigrate(account);
         return meroshareApiService.login(account.getDpId(), account.getUsername(), plainPassword);
     }
 
     private String loginAccountFresh(MeroshareAccount account) {
-        String plainPassword = decryptField(account.getPassword(), "password", account.getUsername());
+        String plainPassword = decryptPasswordAndMigrate(account);
         return meroshareApiService.loginFresh(account.getDpId(), account.getUsername(), plainPassword);
     }
 
-    private String decryptField(String encryptedValue, String fieldName, String username) {
-        if (encryptedValue == null || encryptedValue.isBlank()) {
-            throw new RuntimeException("No encrypted " + fieldName + " stored for account: " + username);
+    /*
+     Decrypts the password and reencrypts it under the primary key if it
+     was still on the legacy key, same self healing migration used for
+     the pin field and in MeroshareAccountService.
+    */
+    private String decryptPasswordAndMigrate(MeroshareAccount account) {
+        if (account.getPassword() == null || account.getPassword().isBlank()) {
+            throw new RuntimeException("No encrypted password stored for account: " + account.getUsername());
         }
         try {
-            return encryptionUtil.decrypt(encryptedValue);
+            EncryptionUtil.DecryptResult decrypted = encryptionUtil.decryptDetailed(account.getPassword());
+            if (decrypted.legacyKey()) {
+                account.setPassword(encryptionUtil.encrypt(decrypted.plainText()));
+                accountRepository.save(account);
+                log.info("MIGRATE reencrypted legacy password for account {}", account.getId());
+            }
+            return decrypted.plainText();
         } catch (Exception e) {
-            log.error("[DECRYPT] Failed for {} of '{}': {}", fieldName, username, e.getMessage());
+            log.error("[DECRYPT] Failed for password of '{}': {}", account.getUsername(), e.getMessage());
             throw new RuntimeException(
-                    "Could not decrypt " + fieldName + " for account '" + username +
+                    "Could not decrypt password for account '" + account.getUsername() +
                             "'. Please remove and re-add this Meroshare account.", e);
         }
     }
@@ -242,7 +253,13 @@ public class IpoService {
         String decryptedPin;
         if (account.getPin() != null && !account.getPin().isBlank()) {
             try {
-                decryptedPin = encryptionUtil.decrypt(account.getPin());
+                EncryptionUtil.DecryptResult decrypted = encryptionUtil.decryptDetailed(account.getPin());
+                decryptedPin = decrypted.plainText();
+                if (decrypted.legacyKey()) {
+                    account.setPin(encryptionUtil.encrypt(decryptedPin));
+                    accountRepository.save(account);
+                    log.info("MIGRATE reencrypted legacy pin for account {}", account.getId());
+                }
             } catch (Exception e) {
                 log.error("[APPLY] PIN decrypt failed for {}: {}", account.getUsername(), e.getMessage());
                 return buildResult(account.getId(), account.getUsername(),

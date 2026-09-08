@@ -22,6 +22,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
     private final UserDetailsServiceImpl userDetailsService;
+    private final TokenValidityService tokenValidityService;
 
     // sse endpoints trigger an async dispatch when the emitter completes
     // this filter must run on that dispatch too or security context is empty
@@ -57,6 +58,16 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
 
         String username = jwtUtil.extractUsername(token);
+
+        // Reject tokens issued before the user's last logout or password change
+        if (username != null) {
+            long issuedAtMillis = jwtUtil.extractIssuedAt(token).getTime();
+            if (!tokenValidityService.isIssuedAtValid(username, issuedAtMillis)) {
+                log.warn("[JWT] Revoked token used for {}", username);
+                filterChain.doFilter(request, response);
+                return;
+            }
+        }
 
         // Only set auth if not already authenticated in this request
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {

@@ -12,26 +12,20 @@ import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.Base64;
 
-/**
- * AES-256-CBC encryption utility for storing Meroshare passwords and PINs.
- *
- * Key derivation: SHA-256 of the JWT secret → always produces a valid 32-byte
- * AES-256 key regardless of the secret's length or character set.
- * This replaces the old `substring(0, 32)` approach which:
- *   (a) failed if the secret was shorter than 32 characters, and
- *   (b) produced a low-entropy key if the secret was a short passphrase.
- *
- * Wire format for NEW encryptions:
- *   "CBC:" + Base64(IV[16] + ciphertext)
- *
- * Legacy ECB format (no prefix, plain Base64) is still decryptable as a
- * migration path — once a user re-adds their account it will be re-encrypted
- * in the new format.
- *
- * IMPORTANT: If you change the JWT secret, all stored passwords and PINs
- * become unreadable. Users will need to re-add their Meroshare accounts.
- * Consider using a dedicated, stable encryption key in production.
- */
+/*
+ AES 256 CBC encryption for stored Meroshare passwords and PINs.
+
+ There are two keys. The primary key comes from app.encryption.secret
+ and is used for all new encryption. The legacy key comes from
+ app.jwt.secret, this used to double as the encryption key before the
+ two secrets were split apart. Old rows were encrypted with the legacy
+ key so decrypt still tries it as a fallback, this means existing user
+ data keeps working with no manual migration and no downtime.
+
+ decryptDetailed tells the caller which key actually worked, callers
+ that touch a row during normal use can reencrypt it under the primary
+ key at that point, so data moves to the new key over time on its own.
+*/
 @Slf4j
 @Component
 public class EncryptionUtil {
@@ -41,28 +35,32 @@ public class EncryptionUtil {
     private static final String ALGORITHM = "AES/CBC/PKCS5Padding";
     private static final String ECB_ALGORITHM = "AES/ECB/PKCS5Padding";
 
-    @Value("${app.jwt.secret}")
-    private String secretKey;
+    @Value("${app.encryption.secret}")
+    private String primarySecret;
 
-    /**
-     * Derives a stable 32-byte AES-256 key from the JWT secret using SHA-256.
-     * This works correctly regardless of the secret's length.
-     */
-    private SecretKeySpec buildKey() {
+    @Value("${app.jwt.secret}")
+    private String legacySecret;
+
+    public record DecryptResult(String plainText, boolean legacyKey) {}
+
+    private SecretKeySpec deriveKey(String secret) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] keyBytes = digest.digest(secretKey.trim().getBytes(StandardCharsets.UTF_8));
-            // SHA-256 always produces exactly 32 bytes — perfect for AES-256
+            byte[] keyBytes = digest.digest(secret.trim().getBytes(StandardCharsets.UTF_8));
             return new SecretKeySpec(keyBytes, "AES");
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to derive AES key: " + e.getMessage(), e);
+            throw new IllegalStateException("Failed to derive AES key " + e.getMessage(), e);
         }
     }
 
-    /**
-     * Encrypts using AES-256-CBC with a random IV.
-     * Output: "CBC:" + Base64(IV[16] + ciphertext)
-     */
+    private SecretKeySpec primaryKey() {
+        return deriveKey(primarySecret);
+    }
+
+    private SecretKeySpec legacyKey() {
+        return deriveKey(legacySecret);
+    }
+
     public String encrypt(String plainText) {
         if (plainText == null || plainText.isBlank()) {
             throw new IllegalArgumentException("Cannot encrypt null or blank text");
@@ -72,7 +70,7 @@ public class EncryptionUtil {
             new SecureRandom().nextBytes(iv);
 
             Cipher cipher = Cipher.getInstance(ALGORITHM);
-            cipher.init(Cipher.ENCRYPT_MODE, buildKey(), new IvParameterSpec(iv));
+            cipher.init(Cipher.ENCRYPT_MODE, primaryKey(), new IvParameterSpec(iv));
             byte[] encrypted = cipher.doFinal(plainText.getBytes(StandardCharsets.UTF_8));
 
             byte[] combined = new byte[IV_LENGTH + encrypted.length];
@@ -81,73 +79,86 @@ public class EncryptionUtil {
 
             return CBC_PREFIX + Base64.getEncoder().encodeToString(combined);
         } catch (Exception e) {
-            throw new RuntimeException("Encryption failed: " + e.getMessage(), e);
+            throw new RuntimeException("Encryption failed " + e.getMessage(), e);
         }
     }
 
-    /**
-     * Decrypts a value encrypted by {@link #encrypt(String)} (CBC: prefix)
-     * or by the legacy ECB code (no prefix).
-     *
-     * Throws RuntimeException if decryption fails or produces an empty string —
-     * an empty decrypted password must never be silently used.
-     */
+    /*
+     Plain decrypt for callers that only need the value, most call sites
+     use this. It tries the primary key first then the legacy key.
+    */
     public String decrypt(String encryptedText) {
+        return decryptDetailed(encryptedText).plainText();
+    }
+
+    /*
+     Same as decrypt but also reports whether the legacy key was needed,
+     use this where you can reencrypt the value once you have it.
+    */
+    public DecryptResult decryptDetailed(String encryptedText) {
         if (encryptedText == null || encryptedText.isBlank()) {
-            throw new RuntimeException("Cannot decrypt: encrypted text is null or blank");
+            throw new RuntimeException("Cannot decrypt encrypted text is null or blank");
         }
 
-        // ── New CBC format ────────────────────────────────────────────────────
         if (encryptedText.startsWith(CBC_PREFIX)) {
             String base64Part = encryptedText.substring(CBC_PREFIX.length());
-            String result = decryptCBC(base64Part);
-            if (result.isEmpty()) {
-                throw new RuntimeException(
-                        "Decryption produced an empty string — the stored value may be corrupted. " +
-                        "Please re-add the Meroshare account.");
+
+            try {
+                String result = decryptCBC(base64Part, primaryKey());
+                if (!result.isEmpty()) {
+                    return new DecryptResult(result, false);
+                }
+            } catch (Exception e) {
+                log.debug("Primary key CBC decrypt failed, trying legacy key");
             }
-            return result;
+
+            try {
+                String result = decryptCBC(base64Part, legacyKey());
+                if (!result.isEmpty()) {
+                    log.debug("Decrypted with legacy key, value should be reencrypted");
+                    return new DecryptResult(result, true);
+                }
+            } catch (Exception e) {
+                log.debug("Legacy key CBC decrypt also failed {}", e.getMessage());
+            }
+
+            throw new RuntimeException(
+                    "Decryption produced an empty string, the stored value may be corrupted. " +
+                    "Please re-add the Meroshare account.");
         }
 
-        // ── Legacy ECB format ─────────────────────────────────────────────────
-        // Try ECB first (original format; short passwords ≤ 16 bytes produce
-        // exactly 16 raw bytes = 24-char Base64 with no IV overhead)
         try {
-            String result = decryptECB(encryptedText);
+            String result = decryptECB(encryptedText, legacyKey());
             if (!result.isEmpty()) {
-                log.debug("[DECRYPT] Decrypted using legacy ECB path — consider re-adding this account");
-                return result;
+                log.debug("Decrypted using legacy ECB format, value should be reencrypted");
+                return new DecryptResult(result, true);
             }
-            log.warn("[DECRYPT] ECB returned empty string, trying legacy CBC fallback");
         } catch (Exception ecbEx) {
-            log.debug("[DECRYPT] ECB failed ({}), trying legacy CBC", ecbEx.getMessage());
+            log.debug("ECB failed {}, trying legacy CBC with no prefix", ecbEx.getMessage());
         }
 
-        // ── Legacy CBC without prefix (defensive — shouldn't normally exist) ──
         try {
-            String result = decryptCBC(encryptedText);
+            String result = decryptCBC(encryptedText, legacyKey());
             if (!result.isEmpty()) {
-                log.debug("[DECRYPT] Decrypted using legacy CBC (no prefix) path");
-                return result;
+                log.debug("Decrypted using legacy CBC with no prefix");
+                return new DecryptResult(result, true);
             }
         } catch (Exception cbcEx) {
-            log.debug("[DECRYPT] Legacy CBC also failed: {}", cbcEx.getMessage());
+            log.debug("Legacy CBC with no prefix also failed {}", cbcEx.getMessage());
         }
 
         throw new RuntimeException(
-                "Decryption failed: unable to decrypt with any supported format. " +
-                "The stored value may be corrupted or encrypted with a different key. " +
+                "Decryption failed, unable to decrypt with any supported format or key. " +
+                "The stored value may be corrupted. " +
                 "Please remove and re-add the Meroshare account.");
     }
 
-    // ─── Private helpers ──────────────────────────────────────────────────────
-
-    private String decryptCBC(String base64Data) {
+    private String decryptCBC(String base64Data, SecretKeySpec key) {
         try {
             byte[] combined = Base64.getDecoder().decode(base64Data);
             if (combined.length <= IV_LENGTH) {
                 throw new IllegalArgumentException(
-                        "Data too short for CBC — only " + combined.length + " bytes (need >" + IV_LENGTH + ")");
+                        "Data too short for CBC only " + combined.length + " bytes need more than " + IV_LENGTH);
             }
             byte[] iv = new byte[IV_LENGTH];
             byte[] ciphertext = new byte[combined.length - IV_LENGTH];
@@ -155,21 +166,21 @@ public class EncryptionUtil {
             System.arraycopy(combined, IV_LENGTH, ciphertext, 0, ciphertext.length);
 
             Cipher cipher = Cipher.getInstance(ALGORITHM);
-            cipher.init(Cipher.DECRYPT_MODE, buildKey(), new IvParameterSpec(iv));
+            cipher.init(Cipher.DECRYPT_MODE, key, new IvParameterSpec(iv));
             return new String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8);
         } catch (Exception e) {
-            throw new RuntimeException("CBC decryption failed: " + e.getMessage(), e);
+            throw new RuntimeException("CBC decryption failed " + e.getMessage(), e);
         }
     }
 
-    private String decryptECB(String base64Data) {
+    private String decryptECB(String base64Data, SecretKeySpec key) {
         try {
             Cipher cipher = Cipher.getInstance(ECB_ALGORITHM);
-            cipher.init(Cipher.DECRYPT_MODE, buildKey());
+            cipher.init(Cipher.DECRYPT_MODE, key);
             byte[] decoded = Base64.getDecoder().decode(base64Data);
             return new String(cipher.doFinal(decoded), StandardCharsets.UTF_8);
         } catch (Exception e) {
-            throw new RuntimeException("ECB decryption failed: " + e.getMessage(), e);
+            throw new RuntimeException("ECB decryption failed " + e.getMessage(), e);
         }
     }
 }

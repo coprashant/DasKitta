@@ -14,6 +14,7 @@ export const requestEmailChangeApi = (newEmail) =>
 export const confirmEmailChangeApi = (newEmail, code) =>
     client.post("/auth/email/confirm-change", { newEmail, code });
 export const getUserDetailsApi = () => client.get("/auth/me");
+export const logoutApi = () => client.post("/auth/logout");
 
 export const deleteAccountApi = (password) =>
     client.delete("/auth/delete-account", { data: { password } });

@@ -9,6 +9,8 @@ import com.meroshare.backend.entity.AppUser;
 import com.meroshare.backend.exception.UnverifiedAccountException;
 import com.meroshare.backend.repository.AppUserRepository;
 import com.meroshare.backend.security.JwtUtil;
+import com.meroshare.backend.security.RefreshTokenService;
+import com.meroshare.backend.security.TokenValidityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -18,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
@@ -31,12 +34,17 @@ public class AuthService {
     private final JwtUtil jwtUtil;
     private final AuthenticationManager authenticationManager;
     private final EmailServiceClient emailServiceClient;
+    private final TokenValidityService tokenValidityService;
+    private final RefreshTokenService refreshTokenService;
 
     private final SecureRandom secureRandom = new SecureRandom();
 
     // hours an unverified account can sit before its username and email are freed
     @Value("${account.unverified-expiry-hours:24}")
     private long unverifiedExpiryHours;
+
+    public record SessionResult(String accessToken, String refreshToken, Duration refreshTtl,
+                                 String username, String email) {}
 
     private String cleanEmail(String email) {
         if (email == null) return null;
@@ -118,7 +126,7 @@ public class AuthService {
         }
     }
 
-    public AuthResponse login(LoginRequest request) {
+    public SessionResult login(LoginRequest request) {
         String sanitizedUsername = cleanInput(request.getUsername());
 
         authenticationManager.authenticate(
@@ -143,8 +151,38 @@ public class AuthService {
                     user.getEmail());
         }
 
-        String token = jwtUtil.generateToken(user.getUsername());
-        return new AuthResponse(token, user.getUsername(), user.getEmail());
+        String accessToken = jwtUtil.generateToken(user.getUsername());
+        RefreshTokenService.Issued refresh = refreshTokenService.issue(user.getUsername(), request.isRememberMe());
+
+        return new SessionResult(accessToken, refresh.rawToken(), refresh.ttl(), user.getUsername(), user.getEmail());
+    }
+
+    /*
+     Exchanges a still valid refresh token for a new access token and a
+     rotated refresh token. Called silently by the frontend when an
+     access token has expired, this is what keeps a user signed in
+     without asking for a password again.
+    */
+    public SessionResult refresh(String rawRefreshToken) {
+        RefreshTokenService.Rotated rotated = refreshTokenService.validateAndRotate(rawRefreshToken);
+        if (rotated == null) {
+            throw new RuntimeException("Session expired, please sign in again");
+        }
+
+        AppUser user = appUserRepository.findByUsername(rotated.username())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        String accessToken = jwtUtil.generateToken(user.getUsername());
+        return new SessionResult(accessToken, rotated.issued().rawToken(), rotated.issued().ttl(),
+                user.getUsername(), user.getEmail());
+    }
+
+    /*
+     Revokes only the refresh token for this device or browser, other
+     signed in devices are not affected.
+    */
+    public void logout(String rawRefreshToken) {
+        refreshTokenService.revoke(rawRefreshToken);
     }
 
     @Transactional
@@ -210,6 +248,10 @@ public class AuthService {
 
         user.setPassword(passwordEncoder.encode(newPassword));
         appUserRepository.save(user);
+
+        // password changed, any token issued before this point is now revoked
+        tokenValidityService.invalidateTokensBefore(user.getUsername());
+        refreshTokenService.revokeAllForUser(user.getUsername());
     }
 
     @Transactional
@@ -304,6 +346,7 @@ public class AuthService {
 
         otpService.clearOtp(user.getEmail());
         appUserRepository.delete(user);
+        refreshTokenService.revokeAllForUser(user.getUsername());
     }
 
     private String buildOtpEmailHtml(String heading, String introText, String otpCode) {

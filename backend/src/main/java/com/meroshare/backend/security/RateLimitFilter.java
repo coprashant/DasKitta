@@ -31,12 +31,19 @@ public class RateLimitFilter extends OncePerRequestFilter {
                            @Value("${ratelimit.resend-otp.max-requests:3}") int resendOtpMax,
                            @Value("${ratelimit.resend-otp.window-seconds:60}") long resendOtpWindowSeconds,
                            @Value("${ratelimit.ipo-apply.max-requests:10}") int ipoApplyMax,
-                           @Value("${ratelimit.ipo-apply.window-seconds:60}") long ipoApplyWindowSeconds) {
+                           @Value("${ratelimit.ipo-apply.window-seconds:60}") long ipoApplyWindowSeconds,
+                           @Value("${ratelimit.otp-verify.max-requests:8}") int otpVerifyMax,
+                           @Value("${ratelimit.otp-verify.window-seconds:300}") long otpVerifyWindowSeconds,
+                           @Value("${ratelimit.refresh.max-requests:20}") int refreshMax,
+                           @Value("${ratelimit.refresh.window-seconds:300}") long refreshWindowSeconds) {
         this.redisTemplate = redisTemplate;
         this.rules = Map.of(
                 "/api/auth/login", new LimitRule(loginMax, Duration.ofSeconds(loginWindowSeconds)),
                 "/api/auth/resend-otp", new LimitRule(resendOtpMax, Duration.ofSeconds(resendOtpWindowSeconds)),
-                "/api/ipo/apply", new LimitRule(ipoApplyMax, Duration.ofSeconds(ipoApplyWindowSeconds))
+                "/api/ipo/apply", new LimitRule(ipoApplyMax, Duration.ofSeconds(ipoApplyWindowSeconds)),
+                "/api/auth/verify-otp", new LimitRule(otpVerifyMax, Duration.ofSeconds(otpVerifyWindowSeconds)),
+                "/api/auth/email/confirm-change", new LimitRule(otpVerifyMax, Duration.ofSeconds(otpVerifyWindowSeconds)),
+                "/api/auth/refresh", new LimitRule(refreshMax, Duration.ofSeconds(refreshWindowSeconds))
         );
     }
 

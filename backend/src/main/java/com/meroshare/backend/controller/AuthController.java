@@ -11,25 +11,56 @@ import com.meroshare.backend.dto.UpdatePasswordRequest;
 import com.meroshare.backend.dto.UpdateUsernameRequest;
 import com.meroshare.backend.dto.UserDetailsResponse;
 import com.meroshare.backend.service.AuthService;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.Duration;
+
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
     private final AuthService authService;
+
+    private static final String REFRESH_COOKIE_NAME = "refreshToken";
+
+    @Value("${app.cookie.secure:true}")
+    private boolean cookieSecure;
+
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
         return ResponseEntity.ok(authService.register(request));
     }
+
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
-        return ResponseEntity.ok(authService.login(request));
+        AuthService.SessionResult result = authService.login(request);
+        ResponseCookie cookie = buildRefreshCookie(result.refreshToken(), result.refreshTtl());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .body(new AuthResponse(result.accessToken(), result.username(), result.email()));
     }
+
+    // Exchanges the refresh cookie for a new access token, called silently on token expiry
+    @PostMapping("/refresh")
+    public ResponseEntity<AuthResponse> refresh(HttpServletRequest request) {
+        String rawRefreshToken = readCookie(request, REFRESH_COOKIE_NAME);
+        AuthService.SessionResult result = authService.refresh(rawRefreshToken);
+        ResponseCookie cookie = buildRefreshCookie(result.refreshToken(), result.refreshTtl());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .body(new AuthResponse(result.accessToken(), result.username(), result.email()));
+    }
+
     @PostMapping("/verify-otp")
     public ResponseEntity<String> verifyOtp(@Valid @RequestBody OtpRequest request) {
         authService.verifyOtp(request.getEmail(), request.getCode());
@@ -72,6 +103,16 @@ public class AuthController {
         authService.confirmEmailChange(userDetails.getUsername(), request.getNewEmail(), request.getCode());
         return ResponseEntity.ok("Email updated successfully");
     }
+    // Revokes this device refresh token and clears the cookie, other devices stay signed in
+    @PostMapping("/logout")
+    public ResponseEntity<String> logout(HttpServletRequest request) {
+        String rawRefreshToken = readCookie(request, REFRESH_COOKIE_NAME);
+        authService.logout(rawRefreshToken);
+        ResponseCookie cleared = buildRefreshCookie("", Duration.ZERO);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, cleared.toString())
+                .body("Logged out successfully");
+    }
     // Fetches details for the logged in user
     @GetMapping("/me")
     public ResponseEntity<UserDetailsResponse> getUserDetails(@AuthenticationPrincipal UserDetails userDetails) {
@@ -84,5 +125,28 @@ public class AuthController {
             @AuthenticationPrincipal UserDetails userDetails) {
         authService.deleteAccount(userDetails.getUsername(), request.getPassword());
         return ResponseEntity.ok("Account deleted successfully");
+    }
+
+    private ResponseCookie buildRefreshCookie(String value, Duration ttl) {
+        return ResponseCookie.from(REFRESH_COOKIE_NAME, value)
+                .httpOnly(true)
+                .secure(cookieSecure)
+                .sameSite(cookieSecure ? "None" : "Lax")
+                .path("/api/auth")
+                .maxAge(ttl)
+                .build();
+    }
+
+    private String readCookie(HttpServletRequest request, String name) {
+        Cookie[] cookies = request.getCookies();
+        if (cookies == null) {
+            return null;
+        }
+        for (Cookie cookie : cookies) {
+            if (name.equals(cookie.getName())) {
+                return cookie.getValue();
+            }
+        }
+        return null;
     }
 }

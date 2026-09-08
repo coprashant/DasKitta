@@ -154,9 +154,11 @@ public class MeroshareAccountService {
             throw new RuntimeException("Unauthorized");
         }
 
-        String plainPassword = encryptionUtil.decrypt(account.getPassword());
+        EncryptionUtil.DecryptResult decrypted = encryptionUtil.decryptDetailed(account.getPassword());
         String token = meroshareApiService.login(
-                account.getDpId(), account.getUsername(), plainPassword);
+                account.getDpId(), account.getUsername(), decrypted.plainText());
+
+        reencryptIfLegacy(account, decrypted);
 
         return meroshareApiService.getPortfolio(
                 token,
@@ -164,6 +166,19 @@ public class MeroshareAccountService {
                 account.getDemat(),
                 account.getDpId(),
                 account.getUsername());
+    }
+
+    /*
+     A password that just proved correct against a login is safe to
+     reencrypt under the primary key, this migrates old rows away from
+     the legacy key over time as accounts are used, no bulk job needed.
+    */
+    private void reencryptIfLegacy(MeroshareAccount account, EncryptionUtil.DecryptResult decrypted) {
+        if (decrypted.legacyKey()) {
+            account.setPassword(encryptionUtil.encrypt(decrypted.plainText()));
+            accountRepository.save(account);
+            log.info("MIGRATE reencrypted legacy password for account {}", account.getId());
+        }
     }
 
     private MeroshareAccountResponse toResponse(MeroshareAccount account) {
@@ -213,8 +228,10 @@ public class MeroshareAccountService {
                 .liveDataAvailable(false);
 
         try {
-            String plainPassword = encryptionUtil.decrypt(account.getPassword());
-            String token = meroshareApiService.login(account.getDpId(), account.getUsername(), plainPassword);
+            EncryptionUtil.DecryptResult decrypted = encryptionUtil.decryptDetailed(account.getPassword());
+            String token = meroshareApiService.login(account.getDpId(), account.getUsername(), decrypted.plainText());
+
+            reencryptIfLegacy(account, decrypted);
 
             MeroshareApiService.AccountDetails ownDetail = meroshareApiService.fetchAccountDetails(token);
             builder.fullName(ownDetail.getFullName())

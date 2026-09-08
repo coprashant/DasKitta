@@ -47,7 +47,9 @@ public class SecurityConfig {
                                 "/api/auth/login",
                                 "/api/auth/register",
                                 "/api/auth/resend-otp",
-                                "/api/auth/verify-otp"
+                                "/api/auth/verify-otp",
+                                "/api/auth/refresh",
+                                "/api/auth/logout"
                         ).permitAll()
 
                         .requestMatchers("/api/nepse/**").permitAll()

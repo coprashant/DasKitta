@@ -24,6 +24,7 @@ const Auth = () => {
     const [loading, setLoading] = useState(false);
     const [resending, setResending] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [rememberMe, setRememberMe] = useState(false);
     const [errorMessage, setErrorMessage] = useState("");
     const [timer, setTimer] = useState(0);
 
@@ -111,7 +112,7 @@ const Auth = () => {
 
         try {
             if (isLogin) {
-                await login({ username: form.username, password: form.password });
+                await login({ username: form.username, password: form.password, rememberMe });
                 handleClose();
             } else {
                 await register(form);
@@ -303,6 +304,20 @@ const Auth = () => {
                                 </button>
                             </div>
                         </div>
+
+                        {isLogin && (
+                            <div className="form-group form-group-inline">
+                                <label className="checkbox-label" htmlFor="auth-remember-me">
+                                    <input
+                                        id="auth-remember-me"
+                                        type="checkbox"
+                                        checked={rememberMe}
+                                        onChange={(e) => setRememberMe(e.target.checked)}
+                                    />
+                                    Remember me
+                                </label>
+                            </div>
+                        )}
 
                         <button
                             type="submit"

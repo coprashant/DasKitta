@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { loginApi, registerApi, deleteAccountApi } from "../api/auth";
+import { loginApi, registerApi, deleteAccountApi, logoutApi } from "../api/auth";
 import toast from "react-hot-toast";
 const AuthContext = createContext(null);
 const readStoredUser = () => {
@@ -66,6 +66,8 @@ export const AuthProvider = ({ children }) => {
     }
   };
   const logout = useCallback(() => {
+    // best effort, revoke the token server side too, session clears either way
+    logoutApi().catch(() => {});
     clearSession();
     if (onLogoutRef.current) onLogoutRef.current();
     toast.success("Signed out");

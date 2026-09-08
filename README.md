@@ -199,7 +199,9 @@ export DB_USERNAME='postgres'
 export DB_PASSWORD='your_password'
 
 export APP_JWT_SECRET='your_strong_secret_key'
-export APP_JWT_EXPIRATION_MS='2592000000'
+export APP_JWT_EXPIRATION_MS='3600000'
+export APP_ENCRYPTION_SECRET='a_different_strong_secret_key'
+export COOKIE_SECURE='true'
 export CORS_ALLOWED_ORIGINS='http://localhost:5173'
 
 export MEROSHARE_BASE_URL='https://webbackend.cdsc.com.np/api'
@@ -272,6 +274,7 @@ docker run --rm -p 8080:8080 \
   -e DB_USERNAME='postgres' \
   -e DB_PASSWORD='your_password' \
   -e APP_JWT_SECRET='your_secret' \
+  -e APP_ENCRYPTION_SECRET='a_different_secret' \
   daskitta-backend:latest
 ```
 
@@ -279,8 +282,11 @@ docker run --rm -p 8080:8080 \
 
 ## Security Considerations
 
-- **Authentication:** JWT-based with configurable expiration
-- **Credential Encryption:** User account passwords and PINs are encrypted using AES before storage
+- **Authentication:** short lived access token (default 1 hour) plus a rotating refresh token in an httpOnly cookie, so a user stays signed in without repeated logins, tokens can be revoked server side on logout or password change
+- **Remember Me:** checking it at login gives a 60 day refresh token, leaving it unchecked gives a 24 hour one, either way the access token itself always expires in about an hour and is silently renewed
+- **COOKIE_SECURE:** set to true in production so the refresh cookie is Secure and SameSite=None for a cross origin frontend, set to false only for local http development
+- **Credential Encryption:** User account passwords and PINs are encrypted using AES before storage, with its own secret separate from the JWT secret
+- **APP_ENCRYPTION_SECRET must differ from APP_JWT_SECRET.** Old rows encrypted before this secret existed are still readable through a legacy key fallback and get silently reencrypted under the new secret the next time that account logs in or is used, no manual migration or user action is needed
 - **Protected Routes:** Frontend route guards and API interceptors enforce authorization
 - **CORS:** Configured to accept requests from specified origins only
 - **Environment Variables:** Sensitive values (secrets, API keys) must be provided via environment variables
