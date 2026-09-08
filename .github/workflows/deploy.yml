@@ -2,7 +2,7 @@ name: Build & Deploy Backend to Render
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ daskitta-main ]
 
 # Grant permissions to write packages to GHCR using built-in GITHUB_TOKEN
 permissions:
@@ -28,7 +28,7 @@ jobs:
 
       # Build application JAR file
       - name: Build JAR with Maven
-        run: ./mvnw package -DskipTests -Dmaven.javadoc.skip=true
+        run: mvn package -DskipTests -Dmaven.javadoc.skip=true
 
       # Log in to GitHub Container Registry (ghcr.io)
       - name: Log in to GHCR
