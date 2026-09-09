@@ -67,7 +67,8 @@ public class IpoController {
 
         String username = userDetails.getUsername();
 
-        Thread worker = new Thread(() -> {
+        // virtual thread instead of a raw platform thread per stream
+        Thread.ofVirtual().name("ipo-result-stream-" + username).start(() -> {
             try {
                 ipoService.checkResultsStream(shareId, username, result -> {
                     try {
@@ -83,8 +84,6 @@ public class IpoController {
                 emitter.completeWithError(e);
             }
         });
-        worker.setName("ipo result stream " + username);
-        worker.start();
 
         return emitter;
     }

@@ -1,5 +1,6 @@
 package com.meroshare.backend.security;
 
+import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -49,19 +50,22 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         String token = authHeader.substring(7);
 
+        // parse once, reused below for username and issued at
+        Claims claims = jwtUtil.parseClaimsIfValid(token);
+
         // Invalid / expired token — clear any stale auth and continue.
         // The security config will reject the request if the endpoint requires auth.
-        if (!jwtUtil.validateToken(token)) {
+        if (claims == null) {
             log.warn("[JWT] Invalid or expired token from {}", request.getRequestURI());
             filterChain.doFilter(request, response);
             return;
         }
 
-        String username = jwtUtil.extractUsername(token);
+        String username = claims.getSubject();
 
         // Reject tokens issued before the user's last logout or password change
         if (username != null) {
-            long issuedAtMillis = jwtUtil.extractIssuedAt(token).getTime();
+            long issuedAtMillis = claims.getIssuedAt().getTime();
             if (!tokenValidityService.isIssuedAtValid(username, issuedAtMillis)) {
                 log.warn("[JWT] Revoked token used for {}", username);
                 filterChain.doFilter(request, response);

@@ -7,6 +7,7 @@ import com.meroshare.backend.entity.AppUser;
 import com.meroshare.backend.entity.IpoApplication;
 import com.meroshare.backend.entity.MeroshareAccount;
 import com.meroshare.backend.entity.CdscResultCache;
+import com.meroshare.backend.exception.FastRuntimeException;
 import com.meroshare.backend.repository.AppUserRepository;
 import com.meroshare.backend.repository.IpoApplicationRepository;
 import com.meroshare.backend.repository.MeroshareAccountRepository;
@@ -46,13 +47,13 @@ public class IpoService {
 
     private AppUser getAppUser(String username) {
         return appUserRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User not found: " + username));
+                .orElseThrow(() -> new FastRuntimeException("User not found: " + username));
     }
 
     private MeroshareAccount getFirstAccount(String username) {
         AppUser appUser = getAppUser(username);
         List<MeroshareAccount> accounts = accountRepository.findByAppUserId(appUser.getId());
-        if (accounts.isEmpty()) throw new RuntimeException("Add at least one Meroshare account first");
+        if (accounts.isEmpty()) throw new FastRuntimeException("Add at least one Meroshare account first");
         return accounts.get(0);
     }
 
@@ -73,7 +74,7 @@ public class IpoService {
     */
     private String decryptPasswordAndMigrate(MeroshareAccount account) {
         if (account.getPassword() == null || account.getPassword().isBlank()) {
-            throw new RuntimeException("No encrypted password stored for account: " + account.getUsername());
+            throw new FastRuntimeException("No encrypted password stored for account: " + account.getUsername());
         }
         try {
             EncryptionUtil.DecryptResult decrypted = encryptionUtil.decryptDetailed(account.getPassword());
@@ -85,7 +86,7 @@ public class IpoService {
             return decrypted.plainText();
         } catch (Exception e) {
             log.error("[DECRYPT] Failed for password of '{}': {}", account.getUsername(), e.getMessage());
-            throw new RuntimeException(
+            throw new FastRuntimeException(
                     "Could not decrypt password for account '" + account.getUsername() +
                             "'. Please remove and re-add this Meroshare account.", e);
         }
@@ -122,16 +123,16 @@ public class IpoService {
         List<IpoApplyResult> results = new ArrayList<>();
 
         if (request.getShareId() == null || request.getShareId().isBlank()) {
-            throw new RuntimeException("Share ID must not be blank");
+            throw new FastRuntimeException("Share ID must not be blank");
         }
         try {
             Integer.parseInt(request.getShareId());
         } catch (NumberFormatException e) {
-            throw new RuntimeException("Share ID is not a valid number: " + request.getShareId());
+            throw new FastRuntimeException("Share ID is not a valid number: " + request.getShareId());
         }
 
         if (request.getCompanyName() == null || request.getCompanyName().isBlank()) {
-            throw new RuntimeException("Company name must not be blank");
+            throw new FastRuntimeException("Company name must not be blank");
         }
 
         for (Long accountId : request.getAccountIds()) {
@@ -331,25 +332,25 @@ public class IpoService {
 
     private void validateApplyFields(MeroshareAccount account) {
         if (account.getBoid() == null || account.getBoid().isBlank())
-            throw new RuntimeException("BOID not set for account: " + account.getUsername());
+            throw new FastRuntimeException("BOID not set for account: " + account.getUsername());
         if (account.getDemat() == null || account.getDemat().isBlank())
-            throw new RuntimeException("Demat not set for account: " + account.getUsername());
+            throw new FastRuntimeException("Demat not set for account: " + account.getUsername());
         if (account.getAccountNumber() == null || account.getAccountNumber().isBlank())
-            throw new RuntimeException("Account number not set for account: " + account.getUsername());
+            throw new FastRuntimeException("Account number not set for account: " + account.getUsername());
         if (account.getCustomerId() == null || account.getCustomerId().isBlank())
-            throw new RuntimeException("Customer ID not set for account: " + account.getUsername()
+            throw new FastRuntimeException("Customer ID not set for account: " + account.getUsername()
                     + ". Please re-add the account.");
         if (account.getAccountBranchId() == null || account.getAccountBranchId().isBlank())
-            throw new RuntimeException("Account branch ID not set for account: " + account.getUsername());
+            throw new FastRuntimeException("Account branch ID not set for account: " + account.getUsername());
         if (account.getBankId() == null || account.getBankId().isBlank())
-            throw new RuntimeException("Bank ID not set for account: " + account.getUsername());
+            throw new FastRuntimeException("Bank ID not set for account: " + account.getUsername());
     }
 
     // streams one result at a time instead of collecting the whole list first
     public void checkResultsStream(String shareId, String username, Consumer<IpoApplicationResponse> onResult) {
         AppUser appUser = getAppUser(username);
         List<MeroshareAccount> accounts = accountRepository.findByAppUserId(appUser.getId());
-        if (accounts.isEmpty()) throw new RuntimeException("Add at least one Meroshare account first");
+        if (accounts.isEmpty()) throw new FastRuntimeException("Add at least one Meroshare account first");
 
         for (int i = 0; i < accounts.size(); i++) {
             IpoApplicationResponse res = checkResultForAccount(accounts.get(i), shareId);
@@ -487,10 +488,10 @@ public class IpoService {
         AppUser appUser = getAppUser(username);
 
         MeroshareAccount account = accountRepository.findById(accountId)
-                .orElseThrow(() -> new RuntimeException("Account not found"));
+                .orElseThrow(() -> new FastRuntimeException("Account not found"));
 
         if (!account.getAppUser().getId().equals(appUser.getId())) {
-            throw new RuntimeException("Unauthorized");
+            throw new FastRuntimeException("Unauthorized");
         }
 
         String token = loginAccount(account);

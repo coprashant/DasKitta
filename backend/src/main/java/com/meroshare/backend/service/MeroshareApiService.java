@@ -3,6 +3,7 @@ package com.meroshare.backend.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.meroshare.backend.dto.PortfolioResponse;
+import com.meroshare.backend.exception.FastRuntimeException;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -75,51 +76,37 @@ public class MeroshareApiService {
                 .codecs(c -> c.defaultCodecs().maxInMemorySize(8 * 1024 * 1024));
     }
 
-    private WebClient buildClient(String token) {
-        WebClient.Builder builder = WebClient.builder().baseUrl(MERO_SHARE_BASE);
-        baseHeaders(builder);
+    // clients built once and reused, not rebuilt on every call
+    private final WebClient meroShareClient = baseHeaders(WebClient.builder().baseUrl(MERO_SHARE_BASE)).build();
+    private final WebClient portfolioClient = baseHeaders(WebClient.builder().baseUrl(PORTFOLIO_BASE)).build();
+    private final WebClient resultClient = WebClient.builder()
+            .baseUrl(PUBLIC_RESULT_URL)
+            .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+            .defaultHeader(HttpHeaders.ACCEPT,       "application/json, text/plain, */*")
+            .defaultHeader("Accept-Encoding",        "gzip, deflate, br")
+            .defaultHeader("Accept-Language",        "en-US,en;q=0.9")
+            .defaultHeader("Cache-Control",          "no-cache")
+            .defaultHeader("Connection",             "keep-alive")
+            .defaultHeader("Origin",                 PUBLIC_RESULT_URL)
+            .defaultHeader("Referer",                PUBLIC_RESULT_URL + "/")
+            .defaultHeader("Sec-Fetch-Dest",         "empty")
+            .defaultHeader("Sec-Fetch-Mode",         "cors")
+            .defaultHeader("Sec-Fetch-Site",         "same-origin")
+            .defaultHeader("User-Agent",             USER_AGENT)
+            .codecs(c -> c.defaultCodecs().maxInMemorySize(8 * 1024 * 1024))
+            .build();
+
+    // sets auth header on a single request instead of baking it into a whole client
+    private void applyAuth(HttpHeaders headers, String token) {
         if (token != null && !token.isBlank()) {
-            builder.defaultHeader("Authorization", token);
+            headers.set("Authorization", token);
         }
-        return builder.build();
-    }
-
-    private WebClient buildClient() {
-        return buildClient(null);
-    }
-
-    private WebClient buildPortfolioClient(String token) {
-        WebClient.Builder builder = WebClient.builder().baseUrl(PORTFOLIO_BASE);
-        baseHeaders(builder);
-        if (token != null && !token.isBlank()) {
-            builder.defaultHeader("Authorization", token);
-        }
-        return builder.build();
-    }
-
-    private WebClient buildResultClient() {
-        WebClient.Builder builder = WebClient.builder()
-                .baseUrl(PUBLIC_RESULT_URL)
-                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                .defaultHeader(HttpHeaders.ACCEPT,       "application/json, text/plain, */*")
-                .defaultHeader("Accept-Encoding",        "gzip, deflate, br")
-                .defaultHeader("Accept-Language",        "en-US,en;q=0.9")
-                .defaultHeader("Cache-Control",          "no-cache")
-                .defaultHeader("Connection",             "keep-alive")
-                .defaultHeader("Origin",                 PUBLIC_RESULT_URL)
-                .defaultHeader("Referer",                PUBLIC_RESULT_URL + "/")
-                .defaultHeader("Sec-Fetch-Dest",         "empty")
-                .defaultHeader("Sec-Fetch-Mode",         "cors")
-                .defaultHeader("Sec-Fetch-Site",         "same-origin")
-                .defaultHeader("User-Agent",             USER_AGENT)
-                .codecs(c -> c.defaultCodecs().maxInMemorySize(8 * 1024 * 1024));
-        return builder.build();
     }
 
     public List<Map> getDpList() {
         String url = MERO_SHARE_BASE + "/capital/";
         try {
-            String raw = buildClient().get().uri("/capital/")
+            String raw = meroShareClient.get().uri("/capital/")
                     .retrieve().bodyToMono(String.class).block();
             List<Map> result = parseJsonArray(raw, "DP_LIST");
             if (!result.isEmpty()) return result;
@@ -190,11 +177,11 @@ public class MeroshareApiService {
         try {
             clientId = Integer.parseInt(dpId.trim());
         } catch (NumberFormatException e) {
-            throw new RuntimeException("Invalid DP ID format " + dpId);
+            throw new FastRuntimeException("Invalid DP ID format " + dpId);
         }
 
         if (password == null || password.isBlank()) {
-            throw new RuntimeException("Password is empty for user " + username);
+            throw new FastRuntimeException("Password is empty for user " + username);
         }
 
         Map<String, Object> body = Map.of(
@@ -205,7 +192,7 @@ public class MeroshareApiService {
         log.info("[LOGIN] Attempting user {} dpId {}", username, dpId);
 
         try {
-            ResponseEntity<String> response = buildClient().post()
+            ResponseEntity<String> response = meroShareClient.post()
                     .uri("/auth/")
                     .bodyValue(body)
                     .retrieve()
@@ -225,7 +212,7 @@ public class MeroshareApiService {
             String errBody = e.getResponseBodyAsString();
             log.error("[LOGIN] HTTP {} {}", e.getStatusCode(), errBody);
             if (e.getStatusCode().value() == 401 || e.getStatusCode().value() == 403) {
-                throw new RuntimeException("Invalid credentials for " + username + ". " + extractMessage(errBody));
+                throw new FastRuntimeException("Invalid credentials for " + username + ". " + extractMessage(errBody));
             }
             log.warn("[LOGIN] WebClient HTTP error trying curl");
         } catch (RuntimeException re) {
@@ -251,7 +238,7 @@ public class MeroshareApiService {
             }
         }
 
-        throw new RuntimeException(
+        throw new FastRuntimeException(
                 "Login failed for user '" + username + "'. CDSC API may be unreachable. Please try again later.");
     }
 
@@ -267,7 +254,7 @@ public class MeroshareApiService {
                 String msg = n.has("message")
                         ? n.get("message").asText("Account has expired issues")
                         : "Account has expired issues";
-                throw new RuntimeException("Meroshare account issue for '" + username + "' " + msg);
+                throw new FastRuntimeException("Meroshare account issue for '" + username + "' " + msg);
             }
         } catch (RuntimeException re) {
             throw re;
@@ -279,7 +266,8 @@ public class MeroshareApiService {
         String raw = null;
 
         try {
-            raw = buildClient(token).get().uri("/ownDetail/")
+            raw = meroShareClient.get().uri("/ownDetail/")
+                    .headers(h -> applyAuth(h, token))
                     .retrieve().bodyToMono(String.class).block();
         } catch (Exception e) {
             log.warn("[OWN_DETAIL] WebClient failed {}", e.getMessage());
@@ -290,7 +278,7 @@ public class MeroshareApiService {
         }
 
         if (isHtml(raw) || raw == null) {
-            throw new RuntimeException("Could not fetch account details from CDSC. Please try again later.");
+            throw new FastRuntimeException("Could not fetch account details from CDSC. Please try again later.");
         }
 
         try {
@@ -306,7 +294,7 @@ public class MeroshareApiService {
                     d.getFullName(), d.getBoid(), d.getDematExpiryDate(), d.getAccountExpiryDate(), d.getPasswordExpiryDate());
             return d;
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse account details " + e.getMessage(), e);
+            throw new FastRuntimeException("Failed to parse account details " + e.getMessage(), e);
         }
     }
 
@@ -315,7 +303,8 @@ public class MeroshareApiService {
         String raw = null;
 
         try {
-            raw = buildClient(token).get().uri("/bank/" + bankListId)
+            raw = meroShareClient.get().uri("/bank/" + bankListId)
+                    .headers(h -> applyAuth(h, token))
                     .retrieve().bodyToMono(String.class).block();
         } catch (Exception e) {
             log.warn("[BANK_DETAIL] WebClient failed {}", e.getMessage());
@@ -369,7 +358,8 @@ public class MeroshareApiService {
     public List<Map> getUserBanks(String token) {
         String url = MERO_SHARE_BASE + "/bank/";
         try {
-            String raw = buildClient(token).get().uri("/bank/")
+            String raw = meroShareClient.get().uri("/bank/")
+                    .headers(h -> applyAuth(h, token))
                     .retrieve().bodyToMono(String.class).block();
             List<Map> result = parseJsonArray(raw, "USER_BANKS");
             if (!result.isEmpty()) return result;
@@ -386,7 +376,8 @@ public class MeroshareApiService {
         Map<String, Object> payload = buildOpenIpoPayload();
 
         try {
-            String raw = buildClient(token).post().uri("/companyShare/applicableIssue/")
+            String raw = meroShareClient.post().uri("/companyShare/applicableIssue/")
+                    .headers(h -> applyAuth(h, token))
                     .bodyValue(payload).retrieve().bodyToMono(String.class).block();
             List<Map> result = parseJsonResponse(raw, "OPEN_IPOS");
             if (!result.isEmpty()) return result;
@@ -421,7 +412,8 @@ public class MeroshareApiService {
         Map<String, Object> payload = buildAppHistoryPayload();
 
         try {
-            String raw = buildClient(token).post().uri("/applicantForm/active/search/")
+            String raw = meroShareClient.post().uri("/applicantForm/active/search/")
+                    .headers(h -> applyAuth(h, token))
                     .bodyValue(payload).retrieve().bodyToMono(String.class).block();
             List<Map> result = parseJsonResponse(raw, "APP_HISTORY");
             if (!result.isEmpty()) return result;
@@ -472,8 +464,9 @@ public class MeroshareApiService {
         String applyUrl = MERO_SHARE_BASE + "/applicantForm/share/apply/";
 
         try {
-            String raw = buildClient(token).post()
+            String raw = meroShareClient.post()
                     .uri("/applicantForm/share/apply/")
+                    .headers(h -> applyAuth(h, token))
                     .bodyValue(body)
                     .retrieve()
                     .bodyToMono(String.class)
@@ -488,7 +481,7 @@ public class MeroshareApiService {
             log.warn("[APPLY_IPO] WebClient HTTP {} {}", status, errBody);
 
             if (status >= 400 && status < 500) {
-                throw new RuntimeException(extractMessage(errBody));
+                throw new FastRuntimeException(extractMessage(errBody));
             }
 
             log.warn("[APPLY_IPO] Server error {}, trying curl fallback", status);
@@ -502,7 +495,7 @@ public class MeroshareApiService {
             return extractApplyMessage(curlRaw);
         }
 
-        throw new RuntimeException("IPO application failed. Unable to reach CDSC API. Please try again later.");
+        throw new FastRuntimeException("IPO application failed. Unable to reach CDSC API. Please try again later.");
     }
 
     private String extractApplyMessage(String raw) {
@@ -512,7 +505,7 @@ public class MeroshareApiService {
             if (n.has("status")) {
                 String status = n.get("status").asText("");
                 if (!"CREATED".equalsIgnoreCase(status) && !status.isBlank()) {
-                    throw new RuntimeException(extractMessage(raw));
+                    throw new FastRuntimeException(extractMessage(raw));
                 }
             }
             if (n.has("message")) {
@@ -529,19 +522,20 @@ public class MeroshareApiService {
         String url = MERO_SHARE_BASE + "/applicantForm/report/detail/" + applicantFormId;
         log.info("[RESULT_DETAIL] applicantFormId {}", applicantFormId);
 
-        String curlRaw = curlClient.get(url, token);
-        log.info("[RESULT_DETAIL] Curl raw {}", snippet300(curlRaw));
-        if (!isHtml(curlRaw) && curlRaw != null) return parseDetailResult(curlRaw);
-
         try {
-            String raw = buildClient(token).get()
+            String raw = meroShareClient.get()
                     .uri("/applicantForm/report/detail/" + applicantFormId)
+                    .headers(h -> applyAuth(h, token))
                     .retrieve().bodyToMono(String.class).block();
             log.info("[RESULT_DETAIL] WebClient raw {}", snippet300(raw));
             if (!isHtml(raw) && raw != null) return parseDetailResult(raw);
         } catch (Exception e) {
             log.warn("[RESULT_DETAIL] WebClient failed {}", e.getMessage());
         }
+
+        String curlRaw = curlClient.get(url, token);
+        log.info("[RESULT_DETAIL] Curl raw {}", snippet300(curlRaw));
+        if (!isHtml(curlRaw) && curlRaw != null) return parseDetailResult(curlRaw);
 
         ResultInfo result = new ResultInfo();
         result.setStatus("UNKNOWN");
@@ -569,7 +563,7 @@ public class MeroshareApiService {
         String url = PUBLIC_RESULT_URL + "/result/companyShares/fileUploaded";
 
         try {
-            String raw = buildResultClient().get()
+            String raw = resultClient.get()
                     .uri("/result/companyShares/fileUploaded")
                     .retrieve().bodyToMono(String.class).block();
             log.info("[SHARE_LIST] WebClient raw first 300 {}", snippet300(raw));
@@ -644,9 +638,10 @@ public class MeroshareApiService {
         String raw = null;
 
         try {
-            raw = buildPortfolioClient(token)
+            raw = portfolioClient
                     .post()
                     .uri("/myPortfolio/")
+                    .headers(h -> applyAuth(h, token))
                     .bodyValue(payload)
                     .retrieve()
                     .bodyToMono(String.class)
@@ -664,7 +659,7 @@ public class MeroshareApiService {
 
         if (isHtml(raw) || raw == null) {
             log.error("[PORTFOLIO] Both returned HTML or null {}", snippet300(raw));
-            throw new RuntimeException("Could not fetch portfolio. Please try again later.");
+            throw new FastRuntimeException("Could not fetch portfolio. Please try again later.");
         }
 
         return parsePortfolioResponse(raw);
@@ -708,7 +703,7 @@ public class MeroshareApiService {
                     .build();
 
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse portfolio response " + e.getMessage(), e);
+            throw new FastRuntimeException("Failed to parse portfolio response " + e.getMessage(), e);
         }
     }
 
@@ -782,7 +777,7 @@ public class MeroshareApiService {
         try {
             return objectMapper.writeValueAsString(obj);
         } catch (Exception e) {
-            throw new RuntimeException("JSON serialization failed", e);
+            throw new FastRuntimeException("JSON serialization failed", e);
         }
     }
 

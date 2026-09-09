@@ -1,5 +1,6 @@
 package com.meroshare.backend.security;
 
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -43,6 +44,16 @@ public class EncryptionUtil {
 
     public record DecryptResult(String plainText, boolean legacyKey) {}
 
+    // keys derived once at startup, not re hashed on every encrypt or decrypt call
+    private SecretKeySpec primaryKey;
+    private SecretKeySpec legacyKey;
+
+    @PostConstruct
+    private void init() {
+        primaryKey = deriveKey(primarySecret);
+        legacyKey = deriveKey(legacySecret);
+    }
+
     private SecretKeySpec deriveKey(String secret) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -51,14 +62,6 @@ public class EncryptionUtil {
         } catch (Exception e) {
             throw new IllegalStateException("Failed to derive AES key " + e.getMessage(), e);
         }
-    }
-
-    private SecretKeySpec primaryKey() {
-        return deriveKey(primarySecret);
-    }
-
-    private SecretKeySpec legacyKey() {
-        return deriveKey(legacySecret);
     }
 
     public String encrypt(String plainText) {
@@ -70,7 +73,7 @@ public class EncryptionUtil {
             new SecureRandom().nextBytes(iv);
 
             Cipher cipher = Cipher.getInstance(ALGORITHM);
-            cipher.init(Cipher.ENCRYPT_MODE, primaryKey(), new IvParameterSpec(iv));
+            cipher.init(Cipher.ENCRYPT_MODE, primaryKey, new IvParameterSpec(iv));
             byte[] encrypted = cipher.doFinal(plainText.getBytes(StandardCharsets.UTF_8));
 
             byte[] combined = new byte[IV_LENGTH + encrypted.length];
@@ -104,7 +107,7 @@ public class EncryptionUtil {
             String base64Part = encryptedText.substring(CBC_PREFIX.length());
 
             try {
-                String result = decryptCBC(base64Part, primaryKey());
+                String result = decryptCBC(base64Part, primaryKey);
                 if (!result.isEmpty()) {
                     return new DecryptResult(result, false);
                 }
@@ -113,7 +116,7 @@ public class EncryptionUtil {
             }
 
             try {
-                String result = decryptCBC(base64Part, legacyKey());
+                String result = decryptCBC(base64Part, legacyKey);
                 if (!result.isEmpty()) {
                     log.debug("Decrypted with legacy key, value should be reencrypted");
                     return new DecryptResult(result, true);
@@ -124,11 +127,11 @@ public class EncryptionUtil {
 
             throw new RuntimeException(
                     "Decryption produced an empty string, the stored value may be corrupted. " +
-                    "Please re-add the Meroshare account.");
+                            "Please re-add the Meroshare account.");
         }
 
         try {
-            String result = decryptECB(encryptedText, legacyKey());
+            String result = decryptECB(encryptedText, legacyKey);
             if (!result.isEmpty()) {
                 log.debug("Decrypted using legacy ECB format, value should be reencrypted");
                 return new DecryptResult(result, true);
@@ -138,7 +141,7 @@ public class EncryptionUtil {
         }
 
         try {
-            String result = decryptCBC(encryptedText, legacyKey());
+            String result = decryptCBC(encryptedText, legacyKey);
             if (!result.isEmpty()) {
                 log.debug("Decrypted using legacy CBC with no prefix");
                 return new DecryptResult(result, true);
@@ -149,8 +152,8 @@ public class EncryptionUtil {
 
         throw new RuntimeException(
                 "Decryption failed, unable to decrypt with any supported format or key. " +
-                "The stored value may be corrupted. " +
-                "Please remove and re-add the Meroshare account.");
+                        "The stored value may be corrupted. " +
+                        "Please remove and re-add the Meroshare account.");
     }
 
     private String decryptCBC(String base64Data, SecretKeySpec key) {

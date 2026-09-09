@@ -7,6 +7,8 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -42,10 +44,15 @@ public class CompanySectorSnapshotService {
     @PostConstruct
     public void init() {
         loadSnapshotFromDisk();
-        runBackgroundRefresh("startup");
     }
 
-    // Monthly refresh first day of month at 03:00
+    @EventListener(ApplicationReadyEvent.class)
+    public void onApplicationReady() {
+        if (snapshotRef.get().totalScrips() == 0) {
+            runBackgroundRefresh("startup");
+        }
+    }
+
     @Scheduled(cron = "${nepse.company-sectors.refresh-cron:0 0 3 1 * *}")
     public void refreshMonthlySnapshot() {
         runBackgroundRefresh("scheduled");
@@ -57,27 +64,27 @@ public class CompanySectorSnapshotService {
     }
 
     public Mono<Map<String, Object>> refreshSnapshotNow() {
-        return refreshSnapshot("manual").map(snapshot -> snapshot.toPayload());
+        return refreshSnapshot("manual").map(SectorSnapshot::toPayload);
     }
 
-        private void runBackgroundRefresh(String trigger) {
+    private void runBackgroundRefresh(String trigger) {
         refreshSnapshot(trigger)
-            .doOnSuccess(snapshot -> log.info(
-                "company sectors background refresh succeeded trigger {} totalScrips {}",
-                trigger,
-                snapshot.totalScrips()
-            ))
-            .doOnError(error -> log.warn(
-                "company sectors background refresh failed trigger {} reason {}",
-                trigger,
-                error.getMessage()
-            ))
-            .onErrorResume(error -> Mono.empty())
-            .subscribe(
-                ignored -> {},
-                error -> log.debug("company sectors background refresh terminal error ignored")
-            );
-        }
+                .doOnSuccess(snapshot -> log.info(
+                        "company sectors background refresh succeeded trigger {} totalScrips {}",
+                        trigger,
+                        snapshot.totalScrips()
+                ))
+                .doOnError(error -> log.warn(
+                        "company sectors background refresh failed trigger {} reason {}",
+                        trigger,
+                        error.getMessage()
+                ))
+                .onErrorResume(error -> Mono.empty())
+                .subscribe(
+                        ignored -> {},
+                        error -> log.debug("company sectors background refresh terminal error ignored")
+                );
+    }
 
     private Mono<SectorSnapshot> refreshSnapshot(String trigger) {
         return fetchSectorMapFromClassification()

@@ -8,7 +8,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
-import org.springframework.util.AntPathMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -21,7 +20,6 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private final StringRedisTemplate redisTemplate;
     private final Map<String, LimitRule> rules;
-    private final AntPathMatcher pathMatcher = new AntPathMatcher();
 
     private static final String KEY_PREFIX = "ratelimit:";
 
@@ -60,20 +58,21 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
         String requestPath = request.getRequestURI();
 
-        Map.Entry<String, LimitRule> matchedRule = rules.entrySet().stream()
-                .filter(entry -> pathMatcher.match(entry.getKey(), requestPath) || 
-                                 pathMatcher.match(entry.getKey() + "/", requestPath))
-                .findFirst()
-                .orElse(null);
+        // rule paths are plain literal paths, a direct lookup is enough
+        // strip one trailing slash so path and path/ both match the same rule
+        String lookupPath = (requestPath.length() > 1 && requestPath.endsWith("/"))
+                ? requestPath.substring(0, requestPath.length() - 1)
+                : requestPath;
 
-        if (matchedRule == null) {
+        LimitRule rule = rules.get(lookupPath);
+
+        if (rule == null) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        LimitRule rule = matchedRule.getValue();
         String clientIp = resolveClientIp(request);
-        String key = KEY_PREFIX + matchedRule.getKey() + ":" + clientIp;
+        String key = KEY_PREFIX + lookupPath + ":" + clientIp;
 
         try {
             Long count = redisTemplate.opsForValue().increment(key);

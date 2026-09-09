@@ -2,6 +2,7 @@ package com.meroshare.backend.security;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -19,8 +20,12 @@ public class JwtUtil {
     @Value("${app.jwt.expiration-ms}")
     private long jwtExpirationMs;
 
-    private SecretKey getSigningKey() {
-        return Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
+    // signing key built once at startup, not on every sign or parse call
+    private SecretKey signingKey;
+
+    @PostConstruct
+    private void init() {
+        signingKey = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
     }
 
     public String generateToken(String username) {
@@ -29,7 +34,7 @@ public class JwtUtil {
                 .id(UUID.randomUUID().toString())
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + jwtExpirationMs))
-                .signWith(getSigningKey())
+                .signWith(signingKey)
                 .compact();
     }
 
@@ -54,9 +59,19 @@ public class JwtUtil {
         }
     }
 
+    // parses once and returns null if invalid or expired
+    // use this when a caller needs more than one field from the same token
+    public Claims parseClaimsIfValid(String token) {
+        try {
+            return parseClaims(token);
+        } catch (JwtException | IllegalArgumentException e) {
+            return null;
+        }
+    }
+
     private Claims parseClaims(String token) {
         return Jwts.parser()
-                .verifyWith(getSigningKey())
+                .verifyWith(signingKey)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
