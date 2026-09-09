@@ -17,7 +17,7 @@ const SEO = ({
 }) => {
     const fullTitle = title
         ? `${title} | ${SITE_NAME}`
-        : `${SITE_NAME} — Nepal IPO and NEPSE Tracker`;
+        : `${SITE_NAME}`;
     const canonicalUrl = canonical ? `${SITE_URL}${canonical}` : null;
 
     return (

@@ -5,12 +5,31 @@ import {
     isNepseOpen,
     getTopGainers,
     getTopLosers,
+    isNepseError,
 } from "../../api/nepse.js";
 import { buildSparkline, useChartHover, tooltipAlign } from "../../pages/Nepse/nepseUtils.js";
 import BullMascot from "./BullMascot.jsx";
 import "./NepseStrip.css";
 
 const MOVERS_ROW_COUNT = 5;
+const CACHE_KEY = "nepse_cache_v1";
+
+function loadNepseCache() {
+    if (typeof window === "undefined") return null;
+
+    try {
+        const raw = window.localStorage.getItem(CACHE_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch {
+        return null;
+    }
+}
+
+function toList(raw) {
+    if (isNepseError(raw)) return [];
+    if (Array.isArray(raw)) return raw;
+    return raw?.data ?? Object.values(raw ?? {});
+}
 
 function SkeletonGraphSVG({ width = 340, height = 100 }) {
     return (
@@ -95,10 +114,11 @@ function Sparkline({ data, isOpen, pts, width = 340, height = 100 }) {
 }
 
 function useNepseIndex() {
-    const [indexData, setIndexData] = useState(null);
-    const [graphData, setGraphData] = useState(null);
+    const initialCache = useMemo(() => loadNepseCache(), []);
+    const [indexData, setIndexData] = useState(initialCache?.indices ?? null);
+    const [graphData, setGraphData] = useState(initialCache?.graphData ?? null);
     const [isOpen, setIsOpen] = useState(false);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(!initialCache?.indices && !initialCache?.graphData);
 
     useEffect(() => {
         let alive = true;
@@ -110,12 +130,33 @@ function useNepseIndex() {
                     getDailyNepseIndexGraph()
                 ]);
                 if (!alive) return;
-                setIndexData(idx.data);
+
+                const index = isNepseError(idx.data) ? null : idx.data;
+                const graph = toList(grf.data);
+
+                if (index) {
+                    setIndexData(index);
+                } else if (initialCache?.indices) {
+                    setIndexData(initialCache.indices);
+                }
+
                 const rawOpen = opn.data;
                 setIsOpen(typeof rawOpen === "object" ? rawOpen?.isOpen === "OPEN" : !!rawOpen);
-                const rawGraph = grf.data;
-                setGraphData(Array.isArray(rawGraph) ? rawGraph : (rawGraph?.data ?? Object.values(rawGraph)));
+
+                if (graph.length) {
+                    setGraphData(graph);
+                } else if (initialCache?.graphData) {
+                    setGraphData(initialCache.graphData);
+                }
             } catch (error) {
+                if (initialCache?.indices) {
+                    setIndexData((current) => current ?? initialCache.indices);
+                }
+
+                if (initialCache?.graphData) {
+                    setGraphData((current) => current ?? initialCache.graphData);
+                }
+
                 if (import.meta.env.DEV) {
                     console.warn("Failed to load NEPSE hero data", error);
                 }
@@ -225,19 +266,36 @@ function TickerEmptyState({ message }) {
 }
 
 export default function NepseStrip() {
-    const [gainers, setGainers] = useState(null);
-    const [losers, setLosers] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const [gainers, setGainers] = useState(() => loadNepseCache()?.gainers ?? null);
+    const [losers, setLosers] = useState(() => loadNepseCache()?.losers ?? null);
+    const [loading, setLoading] = useState(() => {
+        const cache = loadNepseCache();
+        return !(cache?.gainers?.length || cache?.losers?.length);
+    });
 
     useEffect(() => {
         let alive = true;
         const loadMovers = async () => {
+            const cached = loadNepseCache();
+
             try {
                 const [gRes, lRes] = await Promise.all([getTopGainers(), getTopLosers()]);
                 if (!alive) return;
-                setGainers(Array.isArray(gRes.data) ? gRes.data : gRes.data?.data ?? []);
-                setLosers(Array.isArray(lRes.data) ? lRes.data : lRes.data?.data ?? []);
+
+                const nextGainers = toList(gRes.data);
+                const nextLosers = toList(lRes.data);
+
+                setGainers(nextGainers.length ? nextGainers : (cached?.gainers ?? []));
+                setLosers(nextLosers.length ? nextLosers : (cached?.losers ?? []));
             } catch (error) {
+                if (cached?.gainers) {
+                    setGainers((current) => current ?? cached.gainers);
+                }
+
+                if (cached?.losers) {
+                    setLosers((current) => current ?? cached.losers);
+                }
+
                 if (import.meta.env.DEV) {
                     console.warn("Failed to load NEPSE movers", error);
                 }
