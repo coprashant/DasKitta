@@ -44,7 +44,7 @@ public class AuthService {
     private long unverifiedExpiryHours;
 
     public record SessionResult(String accessToken, String refreshToken, Duration refreshTtl,
-                                 String username, String email) {}
+                                String username, String email) {}
 
     private String cleanEmail(String email) {
         if (email == null) return null;
@@ -67,7 +67,8 @@ public class AuthService {
             AppUser existing = existingByEmail.get();
 
             if (existing.isEnabled()) {
-                throw new RuntimeException("Email already registered");
+                // same shape response as a fresh signup, do not reveal the account exists
+                return new AuthResponse(null, sanitizedUsername, sanitizedEmail);
             }
 
             releaseUsernameIfStale(sanitizedUsername, existing.getId());

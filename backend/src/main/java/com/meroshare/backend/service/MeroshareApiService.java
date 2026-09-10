@@ -10,10 +10,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
@@ -34,6 +36,9 @@ public class MeroshareApiService {
 
     private static final long TOKEN_TTL_MS = 25 * 60 * 1000;
 
+    // bound on webclient block calls so a hung cdsc response cant hold a thread forever
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
+
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final CdscHttpClient curlClient;
 
@@ -51,6 +56,19 @@ public class MeroshareApiService {
 
         boolean isValid() {
             return System.currentTimeMillis() < expiresAt;
+        }
+    }
+
+    // tokenCache and loginLocks only shrink here, isValid alone never removes entries
+    // this keeps memory bounded as more distinct meroshare accounts log in over time
+    @Scheduled(fixedRate = 30 * 60 * 1000)
+    public void cleanupExpiredLoginState() {
+        int before = tokenCache.size();
+        tokenCache.entrySet().removeIf(e -> !e.getValue().isValid());
+        loginLocks.entrySet().removeIf(e -> !tokenCache.containsKey(e.getKey()) && !e.getValue().isLocked());
+        int removed = before - tokenCache.size();
+        if (removed > 0) {
+            log.debug("[LOGIN_CACHE] Cleaned up {} expired token entries", removed);
         }
     }
 
@@ -107,7 +125,7 @@ public class MeroshareApiService {
         String url = MERO_SHARE_BASE + "/capital/";
         try {
             String raw = meroShareClient.get().uri("/capital/")
-                    .retrieve().bodyToMono(String.class).block();
+                    .retrieve().bodyToMono(String.class).timeout(REQUEST_TIMEOUT).block();
             List<Map> result = parseJsonArray(raw, "DP_LIST");
             if (!result.isEmpty()) return result;
         } catch (Exception e) {
@@ -197,6 +215,7 @@ public class MeroshareApiService {
                     .bodyValue(body)
                     .retrieve()
                     .toEntity(String.class)
+                    .timeout(REQUEST_TIMEOUT)
                     .block();
 
             if (response != null) {
@@ -215,7 +234,8 @@ public class MeroshareApiService {
                 throw new FastRuntimeException("Invalid credentials for " + username + ". " + extractMessage(errBody));
             }
             log.warn("[LOGIN] WebClient HTTP error trying curl");
-        } catch (RuntimeException re) {
+        } catch (FastRuntimeException re) {
+            // only real business errors skip curl, a timeout still falls through below
             throw re;
         } catch (Exception e) {
             log.warn("[LOGIN] WebClient failed {} trying curl", e.getMessage());
@@ -268,7 +288,7 @@ public class MeroshareApiService {
         try {
             raw = meroShareClient.get().uri("/ownDetail/")
                     .headers(h -> applyAuth(h, token))
-                    .retrieve().bodyToMono(String.class).block();
+                    .retrieve().bodyToMono(String.class).timeout(REQUEST_TIMEOUT).block();
         } catch (Exception e) {
             log.warn("[OWN_DETAIL] WebClient failed {}", e.getMessage());
         }
@@ -305,7 +325,7 @@ public class MeroshareApiService {
         try {
             raw = meroShareClient.get().uri("/bank/" + bankListId)
                     .headers(h -> applyAuth(h, token))
-                    .retrieve().bodyToMono(String.class).block();
+                    .retrieve().bodyToMono(String.class).timeout(REQUEST_TIMEOUT).block();
         } catch (Exception e) {
             log.warn("[BANK_DETAIL] WebClient failed {}", e.getMessage());
         }
@@ -360,7 +380,7 @@ public class MeroshareApiService {
         try {
             String raw = meroShareClient.get().uri("/bank/")
                     .headers(h -> applyAuth(h, token))
-                    .retrieve().bodyToMono(String.class).block();
+                    .retrieve().bodyToMono(String.class).timeout(REQUEST_TIMEOUT).block();
             List<Map> result = parseJsonArray(raw, "USER_BANKS");
             if (!result.isEmpty()) return result;
         } catch (Exception e) {
@@ -378,7 +398,7 @@ public class MeroshareApiService {
         try {
             String raw = meroShareClient.post().uri("/companyShare/applicableIssue/")
                     .headers(h -> applyAuth(h, token))
-                    .bodyValue(payload).retrieve().bodyToMono(String.class).block();
+                    .bodyValue(payload).retrieve().bodyToMono(String.class).timeout(REQUEST_TIMEOUT).block();
             List<Map> result = parseJsonResponse(raw, "OPEN_IPOS");
             if (!result.isEmpty()) return result;
         } catch (Exception e) {
@@ -414,7 +434,7 @@ public class MeroshareApiService {
         try {
             String raw = meroShareClient.post().uri("/applicantForm/active/search/")
                     .headers(h -> applyAuth(h, token))
-                    .bodyValue(payload).retrieve().bodyToMono(String.class).block();
+                    .bodyValue(payload).retrieve().bodyToMono(String.class).timeout(REQUEST_TIMEOUT).block();
             List<Map> result = parseJsonResponse(raw, "APP_HISTORY");
             if (!result.isEmpty()) return result;
         } catch (Exception e) {
@@ -470,6 +490,7 @@ public class MeroshareApiService {
                     .bodyValue(body)
                     .retrieve()
                     .bodyToMono(String.class)
+                    .timeout(REQUEST_TIMEOUT)
                     .block();
             log.info("[APPLY_IPO] WebClient response {}", snippet(raw));
             if (!isHtml(raw) && raw != null) {
@@ -526,7 +547,7 @@ public class MeroshareApiService {
             String raw = meroShareClient.get()
                     .uri("/applicantForm/report/detail/" + applicantFormId)
                     .headers(h -> applyAuth(h, token))
-                    .retrieve().bodyToMono(String.class).block();
+                    .retrieve().bodyToMono(String.class).timeout(REQUEST_TIMEOUT).block();
             log.info("[RESULT_DETAIL] WebClient raw {}", snippet300(raw));
             if (!isHtml(raw) && raw != null) return parseDetailResult(raw);
         } catch (Exception e) {
@@ -565,7 +586,7 @@ public class MeroshareApiService {
         try {
             String raw = resultClient.get()
                     .uri("/result/companyShares/fileUploaded")
-                    .retrieve().bodyToMono(String.class).block();
+                    .retrieve().bodyToMono(String.class).timeout(REQUEST_TIMEOUT).block();
             log.info("[SHARE_LIST] WebClient raw first 300 {}", snippet300(raw));
             if (!isHtml(raw) && raw != null) {
                 List<Map> r = parseShareList(raw, "SHARE_LIST");
@@ -645,6 +666,7 @@ public class MeroshareApiService {
                     .bodyValue(payload)
                     .retrieve()
                     .bodyToMono(String.class)
+                    .timeout(REQUEST_TIMEOUT)
                     .block();
             log.info("[PORTFOLIO] WebClient snippet {}", snippet300(raw));
         } catch (Exception e) {

@@ -1,5 +1,3 @@
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import { adToBs } from "../../dateUtils";
 
 const BRAND_LOGO_PATH = "/favicon.png";
@@ -124,6 +122,12 @@ export const exportPortfolioPDF = async ({ items, activeAccount, portfolio, tota
         });
         const generatedAtIso = now.toISOString();
         const logoData = await getBrandLogoData();
+
+        // pdf libs are big and rarely used so load them only on export
+        const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+            import("jspdf"),
+            import("jspdf-autotable"),
+        ]);
 
         const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
         const pageWidth = doc.internal.pageSize.getWidth();

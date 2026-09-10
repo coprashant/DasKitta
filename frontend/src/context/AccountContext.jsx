@@ -1,15 +1,16 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { getAccountsApi } from "../api/accounts";
+import { useAuth } from "./AuthContext";
 
 const AccountContext = createContext(null);
 
-const STORAGE_KEY = "dk-active-account";
+// only the id is kept client side, not name, boid, dp code etc
+const STORAGE_KEY = "dk-active-account-id";
 const ORDER_KEY = "dk-account-order";
 
-const readStored = () => {
+const readStoredId = () => {
   try {
-    const s = localStorage.getItem(STORAGE_KEY);
-    return s ? JSON.parse(s) : null;
+    return localStorage.getItem(STORAGE_KEY) || null;
   } catch {
     return null;
   }
@@ -42,15 +43,16 @@ const resolveErrorMessage = (error, fallback) => {
 };
 
 export const AccountProvider = ({ children }) => {
+  const { user, isReady } = useAuth();
   const [accounts, setAccounts] = useState([]);
-  const [activeAccount, setActiveAccountState] = useState(readStored);
+  const [activeAccount, setActiveAccountState] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const setActiveAccount = useCallback((acc) => {
     setActiveAccountState(acc);
     if (acc) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(acc));
+      localStorage.setItem(STORAGE_KEY, String(acc.id));
     } else {
       localStorage.removeItem(STORAGE_KEY);
     }
@@ -71,12 +73,6 @@ export const AccountProvider = ({ children }) => {
   }, []);
 
   const refreshAccounts = useCallback(async () => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      resetAccounts();
-      return;
-    }
-
     setLoading(true);
     setError(null);
 
@@ -93,13 +89,10 @@ export const AccountProvider = ({ children }) => {
       }
 
       setActiveAccountState((prev) => {
-        if (!prev) {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(ordered[0]));
-          return ordered[0];
-        }
-        const still = ordered.find((a) => a.id === prev.id);
+        const wantedId = prev ? prev.id : readStoredId();
+        const still = ordered.find((a) => String(a.id) === String(wantedId));
         const next = still ?? ordered[0];
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        localStorage.setItem(STORAGE_KEY, String(next.id));
         return next;
       });
     } catch (err) {
@@ -109,26 +102,33 @@ export const AccountProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, [resetAccounts]);
+  }, []);
 
+  // wait for the real session check before the first fetch, dont trust a guess
+  // login and logout already trigger refreshAccounts through account sync
   useEffect(() => {
-    refreshAccounts();
-  }, [refreshAccounts]);
+    if (!isReady) return;
+    if (user) {
+      refreshAccounts();
+    } else {
+      resetAccounts();
+    }
+  }, [isReady]);
 
   return (
-    <AccountContext.Provider value={{
-      accounts,
-      activeAccount,
-      setActiveAccount,
-      loading,
-      error,
-      refreshAccounts,
-      refetch: refreshAccounts,
-      resetAccounts,
-      reorderAccounts,
-    }}>
-      {children}
-    </AccountContext.Provider>
+      <AccountContext.Provider value={{
+        accounts,
+        activeAccount,
+        setActiveAccount,
+        loading,
+        error,
+        refreshAccounts,
+        refetch: refreshAccounts,
+        resetAccounts,
+        reorderAccounts,
+      }}>
+        {children}
+      </AccountContext.Provider>
   );
 };
 

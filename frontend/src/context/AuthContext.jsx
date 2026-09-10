@@ -1,34 +1,48 @@
-import { createContext, useContext, useState, useCallback, useRef } from "react";
+import { createContext, useContext, useState, useCallback, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { loginApi, registerApi, deleteAccountApi, logoutApi } from "../api/auth";
+import { attemptRefresh } from "../api/client";
+import { setToken, clearToken } from "../api/tokenStore";
+import { registerPushSubscription } from "../api/notifications";
 import toast from "react-hot-toast";
 const AuthContext = createContext(null);
-const readStoredUser = () => {
-  try {
-    const stored = localStorage.getItem("user");
-    const token = localStorage.getItem("token");
-    if (!stored || !token) return null;
-    return JSON.parse(stored);
-  } catch {
-    return null;
-  }
-};
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(readStoredUser);
+  const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  // true once the initial session check against the refresh cookie is done
+  const [isReady, setIsReady] = useState(false);
   const navigate = useNavigate();
   const onLoginRef  = useRef(null);
   const onLogoutRef = useRef(null);
   const registerOnLogin  = useCallback((fn) => { onLoginRef.current  = fn; }, []);
   const registerOnLogout = useCallback((fn) => { onLogoutRef.current = fn; }, []);
+
+  // on load ask the server if the refresh cookie still gives a valid session
+  // no token or user data is ever trusted from local storage
+  useEffect(() => {
+    let active = true;
+    attemptRefresh()
+        .then((data) => {
+          if (!active) return;
+          if (data?.token) {
+            setUser({ username: data.username, email: data.email });
+          }
+        })
+        .catch(() => {
+          // no valid session, stay logged out
+        })
+        .finally(() => {
+          if (active) setIsReady(true);
+        });
+    return () => { active = false; };
+  }, []);
+
   const persistSession = (token, username, email) => {
-    localStorage.setItem("token", token);
-    localStorage.setItem("user", JSON.stringify({ username, email }));
+    setToken(token);
     setUser({ username, email });
   };
   const clearSession = useCallback(() => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    clearToken();
     setUser(null);
   }, []);
   const login = async (credentials) => {
@@ -38,6 +52,7 @@ export const AuthProvider = ({ children }) => {
       const { token, username, email } = res.data;
       persistSession(token, username, email);
       if (onLoginRef.current) await onLoginRef.current();
+      registerPushSubscription().catch(() => {});
       toast.success("Signed in successfully");
       navigate("/dashboard");
     } catch (err) {
@@ -95,6 +110,7 @@ export const AuthProvider = ({ children }) => {
       <AuthContext.Provider value={{
         user,
         isLoading,
+        isReady,
         login,
         register,
         logout,

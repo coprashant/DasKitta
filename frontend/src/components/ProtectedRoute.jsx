@@ -2,10 +2,11 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 const ProtectedRoute = ({ children }) => {
-    const { user, isLoading } = useAuth();
+    const { user, isReady } = useAuth();
     const location = useLocation();
 
-    if (isLoading) {
+    // wait for the real session check against the server, dont flash protected ui first
+    if (!isReady) {
         return (
             <div style={{
                 minHeight: "100vh",

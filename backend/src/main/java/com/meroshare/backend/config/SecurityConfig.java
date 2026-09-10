@@ -61,6 +61,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/accounts/dp-list").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/accounts/bank-by-dp/**").permitAll()
 
+                        .requestMatchers("/api/notifications/**").authenticated()
+
                         // ipo result and stream now require login guest checking removed
                         .anyRequest().authenticated()
                 )

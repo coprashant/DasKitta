@@ -1,4 +1,5 @@
-import client from "./client";
+import client, { attemptRefresh } from "./client";
+import { getToken } from "./tokenStore";
 
 export const getAppliedCompaniesApi = () => client.get("/ipo/applied-companies");
 export const getPublicShareListApi = () => client.get("/ipo/shares");
@@ -16,13 +17,20 @@ export const getCdscSummaryApi = (accountId) =>
 // streams one result at a time using server sent events
 // onResult fires per account onDone fires at end onError fires on failure
 export const checkResultStreamApi = async (shareId, onResult, onDone, onError) => {
-  const token = localStorage.getItem("token");
   const base = client.defaults.baseURL;
 
+  const openStream = (token) => fetch(`${base}/ipo/result/${shareId}/stream`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
   try {
-    const res = await fetch(`${base}/ipo/result/${shareId}/stream`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
+    let res = await openStream(getToken());
+
+    // token expired mid session, refresh once through the shared flow then retry
+    if (res.status === 401) {
+      const data = await attemptRefresh().catch(() => null);
+      res = await openStream(data?.token ?? getToken());
+    }
 
     if (!res.ok || !res.body) {
       throw new Error("Could not start result check");

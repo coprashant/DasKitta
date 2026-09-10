@@ -94,7 +94,20 @@ public class RateLimitFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
+    // behind a proxy remoteAddr is the proxy ip for every request
+    // use the first hop in x forwarded for so limits apply per real client
     private String resolveClientIp(HttpServletRequest request) {
+        String forwardedFor = request.getHeader("X-Forwarded-For");
+        if (forwardedFor != null && !forwardedFor.isBlank()) {
+            String firstIp = forwardedFor.split(",")[0].trim();
+            if (!firstIp.isEmpty()) {
+                return firstIp;
+            }
+        }
+        String realIp = request.getHeader("X-Real-IP");
+        if (realIp != null && !realIp.isBlank()) {
+            return realIp.trim();
+        }
         return request.getRemoteAddr();
     }
 

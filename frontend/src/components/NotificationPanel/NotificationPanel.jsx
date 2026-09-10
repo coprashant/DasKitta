@@ -155,7 +155,7 @@ const NotificationPanel = ({ onClose }) => {
                         >
                           <IconX />
                         </button>
-                        <span className="notif-time">{fmtRelative(n.timestamp)}</span>
+                        <span className="notif-time">{fmtRelative(n.createdAt ?? n.timestamp)}</span>
                       </div>
                       {isUnread && <span className="notif-dot" aria-hidden="true" />}
                     </div>
