@@ -1,6 +1,7 @@
 package com.meroshare.backend.service;
 
 import com.meroshare.backend.dto.IpoApplyRequest;
+import com.meroshare.backend.dto.IpoApplyProgressEvent;
 import com.meroshare.backend.dto.IpoApplyResult;
 import com.meroshare.backend.dto.IpoApplicationResponse;
 import com.meroshare.backend.entity.AppUser;
@@ -25,6 +26,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -175,6 +177,158 @@ public class IpoService {
         }
 
         return results;
+    }
+
+    public void applyForAllStream(IpoApplyRequest request,
+                                  String username,
+                                  Consumer<IpoApplyProgressEvent> onProgress) {
+        applyForAllStream(request, username, onProgress, () -> true);
+    }
+
+    public void applyForAllStream(IpoApplyRequest request,
+                                  String username,
+                                  Consumer<IpoApplyProgressEvent> onProgress,
+                                  BooleanSupplier shouldContinue) {
+        AppUser appUser = getAppUser(username);
+
+        if (request.getShareId() == null || request.getShareId().isBlank()) {
+            throw new FastRuntimeException("Share ID must not be blank");
+        }
+        try {
+            Integer.parseInt(request.getShareId());
+        } catch (NumberFormatException e) {
+            throw new FastRuntimeException("Share ID is not a valid number: " + request.getShareId());
+        }
+
+        if (request.getCompanyName() == null || request.getCompanyName().isBlank()) {
+            throw new FastRuntimeException("Company name must not be blank");
+        }
+
+        int total = request.getAccountIds().size();
+        int processed = 0;
+        int success = 0;
+        int failed = 0;
+        int cancelled = 0;
+        long sequence = 1;
+
+        onProgress.accept(IpoApplyProgressEvent.builder()
+                .eventType("job_started")
+                .sequence(sequence++)
+                .totalCount(total)
+                .processedCount(processed)
+                .successCount(success)
+                .failedCount(failed)
+            .cancelledCount(cancelled)
+                .pendingCount(total - processed)
+                .build());
+
+        boolean cancelledJob = false;
+
+        for (Long accountId : request.getAccountIds()) {
+            if (!shouldContinue.getAsBoolean()) {
+            cancelledJob = true;
+            break;
+            }
+
+            MeroshareAccount account = accountId != null
+                    ? accountRepository.findById(accountId).orElse(null)
+                    : null;
+
+            String usernameValue = account != null ? account.getUsername() : null;
+            String fullNameValue = account != null ? account.getFullName() : null;
+
+            onProgress.accept(IpoApplyProgressEvent.builder()
+                    .eventType("account_applying")
+                    .sequence(sequence++)
+                    .totalCount(total)
+                    .processedCount(processed)
+                    .successCount(success)
+                    .failedCount(failed)
+                    .cancelledCount(cancelled)
+                    .pendingCount(total - processed)
+                    .accountId(accountId)
+                    .username(usernameValue)
+                    .fullName(fullNameValue)
+                    .status("APPLYING")
+                    .message("Applying")
+                    .build());
+
+            IpoApplyResult result;
+
+            if (accountId == null) {
+                result = buildResult(null, null, null, "FAILED", "Account ID must not be null");
+            } else if (account == null) {
+                result = buildResult(accountId, null, null, "FAILED", "Account not found");
+            } else if (!account.getAppUser().getId().equals(appUser.getId())) {
+                result = buildResult(accountId, account.getUsername(), account.getFullName(), "FAILED", "Unauthorized");
+            } else if (ipoApplicationRepository.existsByMeroshareAccountIdAndShareId(accountId, request.getShareId())) {
+                result = buildResult(accountId, account.getUsername(), account.getFullName(), "FAILED", "Already applied for this IPO from this account");
+            } else {
+                result = applySingleAccount(account, request);
+            }
+
+            processed++;
+            boolean ok = "SUCCESS".equals(result.getStatus());
+            if (ok) {
+                success++;
+            } else {
+                failed++;
+            }
+
+            onProgress.accept(IpoApplyProgressEvent.builder()
+                    .eventType(ok ? "account_success" : "account_failed")
+                    .sequence(sequence++)
+                    .totalCount(total)
+                    .processedCount(processed)
+                    .successCount(success)
+                    .failedCount(failed)
+                    .cancelledCount(cancelled)
+                    .pendingCount(Math.max(0, total - processed))
+                    .accountId(result.getAccountId())
+                    .username(result.getUsername())
+                    .fullName(result.getFullName())
+                    .status(ok ? "SUCCESS" : "FAILED")
+                    .message(result.getMessage())
+                    .build());
+
+            if (processed < total) {
+                try {
+                    long jitter = 2000 + random.nextInt(3000);
+                    long remaining = jitter;
+                    while (remaining > 0) {
+                        if (!shouldContinue.getAsBoolean()) {
+                            cancelledJob = true;
+                            break;
+                        }
+                        long chunk = Math.min(250, remaining);
+                        Thread.sleep(chunk);
+                        remaining -= chunk;
+                    }
+                    if (cancelledJob) {
+                        break;
+                    }
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    log.warn("[APPLY_STREAM] Thread interrupted, stopping remaining accounts");
+                    break;
+                }
+            }
+        }
+
+        if (cancelledJob) {
+            cancelled = Math.max(0, total - processed);
+        }
+
+        onProgress.accept(IpoApplyProgressEvent.builder()
+                .eventType(cancelledJob ? "job_cancelled" : "job_completed")
+                .sequence(sequence)
+                .totalCount(total)
+                .processedCount(processed)
+                .successCount(success)
+                .failedCount(failed)
+                .cancelledCount(cancelled)
+                .pendingCount(cancelledJob ? 0 : Math.max(0, total - processed))
+                .build());
     }
 
     public IpoApplyResult applySingleAccount(MeroshareAccount account, IpoApplyRequest request) {

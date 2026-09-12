@@ -1,9 +1,12 @@
 package com.meroshare.backend.controller;
 
 import com.meroshare.backend.dto.IpoApplyRequest;
-import com.meroshare.backend.dto.IpoApplyResult;
+import com.meroshare.backend.dto.IpoApplyJobSnapshotResponse;
+import com.meroshare.backend.dto.IpoApplyJobStartResponse;
 import com.meroshare.backend.dto.IpoApplicationResponse;
+import com.meroshare.backend.dto.IpoApplyResult;
 import com.meroshare.backend.service.IpoService;
+import com.meroshare.backend.service.IpoApplyJobService;
 import com.meroshare.backend.dto.CdscSummaryDto;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +29,7 @@ import java.util.Map;
 public class IpoController {
 
     private final IpoService ipoService;
+    private final IpoApplyJobService ipoApplyJobService;
 
     @GetMapping("/applied-companies")
     public ResponseEntity<List<Map<String, String>>> getAppliedCompanies(
@@ -49,6 +53,105 @@ public class IpoController {
             @Valid @RequestBody IpoApplyRequest request,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(ipoService.applyForAll(request, userDetails.getUsername()));
+    }
+
+    @PostMapping("/apply/jobs")
+    public ResponseEntity<IpoApplyJobStartResponse> startApplyJob(
+            @Valid @RequestBody IpoApplyRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(ipoApplyJobService.startJob(request, userDetails.getUsername()));
+    }
+
+    @GetMapping(value = "/apply/jobs/{jobId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamApplyJob(
+            @PathVariable String jobId,
+            @RequestParam(defaultValue = "0") long fromSequence,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        SseEmitter emitter = new SseEmitter(0L);
+
+        if (userDetails == null) {
+            emitter.completeWithError(new RuntimeException("Login required"));
+            return emitter;
+        }
+
+        String username = userDetails.getUsername();
+
+        try {
+            String listenerId = ipoApplyJobService.subscribe(jobId, username, fromSequence, event -> {
+                try {
+                    emitter.send(SseEmitter.event().name("progress").id(String.valueOf(event.getSequence())).data(event));
+                    if ("job_completed".equals(event.getEventType())) {
+                        emitter.complete();
+                    }
+                } catch (IOException e) {
+                    emitter.completeWithError(e);
+                }
+            });
+
+            emitter.onCompletion(() -> ipoApplyJobService.unsubscribe(jobId, username, listenerId));
+            emitter.onTimeout(() -> ipoApplyJobService.unsubscribe(jobId, username, listenerId));
+            emitter.onError(err -> ipoApplyJobService.unsubscribe(jobId, username, listenerId));
+        } catch (Exception e) {
+            emitter.completeWithError(e);
+        }
+
+        return emitter;
+    }
+
+    @GetMapping("/apply/jobs/{jobId}")
+    public ResponseEntity<IpoApplyJobSnapshotResponse> getApplyJobSnapshot(
+            @PathVariable String jobId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(ipoApplyJobService.getSnapshot(jobId, userDetails.getUsername()));
+    }
+
+    @PostMapping("/apply/jobs/{jobId}/retry-failed")
+    public ResponseEntity<IpoApplyJobStartResponse> retryFailedApplyJob(
+            @PathVariable String jobId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(ipoApplyJobService.retryFailed(jobId, userDetails.getUsername()));
+    }
+
+    @PostMapping("/apply/jobs/{jobId}/cancel")
+    public ResponseEntity<IpoApplyJobSnapshotResponse> cancelApplyJob(
+            @PathVariable String jobId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(ipoApplyJobService.cancelJob(jobId, userDetails.getUsername()));
+    }
+
+    @PostMapping(value = "/apply/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter applyForAllStream(
+            @Valid @RequestBody IpoApplyRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        SseEmitter emitter = new SseEmitter(0L);
+
+        if (userDetails == null) {
+            emitter.completeWithError(new RuntimeException("Login required"));
+            return emitter;
+        }
+
+        String username = userDetails.getUsername();
+
+        Thread.ofVirtual().name("ipo-apply-stream-" + username).start(() -> {
+            try {
+                ipoService.applyForAllStream(request, username, event -> {
+                    try {
+                        emitter.send(SseEmitter.event().name("progress").data(event));
+                    } catch (IOException e) {
+                        log.warn("SSE send failed for user {} reason {}", username, e.getMessage());
+                        emitter.completeWithError(e);
+                    }
+                });
+                emitter.complete();
+            } catch (Exception e) {
+                log.error("SSE apply stream failed for user {} reason {}", username, e.getMessage());
+                emitter.completeWithError(e);
+            }
+        });
+
+        return emitter;
     }
 
     // sends one result per account as soon as it is checked

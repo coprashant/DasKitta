@@ -1,0 +1,236 @@
+.ipo-progress-overlay {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in oklab, var(--surface) 35%, transparent);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: flex-end;
+  z-index: 450;
+}
+
+.ipo-progress-drawer {
+  width: min(520px, 100%);
+  height: 100%;
+  border-radius: 0;
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  overflow: hidden;
+}
+
+@media (max-width: 767px) {
+  .ipo-progress-overlay {
+    justify-content: stretch;
+    align-items: flex-end;
+  }
+
+  .ipo-progress-drawer {
+    width: 100%;
+    height: min(80vh, 680px);
+    border-left: none;
+    border-top: 1px solid var(--border);
+    border-radius: 14px 14px 0 0;
+  }
+}
+
+.ipo-progress-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ipo-progress-title {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.ipo-progress-subtitle {
+  margin: 2px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.ipo-progress-close {
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-2);
+  border-radius: var(--r);
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ipo-progress-close:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.ipo-progress-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ipo-progress-stats span {
+  font-size: 11px;
+  color: var(--text-2);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 8px;
+}
+
+.ipo-progress-track {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.ipo-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+  transition: width 220ms ease;
+}
+
+.ipo-progress-list {
+  flex: 1;
+  overflow: auto;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.ipo-progress-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 2px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ipo-progress-row:last-child {
+  border-bottom: none;
+}
+
+.ipo-progress-name {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ipo-progress-meta {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--text-2);
+  font-family: var(--mono);
+}
+
+.ipo-progress-msg {
+  margin: 3px 0 0;
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.ipo-progress-pill {
+  height: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ipo-progress-pill.pending {
+  color: var(--text-2);
+  background: var(--surface-2);
+}
+
+.ipo-progress-pill.applying {
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+.ipo-progress-pill.success {
+  color: #0a7a3e;
+  background: #d9f6e7;
+  border-color: #8ad7b0;
+}
+
+.ipo-progress-pill.failed {
+  color: #9b2020;
+  background: #ffe7e7;
+  border-color: #f0a7a7;
+}
+
+.ipo-progress-pill.cancelled {
+  color: #635f4a;
+  background: #f6f2de;
+  border-color: #ddd19a;
+}
+
+.ipo-progress-foot {
+  min-height: 20px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.ipo-progress-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.ipo-progress-action {
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-2);
+  border-radius: var(--r);
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ipo-progress-action:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.ipo-progress-action.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.ipo-progress-action.primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: #fff;
+}
+
+.ipo-progress-action.danger {
+  border-color: #cc4a4a;
+  color: #b02828;
+  background: #ffe7e7;
+}
+
+.ipo-progress-action.danger:hover {
+  border-color: #b02828;
+  color: #941f1f;
+}

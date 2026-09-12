@@ -1,6 +1,13 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { getAccountsApi } from "../../api/accounts";
-import { getOpenIposApi, applyIpoApi } from "../../api/ipo";
+import {
+  cancelApplyJobApi,
+  getOpenIposApi,
+  getApplyJobSnapshotApi,
+  retryFailedApplyJobApi,
+  startApplyJobApi,
+  streamApplyJobApi,
+} from "../../api/ipo";
 import {
   CheckIcon,
   ChevronIcon,
@@ -15,14 +22,20 @@ import toast from "react-hot-toast";
 import ipoData from "../../ipo_data.json";
 import { bsToAd, nowNepal } from "../../dateUtils";
 import SEO from "../../seo/SEO.jsx";
+import BulkApplyProgress from "../../components/BulkApplyProgress/BulkApplyProgress.jsx";
+import { useNotifications } from "../../context/NotificationContext.jsx";
 import "./IPOApply.css";
 
 const STATUS_BADGE_MAP = {
   SUCCESS: "badge-success",
   FAILED: "badge-danger",
-  ALREADY_APPLIED: "badge-warning",
+  CANCELLED: "badge-warning",
+  APPLYING: "badge-warning",
+  ALREADY_APPLIED: "badge-danger",
   PENDING: "badge-muted",
 };
+
+const ACTIVE_APPLY_JOB_KEY = "ipo_apply_active_job";
 
 const statusBadge = (s) => STATUS_BADGE_MAP[s] || "badge-muted";
 
@@ -127,6 +140,7 @@ const closingMap = safeIpoData.reduce((acc, d) => {
 }, {});
 
 const IPOApply = () => {
+  const { refresh: refreshNotifications } = useNotifications();
   const [ipos, setIpos] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [selectedIpo, setSelectedIpo] = useState(null);
@@ -137,10 +151,204 @@ const IPOApply = () => {
   const [accountsError, setAccountsError] = useState(null);
   const [applying, setApplying] = useState(false);
   const [results, setResults] = useState([]);
+  const [progressOpen, setProgressOpen] = useState(false);
+  const [progressDone, setProgressDone] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [activeJobId, setActiveJobId] = useState(null);
+  const [progressSummary, setProgressSummary] = useState({
+    totalCount: 0,
+    processedCount: 0,
+    successCount: 0,
+    failedCount: 0,
+    cancelledCount: 0,
+    pendingCount: 0,
+  });
   const [showOthers, setShowOthers] = useState(false);
   const [accountSearch, setAccountSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = useRef(null);
+  const progressSeqRef = useRef(0);
+  const progressSummaryRef = useRef(progressSummary);
+  const applyingRef = useRef(false);
+  const activeJobRef = useRef(null);
+
+  const hydrateSnapshot = useCallback(async (jobId) => {
+    const snapRes = await getApplyJobSnapshotApi(jobId);
+    const snap = snapRes?.data || {};
+    const rows = Array.isArray(snap.accounts) ? snap.accounts : [];
+
+    setResults(rows.map((r) => ({
+      accountId: r.accountId,
+      username: r.username || "",
+      fullName: r.fullName || "",
+      status: r.status || "PENDING",
+      message: r.message || "",
+    })));
+
+    setProgressSummary({
+      totalCount: Number(snap.totalCount || rows.length || 0),
+      processedCount: Number(snap.processedCount || 0),
+      successCount: Number(snap.successCount || 0),
+      failedCount: Number(snap.failedCount || 0),
+      cancelledCount: Number(snap.cancelledCount || 0),
+      pendingCount: Number(snap.pendingCount || 0),
+    });
+
+    progressSeqRef.current = Number(snap.lastSequence || 0);
+    setProgressDone(Boolean(snap.completed));
+    if (snap.completed) {
+      setApplying(false);
+      applyingRef.current = false;
+    }
+    return snap;
+  }, []);
+
+  const processProgressEvent = useCallback((data) => {
+    if (!data) return;
+
+    const sequence = Number(data.sequence || 0);
+    if (sequence > 0 && sequence <= progressSeqRef.current) return;
+    if (sequence > 0) progressSeqRef.current = sequence;
+
+    setProgressSummary((prev) => ({
+      totalCount: Number(data.totalCount ?? prev.totalCount),
+      processedCount: Number(data.processedCount ?? prev.processedCount),
+      successCount: Number(data.successCount ?? prev.successCount),
+      failedCount: Number(data.failedCount ?? prev.failedCount),
+      cancelledCount: Number(data.cancelledCount ?? prev.cancelledCount),
+      pendingCount: Number(data.pendingCount ?? prev.pendingCount),
+    }));
+
+    if (data.eventType === "job_completed" || data.eventType === "job_cancelled") {
+      setProgressDone(true);
+      setApplying(false);
+      setCancelling(false);
+      applyingRef.current = false;
+      refreshNotifications();
+    }
+
+    if (data.accountId == null) return;
+
+    const accountId = Number(data.accountId);
+    const status =
+      data.status ||
+      (data.eventType === "account_applying"
+        ? "APPLYING"
+        : data.eventType === "account_success"
+          ? "SUCCESS"
+          : data.eventType === "account_cancelled"
+            ? "CANCELLED"
+          : "FAILED");
+
+    setResults((prev) => {
+      const ix = prev.findIndex((row) => Number(row.accountId) === accountId);
+      const nextRow = {
+        accountId,
+        username: data.username || prev[ix]?.username || "",
+        fullName: data.fullName || prev[ix]?.fullName || "",
+        status,
+        message: data.message || (status === "APPLYING" ? "Applying" : ""),
+      };
+
+      if (ix === -1) return [...prev, nextRow];
+      const copy = [...prev];
+      copy[ix] = nextRow;
+      return copy;
+    });
+  }, []);
+
+  const attachJobStream = useCallback(async (jobId, fromSequence = 0, retryCount = 0) => {
+    await streamApplyJobApi(
+      jobId,
+      fromSequence,
+      ({ data }) => processProgressEvent(data),
+      async () => {
+        const snap = await hydrateSnapshot(jobId);
+        setReconnecting(false);
+        if (snap?.completed) {
+          const done = progressSummaryRef.current;
+          if (done.successCount > 0) {
+            toast.success(`Applied for ${done.successCount} account(s)`);
+          }
+          if (done.failedCount > 0) {
+            toast.error(`${done.failedCount} account(s) failed`);
+          }
+          if (done.cancelledCount > 0) {
+            toast("Remaining accounts cancelled");
+          }
+          refreshNotifications();
+        }
+      },
+      async (err) => {
+        if (!applyingRef.current || activeJobRef.current !== jobId) {
+          setReconnecting(false);
+          return;
+        }
+
+        try {
+          setReconnecting(true);
+          const snap = await hydrateSnapshot(jobId);
+          if (snap?.completed) {
+            setReconnecting(false);
+            return;
+          }
+          if (retryCount < 2) {
+            await attachJobStream(jobId, Number(snap.lastSequence || 0), retryCount + 1);
+            return;
+          }
+        } catch {
+        }
+
+        setReconnecting(false);
+        toast.error(resolveErrorMessage(err, "Apply stream interrupted"));
+        setApplying(false);
+        setCancelling(false);
+        applyingRef.current = false;
+      }
+    );
+  }, [hydrateSnapshot, processProgressEvent, refreshNotifications]);
+
+  useEffect(() => {
+    applyingRef.current = applying;
+  }, [applying]);
+
+  useEffect(() => {
+    activeJobRef.current = activeJobId;
+    if (activeJobId) {
+      localStorage.setItem(ACTIVE_APPLY_JOB_KEY, activeJobId);
+    } else {
+      localStorage.removeItem(ACTIVE_APPLY_JOB_KEY);
+    }
+  }, [activeJobId]);
+
+  useEffect(() => {
+    progressSummaryRef.current = progressSummary;
+  }, [progressSummary]);
+
+  useEffect(() => {
+    const stored = localStorage.getItem(ACTIVE_APPLY_JOB_KEY);
+    if (!stored) return;
+
+    const resume = async () => {
+      try {
+        setActiveJobId(stored);
+        activeJobRef.current = stored;
+        const snap = await hydrateSnapshot(stored);
+        if (!snap?.completed) {
+          setApplying(true);
+          applyingRef.current = true;
+          setProgressOpen(true);
+          await attachJobStream(stored, Number(snap.lastSequence || 0), 0);
+        }
+      } catch {
+        localStorage.removeItem(ACTIVE_APPLY_JOB_KEY);
+        setActiveJobId(null);
+      }
+    };
+
+    resume();
+  }, [attachJobStream, hydrateSnapshot]);
 
   const fetchData = useCallback(async (isMounted = true) => {
     setLoading(true);
@@ -260,24 +468,114 @@ const IPOApply = () => {
     }
 
     setApplying(true);
-    setResults([]);
+    applyingRef.current = true;
+    setReconnecting(false);
+    setCancelling(false);
+    setProgressDone(false);
+    setProgressOpen(true);
+    progressSeqRef.current = 0;
+
+    const seeded = selectedAccounts.map((id) => {
+      const account = accounts.find((a) => a.id === id);
+      return {
+        accountId: id,
+        username: account?.username || "",
+        fullName: account?.fullName || "",
+        status: "PENDING",
+        message: "Queued",
+      };
+    });
+
+    setResults(seeded);
+    setProgressSummary({
+      totalCount: selectedAccounts.length,
+      processedCount: 0,
+      successCount: 0,
+      failedCount: 0,
+      cancelledCount: 0,
+      pendingCount: selectedAccounts.length,
+    });
+
     try {
-      const res = await applyIpoApi({
+      const start = await startApplyJobApi({
         shareId: String(selectedIpo.companyShareId),
         companyName: selectedIpo.companyName || selectedIpo.scrip || "Unknown",
         kitta,
         accountIds: selectedAccounts,
       });
-      const data = Array.isArray(res?.data) ? res.data : [];
-      setResults(data);
-      const ok = data.filter((r) => r.status === "SUCCESS").length;
-      if (ok > 0) toast.success(`Applied for ${ok} account(s)`);
+      const jobId = start?.data?.jobId;
+      if (!jobId) {
+        throw new Error("Could not start apply job");
+      }
+      setActiveJobId(jobId);
+      activeJobRef.current = jobId;
+      await attachJobStream(jobId, 0, 0);
     } catch (err) {
       toast.error(resolveErrorMessage(err, "Apply failed"));
-    } finally {
+      setProgressDone(true);
       setApplying(false);
+      setCancelling(false);
+      applyingRef.current = false;
     }
-  }, [selectedIpo, selectedAccounts, kitta]);
+  }, [selectedIpo, selectedAccounts, kitta, accounts, attachJobStream]);
+
+  const handleRetryFailed = useCallback(async () => {
+    if (!activeJobId || applyingRef.current) return;
+
+    try {
+      setApplying(true);
+      applyingRef.current = true;
+      setReconnecting(false);
+      setCancelling(false);
+      setProgressDone(false);
+      setProgressOpen(true);
+      progressSeqRef.current = 0;
+
+      const retry = await retryFailedApplyJobApi(activeJobId);
+      const nextJobId = retry?.data?.jobId;
+      if (!nextJobId) {
+        throw new Error("Could not start retry job");
+      }
+
+      setActiveJobId(nextJobId);
+      activeJobRef.current = nextJobId;
+      await hydrateSnapshot(nextJobId);
+      await attachJobStream(nextJobId, progressSeqRef.current, 0);
+    } catch (err) {
+      toast.error(resolveErrorMessage(err, "Retry failed"));
+      setApplying(false);
+      setCancelling(false);
+      applyingRef.current = false;
+      setProgressDone(true);
+    }
+  }, [activeJobId, attachJobStream, hydrateSnapshot]);
+
+  const handleResumeProgress = useCallback(async () => {
+    if (!activeJobId || applyingRef.current) return;
+    try {
+      setApplying(true);
+      applyingRef.current = true;
+      setReconnecting(true);
+      await hydrateSnapshot(activeJobId);
+      await attachJobStream(activeJobId, progressSeqRef.current, 0);
+    } catch (err) {
+      setReconnecting(false);
+      setApplying(false);
+      applyingRef.current = false;
+      toast.error(resolveErrorMessage(err, "Resume failed"));
+    }
+  }, [activeJobId, hydrateSnapshot, attachJobStream]);
+
+  const handleCancelRemaining = useCallback(async () => {
+    if (!activeJobId || !applyingRef.current || cancelling) return;
+    try {
+      setCancelling(true);
+      await cancelApplyJobApi(activeJobId);
+    } catch (err) {
+      setCancelling(false);
+      toast.error(resolveErrorMessage(err, "Cancel failed"));
+    }
+  }, [activeJobId, cancelling]);
 
   const canApply = useMemo(
       () => Boolean(selectedIpo) && selectedAccounts.length > 0 && !applying,
@@ -530,7 +828,8 @@ const IPOApply = () => {
     );
   };
 
-  return (
+    return (
+      <>
       <Layout>
         <SEO
             title="Apply for IPOs"
@@ -601,6 +900,15 @@ const IPOApply = () => {
 
                     <div className="ipo-desktop-apply">{renderApplyBtn()}</div>
 
+                    {!progressOpen && (applying || results.length > 0) && (
+                        <button
+                            className="ipo-progress-reopen"
+                            onClick={() => setProgressOpen(true)}
+                        >
+                          Show progress
+                        </button>
+                    )}
+
                     {results.length > 0 && (
                         <div className="card anim-fade-up">
                           <div className="ipo-section-label">Results</div>
@@ -652,6 +960,24 @@ const IPOApply = () => {
           )}
         </div>
       </Layout>
+
+        <BulkApplyProgress
+          open={progressOpen}
+          title={selectedIpo ? `${selectedIpo.companyName || selectedIpo.scrip} ${kitta} kitta` : "IPO"}
+          summary={progressSummary}
+          rows={results}
+          applying={applying}
+          completed={progressDone}
+          reconnecting={reconnecting}
+          cancelling={cancelling}
+          canCancel={applying && !progressDone && !cancelling}
+          canRetryFailed={progressDone && progressSummary.failedCount > 0 && !applying}
+          onRetryFailed={handleRetryFailed}
+          onCancelRemaining={handleCancelRemaining}
+          onResume={handleResumeProgress}
+          onClose={() => setProgressOpen(false)}
+        />
+      </>
   );
 };
 

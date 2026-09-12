@@ -574,6 +574,24 @@
 .ipo-result-name { font-size: 13px; font-weight: 600; color: var(--text); margin: 0 0 2px; }
 .ipo-result-msg { font-size: 11px; color: var(--text-2); margin: 0; }
 
+.ipo-progress-reopen {
+  margin-top: 10px;
+  width: 100%;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-2);
+  border-radius: var(--r);
+  padding: 9px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ipo-progress-reopen:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* Skeleton rows */
 .ipo-skel-row { padding: 14px 0; border-bottom: 1px solid var(--border); }
 .ipo-skel-row:last-child { border-bottom: none; }
