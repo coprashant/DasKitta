@@ -236,6 +236,16 @@
   justify-content: flex-end;
 }
 
+.auth-login-options {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.auth-forgot-btn {
+  font-size: 12px;
+  line-height: 1.2;
+}
+
 /* Bottom footer text link layout */
 .auth-footer-text {
   text-align: center;

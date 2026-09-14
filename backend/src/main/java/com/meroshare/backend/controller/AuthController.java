@@ -38,6 +38,9 @@ public class AuthController {
     @Value("${app.cookie.secure:true}")
     private boolean cookieSecure;
 
+    @Value("${app.cookie.cross-site:false}")
+    private boolean crossSiteCookie;
+
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
         return ResponseEntity.ok(authService.register(request));
@@ -143,10 +146,13 @@ public class AuthController {
     }
 
     private ResponseCookie buildRefreshCookie(String value, Duration ttl) {
+        boolean allowCrossSiteNone = crossSiteCookie && cookieSecure;
+        String sameSite = allowCrossSiteNone ? "None" : "Lax";
+
         return ResponseCookie.from(REFRESH_COOKIE_NAME, value)
                 .httpOnly(true)
                 .secure(cookieSecure)
-                .sameSite(cookieSecure ? "None" : "Lax")
+                .sameSite(sameSite)
                 .path("/api/auth")
                 .maxAge(ttl)
                 .build();

@@ -543,7 +543,7 @@ const Auth = () => {
                         </div>
 
                         {isLoginMode && (
-                            <div className="form-group form-group-inline">
+                            <div className="form-group form-group-inline auth-login-options">
                                 <label className="checkbox-label" htmlFor="auth-remember-me">
                                     <input
                                         id="auth-remember-me"
@@ -553,15 +553,11 @@ const Auth = () => {
                                     />
                                     Remember me
                                 </label>
-                            </div>
-                        )}
 
-                        {isLoginMode && (
-                            <div className="form-group form-group-inline auth-inline-action">
                                 <button
                                     type="button"
                                     onClick={handleForgotNavigation}
-                                    className="auth-link auth-inline-btn"
+                                    className="auth-link auth-inline-btn auth-forgot-btn"
                                 >
                                     Forgot Password?
                                 </button>

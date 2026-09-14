@@ -24,14 +24,8 @@ public class GlobalExceptionHandler {
     // unverified account trying to login, frontend uses code to route to otp screen
     @ExceptionHandler(UnverifiedAccountException.class)
     public ResponseEntity<Map<String, Object>> handleUnverified(UnverifiedAccountException ex) {
-        log.debug("[EXCEPTION] Unverified account login attempt");
-        Map<String, Object> body = new HashMap<>();
-        body.put("timestamp", LocalDateTime.now().toString());
-        body.put("status", HttpStatus.FORBIDDEN.value());
-        body.put("message", ex.getMessage());
-        body.put("code", "UNVERIFIED_ACCOUNT");
-        body.put("email", ex.getEmail());
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
+        log.warn("[EXCEPTION] Unverified account login attempt", ex);
+        return buildResponse(HttpStatus.FORBIDDEN, "UNVERIFIED_ACCOUNT", "Account verification required");
     }
 
     /**
@@ -40,25 +34,27 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, Object>> handleRuntime(RuntimeException ex) {
-        log.warn("[EXCEPTION] RuntimeException: {}", ex.getMessage());
-        return buildResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
+        log.warn("[EXCEPTION] RuntimeException", ex);
+        return buildResponse(HttpStatus.BAD_REQUEST, "REQUEST_FAILED", "Request could not be completed");
     }
 
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<Map<String, Object>> handleBadCredentials(BadCredentialsException ex) {
         // Don't log at ERROR — wrong passwords are expected
-        log.debug("[EXCEPTION] BadCredentials");
-        return buildResponse(HttpStatus.UNAUTHORIZED, "Invalid username or password");
+        log.debug("[EXCEPTION] BadCredentials", ex);
+        return buildResponse(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "Invalid username or password");
     }
 
     @ExceptionHandler(DisabledException.class)
     public ResponseEntity<Map<String, Object>> handleDisabled(DisabledException ex) {
-        return buildResponse(HttpStatus.FORBIDDEN, "Your account has been disabled");
+        log.warn("[EXCEPTION] Disabled account", ex);
+        return buildResponse(HttpStatus.FORBIDDEN, "ACCOUNT_DISABLED", "Your account has been disabled");
     }
 
     @ExceptionHandler(LockedException.class)
     public ResponseEntity<Map<String, Object>> handleLocked(LockedException ex) {
-        return buildResponse(HttpStatus.FORBIDDEN, "Your account is locked");
+        log.warn("[EXCEPTION] Locked account", ex);
+        return buildResponse(HttpStatus.FORBIDDEN, "ACCOUNT_LOCKED", "Your account is locked");
     }
 
     /**
@@ -78,6 +74,7 @@ public class GlobalExceptionHandler {
         Map<String, Object> body = new HashMap<>();
         body.put("timestamp", LocalDateTime.now().toString());
         body.put("status", HttpStatus.BAD_REQUEST.value());
+        body.put("code", "VALIDATION_ERROR");
         body.put("message", "Validation failed");
         body.put("errors", fieldErrors);
 
@@ -87,8 +84,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MissingServletRequestParameterException.class)
     public ResponseEntity<Map<String, Object>> handleMissingParam(
             MissingServletRequestParameterException ex) {
-        return buildResponse(HttpStatus.BAD_REQUEST,
-                "Missing required parameter: " + ex.getParameterName());
+        log.warn("[EXCEPTION] Missing request parameter: {}", ex.getParameterName(), ex);
+        return buildResponse(HttpStatus.BAD_REQUEST, "MISSING_PARAMETER", "Missing required request parameter");
     }
 
     /**
@@ -96,15 +93,16 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneric(Exception ex) {
-        log.error("[EXCEPTION] Unexpected error: {}", ex.getMessage(), ex);
+        log.error("[EXCEPTION] Unexpected error", ex);
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR,
-                "An unexpected error occurred. Please try again later.");
+                "INTERNAL_SERVER_ERROR", "An unexpected error occurred. Please try again later.");
     }
 
-    private ResponseEntity<Map<String, Object>> buildResponse(HttpStatus status, String message) {
+    private ResponseEntity<Map<String, Object>> buildResponse(HttpStatus status, String code, String message) {
         Map<String, Object> body = new HashMap<>();
         body.put("timestamp", LocalDateTime.now().toString());
         body.put("status", status.value());
+        body.put("code", code != null ? code : "UNKNOWN_ERROR");
         body.put("message", message != null ? message : "An error occurred");
         return ResponseEntity.status(status).body(body);
     }
