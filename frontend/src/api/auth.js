@@ -5,6 +5,10 @@ export const verifyOtpApi = (email, code) =>
     client.post("/auth/verify-otp", { email, code });
 export const resendOtpApi = (email) =>
     client.post("/auth/resend-otp", { email });
+export const forgotPasswordApi = (email) =>
+    client.post("/auth/forgot-password", { email });
+export const resetPasswordApi = (email, code, newPassword) =>
+    client.post("/auth/reset-password", { email, code, newPassword });
 export const updatePasswordApi = (oldPassword, newPassword) =>
     client.patch("/auth/password", { oldPassword, newPassword });
 export const updateUsernameApi = (newUsername) =>

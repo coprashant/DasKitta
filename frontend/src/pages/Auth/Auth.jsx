@@ -3,7 +3,7 @@ import { useNavigate, useLocation, Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import OtpInput from "../../components/OtpInput/OtpInput";
 import { EyeIcon, EyeOffIcon, CloseIcon, SpinnerIcon } from "../../components/Icons";
-import { verifyOtpApi, resendOtpApi } from "../../api/auth";
+import { verifyOtpApi, resendOtpApi, forgotPasswordApi, resetPasswordApi } from "../../api/auth";
 import SEO from "../../seo/SEO.jsx";
 import "./Auth.css";
 
@@ -18,15 +18,24 @@ const Auth = () => {
     const background = location.state?.background;
 
     const [form, setForm] = useState({ username: "", email: "", password: "" });
+    const [authMode, setAuthMode] = useState(isLogin ? "login" : "register");
     const [submittedEmail, setSubmittedEmail] = useState("");
     const [otpCode, setOtpCode] = useState("");
-    const [isOtpStage, setIsOtpStage] = useState(false);
+    const [resetEmail, setResetEmail] = useState("");
+    const [newPassword, setNewPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const [resending, setResending] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [rememberMe, setRememberMe] = useState(false);
     const [errorMessage, setErrorMessage] = useState("");
+    const [successMessage, setSuccessMessage] = useState("");
     const [timer, setTimer] = useState(0);
+
+    const isOtpStage = authMode === "otp";
+    const isForgotMode = authMode === "forgot";
+    const isResetMode = authMode === "reset";
+    const isLoginMode = authMode === "login";
+    const isRegisterMode = authMode === "register";
 
     const sanitizeErrorMessage = (err, fallback) => {
         if (err?.response?.status === 401) {
@@ -75,8 +84,11 @@ const Auth = () => {
 
     useEffect(() => {
         setErrorMessage("");
-        setIsOtpStage(false);
+        setSuccessMessage("");
+        setAuthMode(isLogin ? "login" : "register");
         setOtpCode("");
+        setResetEmail("");
+        setNewPassword("");
         setSubmittedEmail("");
         setTimer(0);
     }, [location.pathname]);
@@ -93,17 +105,57 @@ const Auth = () => {
         return () => clearInterval(interval);
     }, [timer]);
 
-    const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+    const handleChange = (e) => {
+        setErrorMessage("");
+        setSuccessMessage("");
+        setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+    };
 
     const handleSwitchMode = (targetPath) => {
+        setErrorMessage("");
+        setSuccessMessage("");
+        setOtpCode("");
+        setNewPassword("");
+        setResetEmail("");
+        setSubmittedEmail("");
+        setTimer(0);
+        setAuthMode(targetPath === "/login" ? "login" : "register");
         navigate(targetPath, { state: { background }, replace: true });
+    };
+
+    const handleForgotNavigation = () => {
+        setErrorMessage("");
+        setSuccessMessage("");
+        const prefilledEmail = form.username.includes("@")
+            ? form.username.trim().toLowerCase()
+            : "";
+        setResetEmail(prefilledEmail);
+        setSubmittedEmail(prefilledEmail);
+        setOtpCode("");
+        setNewPassword("");
+        setAuthMode("forgot");
+    };
+
+    const handleBackToLogin = () => {
+        if (location.pathname !== "/login") {
+            handleSwitchMode("/login");
+            return;
+        }
+        setErrorMessage("");
+        setOtpCode("");
+        setNewPassword("");
+        setAuthMode("login");
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setErrorMessage("");
 
-        if (!isLogin && form.password.length < 6) {
+        if (!isRegisterMode && !isLoginMode) {
+            return;
+        }
+
+        if (isRegisterMode && form.password.length < 6) {
             setErrorMessage("Password must be at least 6 characters long.");
             return;
         }
@@ -111,20 +163,20 @@ const Auth = () => {
         setLoading(true);
 
         try {
-            if (isLogin) {
-                await login({ username: form.username, password: form.password, rememberMe });
+            if (isLoginMode) {
+                await login({ loginIdentifier: form.username.trim(), password: form.password, rememberMe });
                 handleClose();
             } else {
                 await register(form);
                 setSubmittedEmail(form.email.trim().toLowerCase());
-                setIsOtpStage(true);
+                setAuthMode("otp");
                 setTimer(RESEND_COOLDOWN);
             }
         } catch (err) {
             if (err?.response?.data?.code === "UNVERIFIED_ACCOUNT") {
                 const email = err.response.data.email || form.email;
                 setSubmittedEmail(email.trim().toLowerCase());
-                setIsOtpStage(true);
+                setAuthMode("otp");
                 setTimer(RESEND_COOLDOWN);
                 setErrorMessage("Your account is not verified yet. A new code has been sent to your email.");
             } else {
@@ -145,11 +197,76 @@ const Auth = () => {
 
         try {
             await verifyOtpApi(targetEmail, otpCode.trim());
-            await login({ username: form.username, password: form.password });
-            setIsOtpStage(false);
+            await login({ loginIdentifier: form.username.trim(), password: form.password });
+            setAuthMode("login");
             handleClose();
         } catch (err) {
             setErrorMessage(sanitizeErrorMessage(err, "Invalid or expired code. Please try again."));
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleForgotPasswordSubmit = async (e) => {
+        e.preventDefault();
+        setErrorMessage("");
+        setSuccessMessage("");
+
+        const targetEmail = resetEmail.trim().toLowerCase();
+        if (!targetEmail) {
+            setErrorMessage("Email is required.");
+            return;
+        }
+
+        setLoading(true);
+        try {
+            await forgotPasswordApi(targetEmail);
+            setSubmittedEmail(targetEmail);
+            setResetEmail(targetEmail);
+            setOtpCode("");
+            setNewPassword("");
+            setAuthMode("reset");
+            setSuccessMessage("A password reset verification code has been sent to your email.");
+        } catch (err) {
+            setErrorMessage(sanitizeErrorMessage(err, "Unable to send reset code. Please try again."));
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleResetPasswordSubmit = async (e) => {
+        e.preventDefault();
+        setErrorMessage("");
+        setSuccessMessage("");
+
+        const targetEmail = (submittedEmail || resetEmail).trim().toLowerCase();
+        if (!targetEmail) {
+            setErrorMessage("Email is required.");
+            setAuthMode("forgot");
+            return;
+        }
+        if (otpCode.length !== 6) {
+            setErrorMessage("Verification code must be 6 digits.");
+            return;
+        }
+        if (newPassword.length < 6) {
+            setErrorMessage("Password must be at least 6 characters long.");
+            return;
+        }
+
+        setLoading(true);
+        try {
+            await resetPasswordApi(targetEmail, otpCode.trim(), newPassword);
+            if (location.pathname !== "/login") {
+                navigate("/login", { state: { background }, replace: true });
+            }
+            setAuthMode("login");
+            setForm((prev) => ({ ...prev, username: targetEmail, password: "" }));
+            setOtpCode("");
+            setNewPassword("");
+            setSuccessMessage("Password has been reset successfully. You can now log in.");
+        } catch (err) {
+            setErrorMessage(sanitizeErrorMessage(err, "Unable to reset password. Please try again."));
         } finally {
             setLoading(false);
         }
@@ -174,17 +291,26 @@ const Auth = () => {
     };
 
     const activeEmail = submittedEmail || form.email;
+    const activeResetEmail = submittedEmail || resetEmail;
 
     return (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="auth-title">
             <SEO
-                title={isLogin ? "Sign In" : "Create Account"}
+                title={
+                    isForgotMode
+                        ? "Forgot Password"
+                        : isResetMode
+                            ? "Reset Password"
+                            : isLoginMode
+                                ? "Sign In"
+                                : "Create Account"
+                }
                 description={
-                    isLogin
+                    isLoginMode || isForgotMode || isResetMode
                         ? "Sign in to DasKitta to manage your Meroshare accounts, apply for IPOs, and track your NEPSE portfolio."
                         : "Create a free DasKitta account to apply for NEPSE IPOs across multiple Meroshare accounts, track your portfolio, and check allotment results."
                 }
-                canonical={isLogin ? "/login" : "/register"}
+                canonical={isLoginMode || isForgotMode || isResetMode ? "/login" : "/register"}
                 noindex={true}
             />
             <div className="modal-blur" onClick={handleClose} aria-hidden="true" />
@@ -205,12 +331,24 @@ const Auth = () => {
                         <span className="auth-brand-name">DasKitta</span>
                     </button>
                     <h1 className="auth-title" id="auth-title">
-                        {isOtpStage ? "Verify Your Account" : isLogin ? "Welcome Back" : "Create Account"}
+                        {isOtpStage
+                            ? "Verify Your Account"
+                            : isForgotMode
+                                ? "Forgot Password"
+                                : isResetMode
+                                    ? "Reset Password"
+                                    : isLoginMode
+                                        ? "Welcome Back"
+                                        : "Create Account"}
                     </h1>
                     <p className="auth-sub">
                         {isOtpStage ? (
                             <>Enter the code sent to <strong className="auth-sub-highlight">{activeEmail}</strong></>
-                        ) : isLogin ? (
+                        ) : isForgotMode ? (
+                            "Enter your account email to receive a reset code"
+                        ) : isResetMode ? (
+                            <>Enter the code sent to <strong className="auth-sub-highlight">{activeResetEmail}</strong> and set a new password</>
+                        ) : isLoginMode ? (
                             "Enter your credentials to access your account"
                         ) : (
                             "Get started in seconds"
@@ -221,6 +359,12 @@ const Auth = () => {
                 {errorMessage && (
                     <div className="auth-error-banner" role="alert">
                         {errorMessage}
+                    </div>
+                )}
+
+                {successMessage && (
+                    <div className="auth-success-banner" role="status">
+                        {successMessage}
                     </div>
                 )}
 
@@ -243,10 +387,103 @@ const Auth = () => {
                             {loading ? <><SpinnerIcon /> Verifying...</> : "Verify & Activate"}
                         </button>
                     </form>
+                ) : isForgotMode ? (
+                    <form onSubmit={handleForgotPasswordSubmit} className="auth-form">
+                        <div className="form-group">
+                            <label className="form-label" htmlFor="forgot-email">Email Address</label>
+                            <input
+                                id="forgot-email"
+                                className="input"
+                                type="email"
+                                value={resetEmail}
+                                onChange={(e) => {
+                                    setErrorMessage("");
+                                    setSuccessMessage("");
+                                    setResetEmail(e.target.value);
+                                }}
+                                placeholder="your@email.com"
+                                required
+                                autoFocus
+                                autoComplete="email"
+                            />
+                        </div>
+
+                        <button
+                            type="submit"
+                            className="btn btn-primary btn-full btn-lg"
+                            disabled={loading}
+                        >
+                            {loading ? <><SpinnerIcon /> Sending...</> : "Send Reset Code"}
+                        </button>
+                    </form>
+                ) : isResetMode ? (
+                    <form onSubmit={handleResetPasswordSubmit} className="auth-form">
+                        <div className="form-group">
+                            <label className="form-label" htmlFor="reset-email">Email Address</label>
+                            <input
+                                id="reset-email"
+                                className="input"
+                                type="email"
+                                value={activeResetEmail}
+                                readOnly
+                                autoComplete="email"
+                            />
+                        </div>
+
+                        <div className="form-group">
+                            <label className="form-label">One-Time Password</label>
+                            <OtpInput
+                                value={otpCode}
+                                onChange={(val) => {
+                                    setErrorMessage("");
+                                    setSuccessMessage("");
+                                    setOtpCode(val);
+                                }}
+                                disabled={loading}
+                            />
+                        </div>
+
+                        <div className="form-group">
+                            <label className="form-label" htmlFor="reset-password">New Password</label>
+                            <div className="input-password-wrap">
+                                <input
+                                    id="reset-password"
+                                    className="input input-password"
+                                    type={showPassword ? "text" : "password"}
+                                    value={newPassword}
+                                    onChange={(e) => {
+                                        setErrorMessage("");
+                                        setSuccessMessage("");
+                                        setNewPassword(e.target.value);
+                                    }}
+                                    placeholder="Min 6 characters"
+                                    required
+                                    minLength={6}
+                                    autoComplete="new-password"
+                                />
+                                <button
+                                    type="button"
+                                    className="password-toggle-btn"
+                                    onClick={() => setShowPassword((v) => !v)}
+                                    aria-label={showPassword ? "Hide password" : "Show password"}
+                                >
+                                    {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                                </button>
+                            </div>
+                        </div>
+
+                        <button
+                            type="submit"
+                            className="btn btn-primary btn-full btn-lg"
+                            disabled={loading || otpCode.length !== 6 || newPassword.length < 6}
+                        >
+                            {loading ? <><SpinnerIcon /> Resetting...</> : "Reset Password"}
+                        </button>
+                    </form>
                 ) : (
                     <form onSubmit={handleSubmit} className="auth-form">
                         <div className="form-group">
-                            <label className="form-label" htmlFor="auth-username">Username</label>
+                            <label className="form-label" htmlFor="auth-username">{isLoginMode ? "Username or Email" : "Username"}</label>
                             <input
                                 id="auth-username"
                                 className="input"
@@ -254,15 +491,15 @@ const Auth = () => {
                                 name="username"
                                 value={form.username}
                                 onChange={handleChange}
-                                placeholder={isLogin ? "Your username" : "Choose a username"}
+                                placeholder={isLoginMode ? "Username or email address" : "Choose a username"}
                                 required
                                 autoFocus
                                 autoComplete="username"
-                                minLength={isLogin ? undefined : 3}
+                                minLength={isLoginMode ? undefined : 3}
                             />
                         </div>
 
-                        {!isLogin && (
+                        {isRegisterMode && (
                             <div className="form-group">
                                 <label className="form-label" htmlFor="auth-email">Email Address</label>
                                 <input
@@ -289,10 +526,10 @@ const Auth = () => {
                                     name="password"
                                     value={form.password}
                                     onChange={handleChange}
-                                    placeholder={isLogin ? "Your password" : "Min 6 characters"}
+                                    placeholder={isLoginMode ? "Your password" : "Min 6 characters"}
                                     required
-                                    autoComplete={isLogin ? "current-password" : "new-password"}
-                                    minLength={isLogin ? undefined : 6}
+                                    autoComplete={isLoginMode ? "current-password" : "new-password"}
+                                    minLength={isLoginMode ? undefined : 6}
                                 />
                                 <button
                                     type="button"
@@ -305,7 +542,7 @@ const Auth = () => {
                             </div>
                         </div>
 
-                        {isLogin && (
+                        {isLoginMode && (
                             <div className="form-group form-group-inline">
                                 <label className="checkbox-label" htmlFor="auth-remember-me">
                                     <input
@@ -319,20 +556,31 @@ const Auth = () => {
                             </div>
                         )}
 
+                        {isLoginMode && (
+                            <div className="form-group form-group-inline auth-inline-action">
+                                <button
+                                    type="button"
+                                    onClick={handleForgotNavigation}
+                                    className="auth-link auth-inline-btn"
+                                >
+                                    Forgot Password?
+                                </button>
+                            </div>
+                        )}
+
                         <button
                             type="submit"
                             className="btn btn-primary btn-full btn-lg"
                             disabled={loading}
                         >
                             {loading ? (
-                                <><SpinnerIcon /> {isLogin ? "Signing in..." : "Creating account..."}</>
+                                <><SpinnerIcon /> {isLoginMode ? "Signing in..." : "Creating account..."}</>
                             ) : (
-                                isLogin ? "Sign in" : "Create account"
+                                isLoginMode ? "Sign in" : "Create account"
                             )}
                         </button>
 
-                        {/* Implicit agreement text */}
-                        {!isLogin && (
+                        {isRegisterMode && (
                             <p className="auth-legal-notice">
                                 By creating an account, you agree to our{" "}
                                 <Link to="/terms" className="auth-link" target="_blank" rel="noopener noreferrer">
@@ -364,7 +612,18 @@ const Auth = () => {
                                         : "Resend code"}
                             </button>
                         </>
-                    ) : isLogin ? (
+                    ) : isForgotMode || isResetMode ? (
+                        <>
+                            Back to login{" "}
+                            <button
+                                type="button"
+                                onClick={handleBackToLogin}
+                                className="auth-link auth-inline-btn"
+                            >
+                                Sign in
+                            </button>
+                        </>
+                    ) : isLoginMode ? (
                         <>
                             Don't have an account?{" "}
                             <button

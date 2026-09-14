@@ -14,6 +14,7 @@ import com.meroshare.backend.security.TokenValidityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -128,17 +129,18 @@ public class AuthService {
     }
 
     public SessionResult login(LoginRequest request) {
-        String sanitizedUsername = cleanInput(request.getUsername());
+        String sanitizedIdentifier = cleanInput(request.getLoginIdentifier());
+
+        AppUser user = appUserRepository
+            .findByUsernameIgnoreCaseOrEmailIgnoreCase(sanitizedIdentifier, sanitizedIdentifier)
+            .orElseThrow(() -> new BadCredentialsException("Invalid username or password"));
 
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
-                        sanitizedUsername,
+                user.getUsername(),
                         request.getPassword()
                 )
         );
-
-        AppUser user = appUserRepository.findByUsername(sanitizedUsername)
-                .orElseThrow(() -> new RuntimeException("User not found"));
 
         if (!user.isEnabled()) {
             // credentials are correct so send a fresh code, ignore cooldown failure
@@ -200,6 +202,37 @@ public class AuthService {
         sendRegistrationOtp(sanitizedEmail);
     }
 
+    @Transactional
+    public void requestForgotPassword(String email) {
+        String sanitizedEmail = cleanEmail(email);
+
+        Optional<AppUser> userOptional = appUserRepository.findByEmail(sanitizedEmail);
+        if (userOptional.isEmpty()) {
+            return;
+        }
+
+        AppUser user = userOptional.get();
+        if (!user.isEnabled()) {
+            return;
+        }
+
+        String otpCode = generateSecureOtp();
+        otpService.storeOtp(sanitizedEmail, otpCode);
+
+        String subject = "Reset your DasKitta password";
+        String textBody = "DasKitta Security Notification\n\n"
+                + "Your 6-digit password reset code is: " + otpCode + "\n\n"
+                + "This code expires in 5 minutes. Do not share this code with anyone.\n"
+                + "If you did not request a password reset, please ignore this message.";
+
+        String htmlBody = buildOtpEmailHtml(
+                "Reset your password",
+                "Use the verification code below to reset your DasKitta account password.",
+                otpCode);
+
+        emailServiceClient.sendEmail(sanitizedEmail, subject, textBody, htmlBody, "DasKitta Support");
+    }
+
     public void sendRegistrationOtp(String email) {
         String sanitizedEmail = cleanEmail(email);
         String otpCode = generateSecureOtp();
@@ -235,6 +268,24 @@ public class AuthService {
 
         user.setEnabled(true);
         appUserRepository.save(user);
+    }
+
+    @Transactional
+    public void resetPassword(String email, String code, String newPassword) {
+        String sanitizedEmail = cleanEmail(email);
+
+        otpService.verifyOtp(sanitizedEmail, code);
+
+        AppUser user = appUserRepository.findByEmail(sanitizedEmail)
+                .orElseThrow(() -> new RuntimeException("User profile not found"));
+
+        if (!user.isEnabled()) {
+            throw new RuntimeException("Account is not verified");
+        }
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+        appUserRepository.save(user);
+        otpService.clearOtp(sanitizedEmail);
     }
 
     @Transactional

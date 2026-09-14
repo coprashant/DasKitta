@@ -219,6 +219,23 @@
   animation: fade-in 0.15s ease both;
 }
 
+.auth-success-banner {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  color: #15803d;
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: var(--r, 8px);
+  margin-bottom: 12px;
+  text-align: center;
+  line-height: 1.35;
+  animation: fade-in 0.15s ease both;
+}
+
+.auth-inline-action {
+  justify-content: flex-end;
+}
+
 /* Bottom footer text link layout */
 .auth-footer-text {
   text-align: center;

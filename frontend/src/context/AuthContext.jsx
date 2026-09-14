@@ -48,7 +48,12 @@ export const AuthProvider = ({ children }) => {
   const login = async (credentials) => {
     setIsLoading(true);
     try {
-      const res = await loginApi(credentials);
+      const payload = {
+        loginIdentifier: (credentials?.loginIdentifier ?? credentials?.username ?? "").trim(),
+        password: credentials?.password,
+        rememberMe: Boolean(credentials?.rememberMe),
+      };
+      const res = await loginApi(payload);
       const { token, username, email } = res.data;
       persistSession(token, username, email);
       if (onLoginRef.current) await onLoginRef.current();
@@ -56,7 +61,7 @@ export const AuthProvider = ({ children }) => {
       toast.success("Signed in successfully");
       navigate("/dashboard");
     } catch (err) {
-      const msg = err.response?.data?.message || err.response?.data?.errors?.username || "Login failed";
+      const msg = err.response?.data?.message || err.response?.data?.errors?.loginIdentifier || "Login failed";
       toast.error(msg);
     } finally {
       setIsLoading(false);
