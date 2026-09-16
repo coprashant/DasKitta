@@ -1,6 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useAuth } from "./AuthContext";
-import { useAccount } from "./AccountContext";
 import {
   clearNotificationsApi,
   deleteNotificationApi,
@@ -10,15 +9,16 @@ import {
 } from "../api/notifications";
 
 const NotificationContext = createContext(null);
+const FETCH_THROTTLE_MS = 60000;
 
 export const NotificationProvider = ({ children }) => {
   const { user } = useAuth();
-  const { activeAccount } = useAccount();
 
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const requestSeqRef = useRef(0);
+  const lastFetchedAtRef = useRef(0);
 
   const readIds = useMemo(
       () => new Set(notifications.filter((n) => n.isRead).map((n) => n.id)),
@@ -35,10 +35,15 @@ export const NotificationProvider = ({ children }) => {
     timestamp: notification.createdAt ?? notification.timestamp ?? null,
   }), []);
 
-  const loadNotifications = useCallback(async () => {
+  const loadNotifications = useCallback(async (force = false) => {
     if (!user) {
       setNotifications([]);
+      lastFetchedAtRef.current = 0;
       setLoading(false);
+      return;
+    }
+
+    if (!force && Date.now() - lastFetchedAtRef.current < FETCH_THROTTLE_MS) {
       return;
     }
 
@@ -50,6 +55,7 @@ export const NotificationProvider = ({ children }) => {
       if (requestSeqRef.current !== requestId) return;
       const items = Array.isArray(response?.data) ? response.data : [];
       setNotifications(items.map(normalizeNotification));
+      lastFetchedAtRef.current = Date.now();
     } catch {
       if (requestSeqRef.current === requestId) {
         setNotifications((current) => current);
@@ -62,8 +68,8 @@ export const NotificationProvider = ({ children }) => {
   }, [normalizeNotification, user]);
 
   useEffect(() => {
-    loadNotifications();
-  }, [user?.username, activeAccount?.id, loadNotifications]);
+    loadNotifications(true);
+  }, [user?.username, loadNotifications]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -135,7 +141,7 @@ export const NotificationProvider = ({ children }) => {
   }, []);
 
   const refresh = useCallback(() => {
-    loadNotifications();
+    loadNotifications(true);
   }, [loadNotifications]);
 
   const contextValue = useMemo(() => ({

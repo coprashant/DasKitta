@@ -286,7 +286,11 @@ export default function Nepse() {
     const [expandedSector, setExpandedSector] = useState(null);
     const [sectorGraphs, setSectorGraphs] = useState({});
 
-    const fetchCore = useCallback(async () => {
+    const fetchCore = useCallback(async ({ force = false } = {}) => {
+        if (!force && document.visibilityState !== "visible") {
+            return;
+        }
+
         try {
             const [
                 openRes,
@@ -353,13 +357,43 @@ export default function Nepse() {
     }, []);
 
     useEffect(() => {
-        void fetchCore();
+        let intervalId = null;
 
-        const interval = setInterval(() => {
-            void fetchCore();
-        }, REFRESH_INTERVAL);
+        const clearPolling = () => {
+            if (intervalId !== null) {
+                window.clearInterval(intervalId);
+                intervalId = null;
+            }
+        };
 
-        return () => clearInterval(interval);
+        const startPolling = () => {
+            if (intervalId !== null || document.visibilityState !== "visible") {
+                return;
+            }
+
+            intervalId = window.setInterval(() => {
+                void fetchCore();
+            }, REFRESH_INTERVAL);
+        };
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === "visible") {
+                void fetchCore({ force: true });
+                startPolling();
+                return;
+            }
+
+            clearPolling();
+        };
+
+        void fetchCore({ force: true });
+        startPolling();
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+
+        return () => {
+            clearPolling();
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+        };
     }, [fetchCore]);
 
     const fetchPromoterPage = useCallback(async (page) => {

@@ -6,6 +6,31 @@ import { setToken, clearToken } from "../api/tokenStore";
 import { registerPushSubscription } from "../api/notifications";
 import toast from "react-hot-toast";
 const AuthContext = createContext(null);
+
+const SESSION_HINT_KEY = "session_hint";
+
+const hasSessionHint = () => {
+  try {
+    return localStorage.getItem(SESSION_HINT_KEY) === "true";
+  } catch {
+    return false;
+  }
+};
+
+const setSessionHint = () => {
+  try {
+    localStorage.setItem(SESSION_HINT_KEY, "true");
+  } catch {
+  }
+};
+
+const clearSessionHint = () => {
+  try {
+    localStorage.removeItem(SESSION_HINT_KEY);
+  } catch {
+  }
+};
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -21,15 +46,23 @@ export const AuthProvider = ({ children }) => {
   // no token or user data is ever trusted from local storage
   useEffect(() => {
     let active = true;
+
+    if (!hasSessionHint()) {
+      setIsReady(true);
+      return () => { active = false; };
+    }
+
     attemptRefresh()
         .then((data) => {
           if (!active) return;
           if (data?.token) {
+            setSessionHint();
             setUser({ username: data.username, email: data.email });
           }
         })
         .catch(() => {
           // no valid session, stay logged out
+          clearSessionHint();
         })
         .finally(() => {
           if (active) setIsReady(true);
@@ -39,10 +72,12 @@ export const AuthProvider = ({ children }) => {
 
   const persistSession = (token, username, email) => {
     setToken(token);
+    setSessionHint();
     setUser({ username, email });
   };
   const clearSession = useCallback(() => {
     clearToken();
+    clearSessionHint();
     setUser(null);
   }, []);
   const login = async (credentials) => {

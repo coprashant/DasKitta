@@ -8,29 +8,40 @@ import com.meroshare.backend.service.CdscMetadataService;
 import com.meroshare.backend.service.MeroshareAccountService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.concurrent.TimeUnit;
 import java.util.List;
 import java.util.Map;
+
 @RestController
 @RequestMapping("/api/accounts")
 @RequiredArgsConstructor
 public class AccountController {
+    private static final CacheControl PUBLIC_METADATA_CACHE = CacheControl.maxAge(1, TimeUnit.HOURS)
+            .cachePublic();
+
     private final MeroshareAccountService accountService;
     private final CdscMetadataService cdscMetadataService;
 
     // Static CDSC metadata, cached for 24 hours via CdscMetadataService
     @GetMapping("/bank-by-dp/{dpId}")
     public ResponseEntity<Map<String, Object>> getBankByDp(@PathVariable Integer dpId) {
-        return ResponseEntity.ok(cdscMetadataService.getBankByDp(dpId));
+        return ResponseEntity.ok()
+                .cacheControl(PUBLIC_METADATA_CACHE)
+                .body(cdscMetadataService.getBankByDp(dpId));
     }
 
     // Static CDSC metadata, cached for 24 hours via CdscMetadataService
     @GetMapping("/dp-list")
     public ResponseEntity<List<Map>> getDpList() {
-        return ResponseEntity.ok(cdscMetadataService.getDpList());
+        return ResponseEntity.ok()
+                .cacheControl(PUBLIC_METADATA_CACHE)
+                .body(cdscMetadataService.getDpList());
     }
 
     @GetMapping

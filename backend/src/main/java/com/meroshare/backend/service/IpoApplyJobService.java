@@ -14,6 +14,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -23,11 +24,15 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
+import java.time.Duration;
+import java.time.Instant;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class IpoApplyJobService {
+
+    private static final Duration COMPLETED_JOB_RETENTION = Duration.ofMinutes(15);
 
     private final IpoService ipoService;
     private final AppUserRepository appUserRepository;
@@ -64,6 +69,7 @@ public class IpoApplyJobService {
                 .failedCount(0)
                 .cancelledCount(0)
                 .pendingCount(request.getAccountIds().size())
+                .completedAt(null)
                 .build();
 
         jobs.put(jobId, state);
@@ -144,6 +150,23 @@ public class IpoApplyJobService {
         return getSnapshot(jobId, username);
     }
 
+    @Scheduled(fixedRate = 300000)
+    public void evictCompletedJobs() {
+        Instant cutoff = Instant.now().minus(COMPLETED_JOB_RETENTION);
+        int before = jobs.size();
+
+        jobs.entrySet().removeIf(entry -> {
+            JobState state = entry.getValue();
+            Instant completedAt = state.getCompletedAt();
+            return state.isCompleted() && completedAt != null && completedAt.isBefore(cutoff);
+        });
+
+        int removed = before - jobs.size();
+        if (removed > 0) {
+            log.info("[APPLY_JOB] Evicted {} completed job snapshots", removed);
+        }
+    }
+
     private void runJob(JobState state) {
         try {
             ipoService.applyForAllStream(
@@ -201,6 +224,7 @@ public class IpoApplyJobService {
 
         if ("job_completed".equals(event.getEventType()) || "job_cancelled".equals(event.getEventType())) {
             state.setCompleted(true);
+            state.setCompletedAt(Instant.now());
             createCompletionNotification(state);
         }
 
@@ -339,6 +363,7 @@ public class IpoApplyJobService {
         private int failedCount;
         private int cancelledCount;
         private int pendingCount;
+        private Instant completedAt;
     }
 
     @Data

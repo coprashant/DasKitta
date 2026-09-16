@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useAccount } from "../../context/AccountContext";
@@ -8,7 +8,6 @@ import { getCompanySectors, isNepseError } from "../../api/nepse";
 import Layout from "../../components/Layout/Layout.jsx";
 import AccountSwitcher from "../../components/AccountSwitcher/AccountSwitcher.jsx";
 import SEO from "../../seo/SEO.jsx";
-import DashboardCharts from "./DashboardCharts.jsx";
 import {
   IconPlus,
   IconFile,
@@ -19,6 +18,8 @@ import {
   IconClock
 } from "../../components/Icons";
 import "./Dashboard.css";
+
+const DashboardCharts = lazy(() => import("./DashboardCharts.jsx"));
 
 const CDSC_MOBILE_LIMIT = 5;
 
@@ -67,6 +68,22 @@ const IconAlertCircle = () => (
 
 const Skeleton = ({ h = 16, w = "100%", style = {} }) => (
     <div className="skeleton" style={{ height: h, width: w, ...style }} />
+);
+
+const ChartsFallback = () => (
+    <div className="dash-card dash-analytics">
+      <div className="dash-card-header">
+        <div>
+          <h2 className="dash-card-title">Application Analytics</h2>
+          <p className="dash-card-subtitle">Track your IPO application history</p>
+        </div>
+      </div>
+
+      <div className="dash-multi-chart-wrapper">
+        <Skeleton h={230} style={{ borderRadius: 10 }} />
+        <Skeleton h={230} style={{ borderRadius: 10 }} />
+      </div>
+    </div>
 );
 
 const cdscResultBadgeClass = (s) =>
@@ -661,21 +678,23 @@ const Dashboard = () => {
                 {/* card shell always renders once account is active, no
                     layout jump when data or loading state changes */}
                 {showAnalyticsCard && (
+                  <Suspense fallback={<ChartsFallback />}>
                     <DashboardCharts
-                        isMobile={isMobile}
-                        activeAccount={activeAccount}
-                        cdscSummary={cdscSummary}
-                        cdscLoading={cdscLoading}
-                        cdscError={cdscError}
-                        portfolio={portfolio}
-                        portfolioLoading={portfolioLoading}
-                        portfolioError={portfolioError}
-                        sectorMap={sectorMap}
-                        chartMode={chartMode}
-                        setChartMode={setChartMode}
-                        fetchCdscSummary={fetchCdscSummary}
-                        fetchPortfolio={fetchPortfolio}
+                      isMobile={isMobile}
+                      activeAccount={activeAccount}
+                      cdscSummary={cdscSummary}
+                      cdscLoading={cdscLoading}
+                      cdscError={cdscError}
+                      portfolio={portfolio}
+                      portfolioLoading={portfolioLoading}
+                      portfolioError={portfolioError}
+                      sectorMap={sectorMap}
+                      chartMode={chartMode}
+                      setChartMode={setChartMode}
+                      fetchCdscSummary={fetchCdscSummary}
+                      fetchPortfolio={fetchPortfolio}
                     />
+                  </Suspense>
                 )}
 
                 <div className="dash-grid">
