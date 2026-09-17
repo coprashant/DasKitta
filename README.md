@@ -2,7 +2,7 @@
 
 A unified investment management platform for NEPSE investors. Manage multiple Meroshare accounts, apply for IPOs in bulk, track portfolio holdings, and monitor real-time market activity—all from a single application.
 
-**Live Application:** [https://daskitta.vercel.app](https://daskitta.vercel.app)
+**Live Application:** [https://daskitta.prasant-bhattarai.com.np/](https://daskitta.prasant-bhattarai.com.np/)
 ![App Screenshot](frontend/public/daskitta.png)
 
 ## Recent Improvements
