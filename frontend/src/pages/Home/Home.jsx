@@ -10,22 +10,18 @@ import "./Home.css";
 
 const FEATURES = [
   {
-    num: "01",
     title: "Apply in one click",
     desc: "Submit your IPO applications across multiple Meroshare profiles at the same time.",
   },
   {
-    num: "02",
     title: "Manage multiple accounts",
     desc: "Track and organize your entire family's investment profiles from one screen.",
   },
   {
-    num: "03",
     title: "Automatic result checks",
     desc: "Instantly find out if you were allotted shares without checking sites manually.",
   },
   {
-    num: "04",
     title: "History timeline",
     desc: "Keep a permanent, clean record of all your past applications and successes.",
   },
@@ -108,9 +104,6 @@ const Home = ({ theme, onThemeToggle }) => {
             <div className="features-grid">
               {FEATURES.map((f) => (
                   <div className="feature-card" key={f.num}>
-                    <div className="feature-top">
-                      <span className="feature-num">{f.num}</span>
-                    </div>
                     <h3 className="feature-title">{f.title}</h3>
                     <p className="feature-desc">{f.desc}</p>
                   </div>
@@ -123,7 +116,6 @@ const Home = ({ theme, onThemeToggle }) => {
         <section className="cta-section">
           <div className="cta-inner">
             <div className="cta-flat-box">
-              <span className="eyebrow">GET STARTED</span>
               <h2 className="section-title">Ready to simplify your investments?</h2>
               <p className="cta-desc">
                 Connect your accounts today and never miss another IPO deadline.

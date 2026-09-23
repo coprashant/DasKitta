@@ -2,8 +2,9 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 const ProtectedRoute = ({ children }) => {
-    const { user, isReady } = useAuth();
+    const { user, isReady, isOfflineSession } = useAuth();
     const location = useLocation();
+    const canAccessProtectedRoute = Boolean(user) || isOfflineSession;
 
     // wait for the real session check against the server, dont flash protected ui first
     if (!isReady) {
@@ -27,7 +28,7 @@ const ProtectedRoute = ({ children }) => {
         );
     }
 
-    if (!user) {
+    if (!canAccessProtectedRoute) {
         const backgroundLocation = location.state?.background || { pathname: "/", search: "", hash: "" };
 
         return (

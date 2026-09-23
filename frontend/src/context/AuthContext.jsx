@@ -9,6 +9,16 @@ const AuthContext = createContext(null);
 
 const SESSION_HINT_KEY = "session_hint";
 
+const hasNetworkConnection = () => {
+  if (typeof navigator === "undefined") {
+    return true;
+  }
+
+  return navigator.onLine !== false;
+};
+
+const isNetworkError = (error) => !error?.response;
+
 const hasSessionHint = () => {
   try {
     return localStorage.getItem(SESSION_HINT_KEY) === "true";
@@ -36,11 +46,54 @@ export const AuthProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(false);
   // true once the initial session check against the refresh cookie is done
   const [isReady, setIsReady] = useState(false);
+  const [isOfflineSession, setIsOfflineSession] = useState(false);
   const navigate = useNavigate();
   const onLoginRef  = useRef(null);
   const onLogoutRef = useRef(null);
   const registerOnLogin  = useCallback((fn) => { onLoginRef.current  = fn; }, []);
   const registerOnLogout = useCallback((fn) => { onLogoutRef.current = fn; }, []);
+
+  const clearSession = useCallback(() => {
+    clearToken();
+    clearSessionHint();
+    setIsOfflineSession(false);
+    setUser(null);
+  }, []);
+
+  const restoreSession = useCallback(async ({ allowOfflineFallback = false } = {}) => {
+    if (!hasSessionHint()) {
+      clearToken();
+      setIsOfflineSession(false);
+      setUser(null);
+      return false;
+    }
+
+    if (!hasNetworkConnection()) {
+      if (allowOfflineFallback) {
+        setIsOfflineSession(true);
+      }
+      return false;
+    }
+
+    try {
+      const data = await attemptRefresh();
+
+      if (data?.token) {
+        setSessionHint();
+        setIsOfflineSession(false);
+        setUser({ username: data.username, email: data.email });
+        return true;
+      }
+    } catch (error) {
+      if (allowOfflineFallback && isNetworkError(error)) {
+        setIsOfflineSession(true);
+        return false;
+      }
+    }
+
+    clearSession();
+    return false;
+  }, [clearSession]);
 
   // on load ask the server if the refresh cookie still gives a valid session
   // no token or user data is ever trusted from local storage
@@ -52,34 +105,36 @@ export const AuthProvider = ({ children }) => {
       return () => { active = false; };
     }
 
-    attemptRefresh()
-        .then((data) => {
-          if (!active) return;
-          if (data?.token) {
-            setSessionHint();
-            setUser({ username: data.username, email: data.email });
-          }
-        })
-        .catch(() => {
-          // no valid session, stay logged out
-          clearSessionHint();
-        })
-        .finally(() => {
-          if (active) setIsReady(true);
-        });
+    restoreSession({ allowOfflineFallback: true })
+      .finally(() => {
+        if (active) setIsReady(true);
+      });
+
     return () => { active = false; };
-  }, []);
+  }, [restoreSession]);
+
+  useEffect(() => {
+    if (!isOfflineSession) {
+      return undefined;
+    }
+
+    const handleOnline = () => {
+      restoreSession();
+    };
+
+    window.addEventListener("online", handleOnline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+    };
+  }, [isOfflineSession, restoreSession]);
 
   const persistSession = (token, username, email) => {
     setToken(token);
     setSessionHint();
+    setIsOfflineSession(false);
     setUser({ username, email });
   };
-  const clearSession = useCallback(() => {
-    clearToken();
-    clearSessionHint();
-    setUser(null);
-  }, []);
+
   const login = async (credentials) => {
     setIsLoading(true);
     try {
@@ -151,6 +206,7 @@ export const AuthProvider = ({ children }) => {
         user,
         isLoading,
         isReady,
+        isOfflineSession,
         login,
         register,
         logout,
