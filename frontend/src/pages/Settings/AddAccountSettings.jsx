@@ -15,6 +15,25 @@ const EMPTY_FORM = {
     pin: "",
 };
 
+// field level checks used on blur, name matches the input's name
+const validateField = (name, value) => {
+    switch (name) {
+        case "username":
+            return value.trim() ? "" : "Meroshare username is required.";
+        case "password":
+            return value ? "" : "Meroshare password is required.";
+        case "crn":
+            return value.trim() ? "" : "CRN number is required.";
+        case "pin":
+            if (value && !/^\d+$/.test(value.trim())) {
+                return "PIN should contain digits only.";
+            }
+            return "";
+        default:
+            return "";
+    }
+};
+
 export default function AddAccountSettings() {
     const navigate = useNavigate();
     const { refreshAccounts } = useAccount();
@@ -27,6 +46,7 @@ export default function AddAccountSettings() {
     const [dpLoading, setDpLoading] = useState(true);
     const [dpError, setDpError] = useState(false);
     const [bankLookupLoading, setBankLookupLoading] = useState(false);
+    const [fieldErrors, setFieldErrors] = useState({});
 
     const bankAbortRef = useRef(null);
 
@@ -64,8 +84,19 @@ export default function AddAccountSettings() {
         };
     }, []);
 
-    const handleChange = (e) =>
-        setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setForm((f) => ({ ...f, [name]: value }));
+        if (fieldErrors[name]) {
+            setFieldErrors((fe) => ({ ...fe, [name]: "" }));
+        }
+    };
+
+    const handleFieldBlur = (e) => {
+        const { name, value } = e.target;
+        const message = validateField(name, value);
+        setFieldErrors((fe) => ({ ...fe, [name]: message }));
+    };
 
     const handleDpChange = async (e) => {
         const selectedId = e.target.value;
@@ -114,13 +145,24 @@ export default function AddAccountSettings() {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!form.dpId || !form.username.trim() || !form.password) {
-            toast.error("DP, username, and password are required.");
+        const usernameError = validateField("username", form.username);
+        const passwordError = validateField("password", form.password);
+        const crnError = validateField("crn", form.crn);
+        const pinError = validateField("pin", form.pin);
+
+        if (usernameError || passwordError || crnError || pinError) {
+            setFieldErrors({
+                username: usernameError,
+                password: passwordError,
+                crn: crnError,
+                pin: pinError,
+            });
+            toast.error(usernameError || passwordError || crnError || pinError);
             return;
         }
 
-        if (!form.crn.trim()) {
-            toast.error("CRN number is required for IPO applications.");
+        if (!form.dpId) {
+            toast.error("DP is required.");
             return;
         }
 
@@ -227,16 +269,20 @@ export default function AddAccountSettings() {
 
                         <input
                             id="usernameInput"
-                            className="input"
+                            className={`input${fieldErrors.username ? " input-invalid" : ""}`}
                             type="text"
                             name="username"
                             value={form.username}
                             onChange={handleChange}
+                            onBlur={handleFieldBlur}
                             placeholder="Your Meroshare username"
                             required
                             autoComplete="username"
                             disabled={loading}
                         />
+                        {fieldErrors.username && (
+                            <span className="field-error">{fieldErrors.username}</span>
+                        )}
                     </div>
 
                     <div className="form-group">
@@ -247,11 +293,12 @@ export default function AddAccountSettings() {
                         <div className="input-with-icon">
                             <input
                                 id="passwordInput"
-                                className="input"
+                                className={`input${fieldErrors.password ? " input-invalid" : ""}`}
                                 type={showPassword ? "text" : "password"}
                                 name="password"
                                 value={form.password}
                                 onChange={handleChange}
+                                onBlur={handleFieldBlur}
                                 placeholder="Your Meroshare password"
                                 required
                                 autoComplete="current-password"
@@ -275,6 +322,9 @@ export default function AddAccountSettings() {
                                 )}
                             </button>
                         </div>
+                        {fieldErrors.password && (
+                            <span className="field-error">{fieldErrors.password}</span>
+                        )}
                     </div>
                 </div>
 
@@ -288,15 +338,19 @@ export default function AddAccountSettings() {
 
                         <input
                             id="crnInput"
-                            className="input"
+                            className={`input${fieldErrors.crn ? " input-invalid" : ""}`}
                             type="text"
                             name="crn"
                             value={form.crn}
                             onChange={handleChange}
+                            onBlur={handleFieldBlur}
                             placeholder="Bank CRN (required for IPO apply)"
                             required
                             disabled={loading}
                         />
+                        {fieldErrors.crn && (
+                            <span className="field-error">{fieldErrors.crn}</span>
+                        )}
                     </div>
 
                     <div className="form-group">
@@ -307,11 +361,12 @@ export default function AddAccountSettings() {
                         <div className="input-with-icon">
                             <input
                                 id="pinInput"
-                                className="input"
+                                className={`input${fieldErrors.pin ? " input-invalid" : ""}`}
                                 type={showPin ? "text" : "password"}
                                 name="pin"
                                 value={form.pin}
                                 onChange={handleChange}
+                                onBlur={handleFieldBlur}
                                 placeholder="Meroshare transaction PIN (MPIN)"
                                 inputMode="numeric"
                                 autoComplete="off"
@@ -329,6 +384,9 @@ export default function AddAccountSettings() {
                                 {showPin ? <EyeOffIcon /> : <EyeIcon />}
                             </button>
                         </div>
+                        {fieldErrors.pin && (
+                            <span className="field-error">{fieldErrors.pin}</span>
+                        )}
                     </div>
                 </div>
 

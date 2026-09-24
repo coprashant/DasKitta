@@ -1,4 +1,4 @@
-import { DotLottiePlayer } from "@dotlottie/react-player";
+import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 
 function getBullAnimationPath(isOpen, pts) {
     if (!isOpen) return "/bull/meditating_bull.json";
@@ -63,7 +63,7 @@ export default function BullMascot({ isOpen, pts, position }) {
                 transition: "left 0.3s ease, top 0.3s ease"
             }}
         >
-            <DotLottiePlayer
+            <DotLottieReact
                 key={animationPath}
                 src={animationPath}
                 loop

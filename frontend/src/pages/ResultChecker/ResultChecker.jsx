@@ -37,6 +37,7 @@ const ResultChecker = () => {
     const [ipoListLoading, setIpoListLoading] = useState(true);
     const [ipoListError, setIpoListError] = useState(null);
     const nextKeyRef = useRef(0);
+    const abortRef = useRef(null);
 
     const fetchIpoList = useCallback(async () => {
         if (!user) {
@@ -66,7 +67,18 @@ const ResultChecker = () => {
         fetchIpoList();
     }, [fetchIpoList]);
 
+    // aborts any in-flight stream when the component unmounts
+    useEffect(() => {
+        return () => {
+            abortRef.current?.abort();
+        };
+    }, []);
+
     const runCheck = async (targetShareId) => {
+        abortRef.current?.abort();
+        const controller = new AbortController();
+        abortRef.current = controller;
+
         setLoading(true);
         setResults([]);
         setChecked(true);
@@ -85,7 +97,8 @@ const ResultChecker = () => {
                 setCheckError(msg);
                 toast.error(msg);
                 setLoading(false);
-            }
+            },
+            controller.signal
         );
     };
 
@@ -259,17 +272,17 @@ const ResultChecker = () => {
                                         </>
                                     ) : (
                                         <>
-                                            <p>No results found for this selection.</p>
-                                            <a
-                                                href="https://iporesult.cdsc.com.np"
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="btn-cdsc"
-                                            >
-                                                Check on CDSC Portal &rarr;
-                                            </a>
+                                        <p>No results found for this selection.</p>
+                                        <a
+                                        href="https://iporesult.cdsc.com.np"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="btn-cdsc"
+                                        >
+                                        Check on CDSC Portal &rarr;
+                                        </a>
                                         </>
-                                    )}
+                                        )}
                                 </div>
                             )}
 

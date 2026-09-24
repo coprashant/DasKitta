@@ -8,6 +8,41 @@ import SEO from "../../seo/SEO.jsx";
 import "./Auth.css";
 
 const RESEND_COOLDOWN = 60;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// field level checks used on blur, name matches the input's name or id
+const validateField = (name, value, mode) => {
+    const trimmed = (value || "").trim();
+    switch (name) {
+        case "username":
+            if (mode === "register" && trimmed && trimmed.length < 3) {
+                return "Must be at least 3 characters.";
+            }
+            return "";
+        case "email":
+            if (trimmed && !EMAIL_RE.test(trimmed)) {
+                return "Enter a valid email address.";
+            }
+            return "";
+        case "password":
+            if (mode === "register" && value && value.length < 6) {
+                return "Must be at least 6 characters.";
+            }
+            return "";
+        case "resetEmail":
+            if (trimmed && !EMAIL_RE.test(trimmed)) {
+                return "Enter a valid email address.";
+            }
+            return "";
+        case "newPassword":
+            if (value && value.length < 6) {
+                return "Must be at least 6 characters.";
+            }
+            return "";
+        default:
+            return "";
+    }
+};
 
 const Auth = () => {
     const { login, register } = useAuth();
@@ -30,6 +65,7 @@ const Auth = () => {
     const [errorMessage, setErrorMessage] = useState("");
     const [successMessage, setSuccessMessage] = useState("");
     const [timer, setTimer] = useState(0);
+    const [fieldErrors, setFieldErrors] = useState({});
 
     const isOtpStage = authMode === "otp";
     const isForgotMode = authMode === "forgot";
@@ -91,6 +127,7 @@ const Auth = () => {
         setNewPassword("");
         setSubmittedEmail("");
         setTimer(0);
+        setFieldErrors({});
     }, [location.pathname]);
 
     useEffect(() => {
@@ -106,9 +143,19 @@ const Auth = () => {
     }, [timer]);
 
     const handleChange = (e) => {
+        const { name, value } = e.target;
         setErrorMessage("");
         setSuccessMessage("");
-        setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+        setForm((f) => ({ ...f, [name]: value }));
+        if (fieldErrors[name]) {
+            setFieldErrors((fe) => ({ ...fe, [name]: "" }));
+        }
+    };
+
+    const handleFieldBlur = (e) => {
+        const { name, value } = e.target;
+        const message = validateField(name, value, authMode);
+        setFieldErrors((fe) => ({ ...fe, [name]: message }));
     };
 
     const handleSwitchMode = (targetPath) => {
@@ -119,6 +166,7 @@ const Auth = () => {
         setResetEmail("");
         setSubmittedEmail("");
         setTimer(0);
+        setFieldErrors({});
         setAuthMode(targetPath === "/login" ? "login" : "register");
         navigate(targetPath, { state: { background }, replace: true });
     };
@@ -133,6 +181,7 @@ const Auth = () => {
         setSubmittedEmail(prefilledEmail);
         setOtpCode("");
         setNewPassword("");
+        setFieldErrors({});
         setAuthMode("forgot");
     };
 
@@ -144,6 +193,7 @@ const Auth = () => {
         setErrorMessage("");
         setOtpCode("");
         setNewPassword("");
+        setFieldErrors({});
         setAuthMode("login");
     };
 
@@ -155,8 +205,18 @@ const Auth = () => {
             return;
         }
 
-        if (isRegisterMode && form.password.length < 6) {
-            setErrorMessage("Password must be at least 6 characters long.");
+        const usernameError = validateField("username", form.username, authMode);
+        const emailError = isRegisterMode ? validateField("email", form.email, authMode) : "";
+        const passwordError = validateField("password", form.password, authMode);
+
+        if (usernameError || emailError || passwordError) {
+            setFieldErrors((fe) => ({
+                ...fe,
+                username: usernameError,
+                email: emailError,
+                password: passwordError,
+            }));
+            setErrorMessage(usernameError || emailError || passwordError);
             return;
         }
 
@@ -212,11 +272,15 @@ const Auth = () => {
         setErrorMessage("");
         setSuccessMessage("");
 
-        const targetEmail = resetEmail.trim().toLowerCase();
-        if (!targetEmail) {
-            setErrorMessage("Email is required.");
+        const emailError = validateField("resetEmail", resetEmail, authMode);
+        if (emailError || !resetEmail.trim()) {
+            const message = emailError || "Email is required.";
+            setFieldErrors((fe) => ({ ...fe, resetEmail: message }));
+            setErrorMessage(message);
             return;
         }
+
+        const targetEmail = resetEmail.trim().toLowerCase();
 
         setLoading(true);
         try {
@@ -249,8 +313,10 @@ const Auth = () => {
             setErrorMessage("Verification code must be 6 digits.");
             return;
         }
-        if (newPassword.length < 6) {
-            setErrorMessage("Password must be at least 6 characters long.");
+        const newPasswordError = validateField("newPassword", newPassword, authMode);
+        if (newPasswordError) {
+            setFieldErrors((fe) => ({ ...fe, newPassword: newPasswordError }));
+            setErrorMessage(newPasswordError);
             return;
         }
 
@@ -393,19 +459,27 @@ const Auth = () => {
                             <label className="form-label" htmlFor="forgot-email">Email Address</label>
                             <input
                                 id="forgot-email"
-                                className="input"
+                                name="resetEmail"
+                                className={`input${fieldErrors.resetEmail ? " input-invalid" : ""}`}
                                 type="email"
                                 value={resetEmail}
                                 onChange={(e) => {
                                     setErrorMessage("");
                                     setSuccessMessage("");
                                     setResetEmail(e.target.value);
+                                    if (fieldErrors.resetEmail) {
+                                        setFieldErrors((fe) => ({ ...fe, resetEmail: "" }));
+                                    }
                                 }}
+                                onBlur={handleFieldBlur}
                                 placeholder="your@email.com"
                                 required
                                 autoFocus
                                 autoComplete="email"
                             />
+                            {fieldErrors.resetEmail && (
+                                <span className="field-error">{fieldErrors.resetEmail}</span>
+                            )}
                         </div>
 
                         <button
@@ -448,14 +522,19 @@ const Auth = () => {
                             <div className="input-password-wrap">
                                 <input
                                     id="reset-password"
-                                    className="input input-password"
+                                    name="newPassword"
+                                    className={`input input-password${fieldErrors.newPassword ? " input-invalid" : ""}`}
                                     type={showPassword ? "text" : "password"}
                                     value={newPassword}
                                     onChange={(e) => {
                                         setErrorMessage("");
                                         setSuccessMessage("");
                                         setNewPassword(e.target.value);
+                                        if (fieldErrors.newPassword) {
+                                            setFieldErrors((fe) => ({ ...fe, newPassword: "" }));
+                                        }
                                     }}
+                                    onBlur={handleFieldBlur}
                                     placeholder="Min 6 characters"
                                     required
                                     minLength={6}
@@ -470,6 +549,9 @@ const Auth = () => {
                                     {showPassword ? <EyeOffIcon /> : <EyeIcon />}
                                 </button>
                             </div>
+                            {fieldErrors.newPassword && (
+                                <span className="field-error">{fieldErrors.newPassword}</span>
+                            )}
                         </div>
 
                         <button
@@ -486,17 +568,21 @@ const Auth = () => {
                             <label className="form-label" htmlFor="auth-username">{isLoginMode ? "Username or Email" : "Username"}</label>
                             <input
                                 id="auth-username"
-                                className="input"
+                                className={`input${fieldErrors.username ? " input-invalid" : ""}`}
                                 type="text"
                                 name="username"
                                 value={form.username}
                                 onChange={handleChange}
+                                onBlur={handleFieldBlur}
                                 placeholder={isLoginMode ? "Username or email address" : "Choose a username"}
                                 required
                                 autoFocus
                                 autoComplete="username"
                                 minLength={isLoginMode ? undefined : 3}
                             />
+                            {fieldErrors.username && (
+                                <span className="field-error">{fieldErrors.username}</span>
+                            )}
                         </div>
 
                         {isRegisterMode && (
@@ -504,15 +590,19 @@ const Auth = () => {
                                 <label className="form-label" htmlFor="auth-email">Email Address</label>
                                 <input
                                     id="auth-email"
-                                    className="input"
+                                    className={`input${fieldErrors.email ? " input-invalid" : ""}`}
                                     type="email"
                                     name="email"
                                     value={form.email}
                                     onChange={handleChange}
+                                    onBlur={handleFieldBlur}
                                     placeholder="your@email.com"
                                     required
                                     autoComplete="email"
                                 />
+                                {fieldErrors.email && (
+                                    <span className="field-error">{fieldErrors.email}</span>
+                                )}
                             </div>
                         )}
 
@@ -521,11 +611,12 @@ const Auth = () => {
                             <div className="input-password-wrap">
                                 <input
                                     id="auth-password"
-                                    className="input input-password"
+                                    className={`input input-password${fieldErrors.password ? " input-invalid" : ""}`}
                                     type={showPassword ? "text" : "password"}
                                     name="password"
                                     value={form.password}
                                     onChange={handleChange}
+                                    onBlur={handleFieldBlur}
                                     placeholder={isLoginMode ? "Your password" : "Min 6 characters"}
                                     required
                                     autoComplete={isLoginMode ? "current-password" : "new-password"}
@@ -540,6 +631,9 @@ const Auth = () => {
                                     {showPassword ? <EyeOffIcon /> : <EyeIcon />}
                                 </button>
                             </div>
+                            {fieldErrors.password && (
+                                <span className="field-error">{fieldErrors.password}</span>
+                            )}
                         </div>
 
                         {isLoginMode && (

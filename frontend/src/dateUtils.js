@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 
 /* BS month lengths per year, index 0 = Baisakh, 11 = Chaitra */
+/* extend this table well before BS 2090 to avoid inaccurate date display */
 const BS_DATA = {
   2078: [31, 31, 32, 32, 31, 30, 30, 29, 30, 29, 30, 30],
   2079: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
@@ -17,14 +18,26 @@ const BS_DATA = {
   2090: [31, 32, 31, 32, 31, 30, 30, 30, 29, 30, 30, 29],
 };
 
+const MAX_BS_YEAR = 2090;
+
 /* AD date corresponding to BS 2078 Baisakh 1 */
 const EPOCH_BS  = { year: 2078, month: 1, day: 1 };
 const EPOCH_AD  = { year: 2021, month: 4, day: 14 };
 
+let warnedMissingYear = false;
+const warnMissingYearOnce = (year) => {
+  if (warnedMissingYear) return;
+  warnedMissingYear = true;
+  console.warn(
+      `BS_DATA has no entry for year ${year}; date calculations beyond ${MAX_BS_YEAR} ` +
+      `will be inaccurate. Update the BS_DATA table in src/dateUtils.js.`
+  );
+};
+
 const totalBsDays = (bsYear, bsMonth, bsDay) => {
   const months = BS_DATA[bsYear];
   if (!months) {
-    throw new Error(`BS year ${bsYear} is outside the supported range (2078 to 2090)`);
+    throw new Error(`BS year ${bsYear} is outside the supported range (2078 to ${MAX_BS_YEAR})`);
   }
   let days = 0;
   for (let y = EPOCH_BS.year; y < bsYear; y++) {
@@ -57,7 +70,7 @@ export const nowNepal = () => {
   return new Date(utcMs + NEPAL_OFFSET_MS);
 };
 
-/* ── AD → BS conversion ── */
+/* AD to BS conversion */
 const BS_MONTHS_EN = [
   "Baisakh", "Jestha", "Ashadh", "Shrawan",
   "Bhadra", "Ashwin", "Kartik", "Mangsir",
@@ -86,15 +99,20 @@ export const adToBs = (adDate) => {
     bsYear++;
   }
 
-  // Walk through months in the current BS year
-  const yearMonths = BS_DATA[bsYear] || BS_DATA[2090];
+  // Walk through months in the current BS year, warn instead of silently using a fallback table
+  const yearMonths = BS_DATA[bsYear];
+  if (!yearMonths) {
+    warnMissingYearOnce(bsYear);
+  }
+  const months = yearMonths || BS_DATA[MAX_BS_YEAR];
+
   for (let m = 0; m < 12; m++) {
-    if (remainingDays < yearMonths[m]) {
+    if (remainingDays < months[m]) {
       bsMonth = m + 1;
       bsDay = remainingDays + 1;
       break;
     }
-    remainingDays -= yearMonths[m];
+    remainingDays -= months[m];
   }
 
   return {
@@ -106,7 +124,7 @@ export const adToBs = (adDate) => {
   };
 };
 
-/* ── Live Nepali date/time hook ── */
+/* Live Nepali date and time hook */
 export const useNepaliDateTime = () => {
   const [now, setNow] = useState(() => nowNepal());
 
@@ -123,9 +141,9 @@ export const useNepaliDateTime = () => {
   const h12 = hours % 12 || 12;
 
   return {
-    bsDate: bs,                                        // { year, month, day, monthName, weekday }
-    timeStr: `${h12}:${minutes} ${ampm}`,             // "10:35 AM"
-    dateShort: `${bs.monthName} ${bs.day}, ${bs.year}`, // "Baisakh 29, 2082"
+    bsDate: bs,
+    timeStr: `${h12}:${minutes} ${ampm}`,
+    dateShort: `${bs.monthName} ${bs.day}, ${bs.year}`,
     dateFull: `${bs.weekday}, ${bs.monthName} ${bs.day}, ${bs.year}`,
   };
 };

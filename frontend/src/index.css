@@ -1,6 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
-/* ── DESIGN TOKENS ─────────────────────────────── */
+/* DESIGN TOKENS */
 :root {
   /* Surface */
   --bg:        #fffeec;
@@ -19,7 +19,7 @@
   --accent-dim:   rgba(30, 111, 181, 0.07);
   --accent-muted: rgba(30, 111, 181, 0.16);
 
-  /* Text — all values pass WCAG AA on their respective backgrounds */
+  /* Text, all values pass WCAG AA on their respective backgrounds */
   --text:   #141c28;
   --text-2: #3d4f6a;
   --text-3: #5a7499;
@@ -37,7 +37,7 @@
   --font-display: 'DM Serif Display', serif;
   --mono:         'IBM Plex Mono', monospace;
 
-  /* Radii — 3 values only */
+  /* Radii, 3 values only */
   --r-sm: 4px;
   --r:    6px;
   --r-lg: 10px;
@@ -47,7 +47,7 @@
   --shadow:    0 2px 10px rgba(30, 80, 160, 0.09);
   --shadow-lg: 0 6px 28px rgba(30, 80, 160, 0.13);
 
-  /* Navbar height — used for sticky offsets */
+  /* Navbar height, used for sticky offsets */
   --nav-h: 52px;
 
   /* Transition */
@@ -84,7 +84,7 @@
   --shadow-lg: 0 6px 28px rgba(0, 0, 0, 0.45);
 }
 
-/* ── RESET ─────────────────────────────────────── */
+/* RESET */
 *, *::before, *::after {
   margin: 0;
   padding: 0;
@@ -106,7 +106,7 @@ body {
   transition: background var(--t) var(--ease), color var(--t) var(--ease);
 }
 
-/* ── PAGE WRAPPER ──────────────────────────────── */
+/* PAGE WRAPPER */
 .page {
   max-width: 1160px;
   margin: 0 auto;
@@ -115,7 +115,7 @@ body {
 @media (min-width: 640px)  { .page { padding: 36px 24px 72px; } }
 @media (min-width: 1024px) { .page { padding: 44px 40px 80px; } }
 
-/* ── TYPOGRAPHY ────────────────────────────────── */
+/* TYPOGRAPHY */
 .page-title {
   font-family: var(--font-display);
   font-size: 26px;
@@ -134,7 +134,7 @@ body {
   line-height: 1.6;
 }
 
-/* ── CARD ──────────────────────────────────────── */
+/* CARD */
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -145,7 +145,7 @@ body {
 }
 @media (min-width: 640px) { .card { padding: 24px; } }
 
-/* ── BUTTONS ───────────────────────────────────── */
+/* BUTTONS */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -162,11 +162,11 @@ body {
   white-space: nowrap;
   line-height: 1.2;
   transition:
-    background var(--t-fast) var(--ease),
-    border-color var(--t-fast) var(--ease),
-    color var(--t-fast) var(--ease),
-    box-shadow var(--t-fast) var(--ease),
-    transform var(--t-fast) var(--ease);
+          background var(--t-fast) var(--ease),
+          border-color var(--t-fast) var(--ease),
+          color var(--t-fast) var(--ease),
+          box-shadow var(--t-fast) var(--ease),
+          transform var(--t-fast) var(--ease);
 }
 .btn:active { transform: translateY(1px); }
 
@@ -213,7 +213,7 @@ body {
 .btn-lg  { padding: 11px 22px; font-size: 14px; }
 .btn-full { width: 100%; }
 
-/* ── BADGES ────────────────────────────────────── */
+/* BADGES */
 .badge {
   display: inline-block;
   padding: 2px 7px;
@@ -229,7 +229,7 @@ body {
 .badge-warning { background: var(--warning-dim); color: var(--warning); }
 .badge-muted   { background: var(--surface-2);   color: var(--text-3);  }
 
-/* ── INPUTS ────────────────────────────────────── */
+/* INPUTS */
 .input {
   width: 100%;
   background: var(--surface);
@@ -242,8 +242,8 @@ body {
   outline: none;
   line-height: 1.4;
   transition:
-    border-color var(--t-fast) var(--ease),
-    box-shadow var(--t-fast) var(--ease);
+          border-color var(--t-fast) var(--ease),
+          box-shadow var(--t-fast) var(--ease);
 }
 .input:focus {
   border-color: var(--accent);
@@ -251,6 +251,15 @@ body {
 }
 .input::placeholder { color: var(--text-3); }
 .input:disabled { background: var(--surface-2); cursor: not-allowed; opacity: 0.6; }
+
+/* invalid state for inline field validation, pairs with .field-error text below */
+.input.input-invalid {
+  border-color: var(--danger);
+}
+.input.input-invalid:focus {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-dim);
+}
 
 select.input {
   appearance: none;
@@ -274,7 +283,16 @@ select.input option { background: var(--surface); color: var(--text); }
 
 .form-hint { font-size: 12px; color: var(--text-3); line-height: 1.5; }
 
-/* ── UTILITY ───────────────────────────────────── */
+/* inline per-field validation message, shown on blur under an input */
+.field-error {
+  display: block;
+  font-size: 12px;
+  color: var(--danger);
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
+/* UTILITY */
 .td-muted { color: var(--text-2); font-size: 13px; }
 
 .loading-text {
@@ -291,7 +309,7 @@ select.input option { background: var(--surface); color: var(--text); }
 }
 .empty-state p { font-size: 14px; margin-bottom: 16px; }
 
-/* ── SKELETON ──────────────────────────────────── */
+/* SKELETON */
 @keyframes skeleton-pulse {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.45; }
@@ -302,7 +320,7 @@ select.input option { background: var(--surface); color: var(--text); }
   animation: skeleton-pulse 1.6s var(--ease) infinite;
 }
 
-/* ── ANIMATIONS ────────────────────────────────── */
+/* ANIMATIONS */
 @keyframes fade-up {
   from { opacity: 0; transform: translateY(14px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -323,12 +341,12 @@ select.input option { background: var(--surface); color: var(--text); }
 .anim-fade-up    { animation: fade-up var(--t-slow) var(--ease) both; }
 .anim-fade-in    { animation: fade-in var(--t) var(--ease) both; }
 
-/* ── SCROLLBAR ─────────────────────────────────── */
+/* SCROLLBAR */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: var(--surface-2); }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
 
-/* ── MODAL OVERLAY ─────────────────────────────── */
+/* MODAL OVERLAY */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -362,7 +380,7 @@ select.input option { background: var(--surface); color: var(--text); }
 }
 @media (min-width: 480px) { .modal-box { padding: 44px 40px 36px; } }
 
-/* ── GLOBAL KEYFRAMES ──────────────────────────── */
+/* GLOBAL KEYFRAMES */
 @keyframes spin {
   to { transform: rotate(360deg); }
 }

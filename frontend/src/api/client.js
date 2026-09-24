@@ -1,8 +1,17 @@
 import axios from "axios";
 import { getToken, setToken, clearToken } from "./tokenStore";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+if (!API_BASE_URL) {
+    console.error(
+        "VITE_API_BASE_URL is not set. API calls will fall back to localhost and " +
+        "will fail in production. Set VITE_API_BASE_URL in your environment."
+    );
+}
+
 const client = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api",
+    baseURL: API_BASE_URL || "http://localhost:8080/api",
     withCredentials: true,
 });
 

@@ -6,19 +6,32 @@ const DEFAULT_IMAGE = `${SITE_URL}/daskitta.png`;
 const DEFAULT_DESCRIPTION =
     "Apply for NEPSE IPOs across all your Meroshare accounts in one click. Track your stock portfolio, check IPO allotment results, and monitor live Nepal stock market data — free and fast.";
 
+// escapes chars that could break out of a script tag when json is injected as text
+const safeJsonLd = (data) => {
+    try {
+        return JSON.stringify(data)
+            .replace(/</g, "\\u003c")
+            .replace(/>/g, "\\u003e")
+            .replace(/&/g, "\\u0026");
+    } catch {
+        return "";
+    }
+};
+
 const SEO = ({
-    title,
-    description = DEFAULT_DESCRIPTION,
-    canonical,
-    image = DEFAULT_IMAGE,
-    noindex = false,
-    type = "website",
-    jsonLd,
-}) => {
+                 title,
+                 description = DEFAULT_DESCRIPTION,
+                 canonical,
+                 image = DEFAULT_IMAGE,
+                 noindex = false,
+                 type = "website",
+                 jsonLd,
+             }) => {
     const fullTitle = title
         ? `${title} | ${SITE_NAME}`
         : `${SITE_NAME}`;
     const canonicalUrl = canonical ? `${SITE_URL}${canonical}` : null;
+    const jsonLdString = jsonLd ? safeJsonLd(jsonLd) : null;
 
     return (
         <Helmet>
@@ -49,10 +62,10 @@ const SEO = ({
             <meta name="twitter:image" content={image} />
             <meta name="twitter:image:alt" content={`${SITE_NAME} — Nepal IPO and NEPSE Tracker`} />
 
-            {/* JSON-LD Structured Data */}
-            {jsonLd && (
+            {/* JSON-LD Structured Data, escaped to prevent script tag breakout */}
+            {jsonLdString && (
                 <script type="application/ld+json">
-                    {JSON.stringify(jsonLd)}
+                    {jsonLdString}
                 </script>
             )}
         </Helmet>

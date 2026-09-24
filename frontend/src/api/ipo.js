@@ -11,7 +11,7 @@ export const applyIpoApi = (data) => client.post("/ipo/apply", {
   accountIds:  data.accountIds,
 });
 
-export const applyIpoStreamApi = async (data, onEvent, onDone, onError) => {
+export const applyIpoStreamApi = async (data, onEvent, onDone, onError, signal) => {
   const base = client.defaults.baseURL;
   const payload = {
     shareId: String(data.shareId),
@@ -28,6 +28,7 @@ export const applyIpoStreamApi = async (data, onEvent, onDone, onError) => {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(payload),
+    signal,
   });
 
   try {
@@ -80,6 +81,7 @@ export const applyIpoStreamApi = async (data, onEvent, onDone, onError) => {
 
     onDone?.();
   } catch (err) {
+    if (err?.name === "AbortError") return;
     onError?.(err);
   }
 };
@@ -92,32 +94,34 @@ export const startApplyJobApi = (data) => client.post("/ipo/apply/jobs", {
 });
 
 export const getApplyJobSnapshotApi = (jobId) =>
-  client.get(`/ipo/apply/jobs/${jobId}`);
+    client.get(`/ipo/apply/jobs/${jobId}`);
 
 export const retryFailedApplyJobApi = (jobId) =>
-  client.post(`/ipo/apply/jobs/${jobId}/retry-failed`);
+    client.post(`/ipo/apply/jobs/${jobId}/retry-failed`);
 
 export const cancelApplyJobApi = (jobId) =>
-  client.post(`/ipo/apply/jobs/${jobId}/cancel`);
+    client.post(`/ipo/apply/jobs/${jobId}/cancel`);
 
 export const streamApplyJobApi = async (
-  jobId,
-  fromSequence,
-  onEvent,
-  onDone,
-  onError
+    jobId,
+    fromSequence,
+    onEvent,
+    onDone,
+    onError,
+    signal
 ) => {
   const base = client.defaults.baseURL;
 
   const openStream = (token) => fetch(
-    `${base}/ipo/apply/jobs/${jobId}/stream?fromSequence=${Number(fromSequence || 0)}`,
-    {
-      method: "GET",
-      headers: {
-        Accept: "text/event-stream",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-    }
+      `${base}/ipo/apply/jobs/${jobId}/stream?fromSequence=${Number(fromSequence || 0)}`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "text/event-stream",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        signal,
+      }
   );
 
   try {
@@ -174,6 +178,7 @@ export const streamApplyJobApi = async (
 
     onDone?.();
   } catch (err) {
+    if (err?.name === "AbortError") return;
     onError?.(err);
   }
 };
@@ -183,11 +188,12 @@ export const getCdscSummaryApi = (accountId) =>
 
 // streams one result at a time using server sent events
 // onResult fires per account onDone fires at end onError fires on failure
-export const checkResultStreamApi = async (shareId, onResult, onDone, onError) => {
+export const checkResultStreamApi = async (shareId, onResult, onDone, onError, signal) => {
   const base = client.defaults.baseURL;
 
   const openStream = (token) => fetch(`${base}/ipo/result/${shareId}/stream`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
+    signal,
   });
 
   try {
@@ -228,6 +234,7 @@ export const checkResultStreamApi = async (shareId, onResult, onDone, onError) =
 
     onDone?.();
   } catch (err) {
+    if (err?.name === "AbortError") return;
     onError?.(err);
   }
 };

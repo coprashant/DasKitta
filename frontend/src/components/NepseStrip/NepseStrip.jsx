@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Suspense, lazy } from "react";
 import {
     getNepseIndex,
     getDailyNepseIndexGraph,
@@ -8,8 +8,10 @@ import {
     isNepseError,
 } from "../../api/nepse.js";
 import { buildSparkline, useChartHover, tooltipAlign } from "../../pages/Nepse/nepseUtils.js";
-import BullMascot from "./BullMascot.jsx";
 import "./NepseStrip.css";
+
+// lazy loaded so the lottie renderer is not part of the initial homepage chunk
+const BullMascot = lazy(() => import("./BullMascot.jsx"));
 
 const MOVERS_ROW_COUNT = 5;
 const CACHE_KEY = "nepse_cache_v1";
@@ -99,7 +101,9 @@ function Sparkline({ data, isOpen, pts, width = 340, height = 100 }) {
                 )}
             </svg>
 
-            <BullMascot isOpen={isOpen} pts={pts} position={mascotPos} />
+            <Suspense fallback={null}>
+                <BullMascot isOpen={isOpen} pts={pts} position={mascotPos} />
+            </Suspense>
 
             {hover && (
                 <div

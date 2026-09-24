@@ -7,6 +7,7 @@ import { AccountProvider } from "./context/AccountContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import AccountSync from "./components/AccountSync";
 import ProtectedRoute from "./components/ProtectedRoute";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 // route pages are loaded on demand so first load only ships what is needed
 const PrivacyPolicy    = lazy(() => import("./pages/Legal/PrivacyPolicy.jsx"));
@@ -73,17 +74,17 @@ const AppContent = () => {
 
             <Suspense fallback={<PageLoader />}>
                 <Routes location={background || location}>
-                    <Route path="/"                   element={<Home />} />
-                    <Route path="/login"              element={<Auth />} />
-                    <Route path="/register"           element={<Auth />} />
-                    <Route path="/ipo/result"         element={<ResultChecker />} />
-                    <Route path="/nepse"              element={<Nepse />} />
-                    <Route path="/nepse/company/:symbol" element={<CompanyDetail />} />
-                    <Route path="/privacy" element={<PrivacyPolicy />} />
-                    <Route path="/terms" element={<TermsOfService />} />
-                    <Route path="/disclaimer" element={<Disclaimer />} />
+                    <Route path="/"                   element={<ErrorBoundary><Home /></ErrorBoundary>} />
+                    <Route path="/login"              element={<ErrorBoundary><Auth /></ErrorBoundary>} />
+                    <Route path="/register"           element={<ErrorBoundary><Auth /></ErrorBoundary>} />
+                    <Route path="/ipo/result"         element={<ErrorBoundary><ResultChecker /></ErrorBoundary>} />
+                    <Route path="/nepse"              element={<ErrorBoundary><Nepse /></ErrorBoundary>} />
+                    <Route path="/nepse/company/:symbol" element={<ErrorBoundary><CompanyDetail /></ErrorBoundary>} />
+                    <Route path="/privacy" element={<ErrorBoundary><PrivacyPolicy /></ErrorBoundary>} />
+                    <Route path="/terms" element={<ErrorBoundary><TermsOfService /></ErrorBoundary>} />
+                    <Route path="/disclaimer" element={<ErrorBoundary><Disclaimer /></ErrorBoundary>} />
                     <Route path="/settings" element={
-                        <ProtectedRoute><Settings /></ProtectedRoute>
+                        <ErrorBoundary><ProtectedRoute><Settings /></ProtectedRoute></ErrorBoundary>
                     }>
                         <Route index element={<ProfileSettings />} />
                         <Route path="accounts" element={<AccountsSettings />} />
@@ -91,16 +92,16 @@ const AppContent = () => {
                         <Route path="accounts/:id/info" element={<AccountInfo />} />
                     </Route>
                     <Route path="/dashboard" element={
-                        <ProtectedRoute><Dashboard /></ProtectedRoute>
+                        <ErrorBoundary><ProtectedRoute><Dashboard /></ProtectedRoute></ErrorBoundary>
                     } />
                     <Route path="/ipo/apply" element={
-                        <ProtectedRoute><IPOApply /></ProtectedRoute>
+                        <ErrorBoundary><ProtectedRoute><IPOApply /></ProtectedRoute></ErrorBoundary>
                     } />
                     <Route path="/history" element={
-                        <ProtectedRoute><History /></ProtectedRoute>
+                        <ErrorBoundary><ProtectedRoute><History /></ProtectedRoute></ErrorBoundary>
                     } />
                     <Route path="/portfolio" element={
-                        <ProtectedRoute><Portfolio /></ProtectedRoute>
+                        <ErrorBoundary><ProtectedRoute><Portfolio /></ProtectedRoute></ErrorBoundary>
                     } />
                     <Route path="*" element={<NotFound />} />
                 </Routes>
@@ -109,10 +110,12 @@ const AppContent = () => {
             {/* Render modal auth overlay above the current page */}
             {background && (
                 <Suspense fallback={null}>
-                    <Routes>
-                        <Route path="/login" element={<Auth />} />
-                        <Route path="/register" element={<Auth />} />
-                    </Routes>
+                    <ErrorBoundary>
+                        <Routes>
+                            <Route path="/login" element={<Auth />} />
+                            <Route path="/register" element={<Auth />} />
+                        </Routes>
+                    </ErrorBoundary>
                 </Suspense>
             )}
         </>
@@ -121,18 +124,20 @@ const AppContent = () => {
 
 const App = () => {
     return (
-        <BrowserRouter>
-            <ThemeProvider>
-                <AuthProvider>
-                    <AccountProvider>
-                        <NotificationProvider>
-                            <AccountSync />
-                            <AppContent />
-                        </NotificationProvider>
-                    </AccountProvider>
-                </AuthProvider>
-            </ThemeProvider>
-        </BrowserRouter>
+        <ErrorBoundary>
+            <BrowserRouter>
+                <ThemeProvider>
+                    <AuthProvider>
+                        <AccountProvider>
+                            <NotificationProvider>
+                                <AccountSync />
+                                <AppContent />
+                            </NotificationProvider>
+                        </AccountProvider>
+                    </AuthProvider>
+                </ThemeProvider>
+            </BrowserRouter>
+        </ErrorBoundary>
     );
 };
 

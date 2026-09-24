@@ -56,6 +56,12 @@
     border-radius: 0 !important;
 }
 
+.tab-item:focus-visible {
+    outline: 2px solid var(--accent) !important;
+    outline-offset: -2px;
+    border-radius: var(--r) !important;
+}
+
 .tab-item:hover {
     color: var(--text-2);
     background: transparent !important;

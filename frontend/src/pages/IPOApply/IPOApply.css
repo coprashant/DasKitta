@@ -1,4 +1,3 @@
-/* Layout */
 .ipo-page {
   padding-bottom: calc(60px + 64px + env(safe-area-inset-bottom) + 16px);
 }
@@ -25,7 +24,7 @@
   }
   .ipo-acc-list {
     grid-template-columns: repeat(2, 1fr);
-    max-height: calc(5 * (55px + 12px));
+    max-height: 50vh;
     overflow-y: auto;
   }
 }
@@ -43,7 +42,6 @@
   gap: 14px;
 }
 
-/* Section Label */
 .ipo-section-label {
   display: block;
   font-size: 11px;
@@ -62,25 +60,28 @@
   border-bottom: none;
 }
 
-/* IPO LIST */
 .ipo-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.ipo-group { margin-bottom: 10px; }
+.ipo-group { margin-bottom: 12px; }
 
 .ipo-group-label {
-  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--text-3);
-  padding: 5px 10px;
+  color: var(--text-2);
+  padding: 6px 10px;
   background: var(--surface-2);
+  border-left: 3px solid var(--accent);
   border-radius: var(--r-sm);
-  margin-bottom: 7px;
+  margin-bottom: 8px;
 }
 
 .ipo-item {
@@ -95,9 +96,9 @@
   border-radius: var(--r-lg);
   cursor: pointer;
   transition:
-    border-color var(--t-fast) var(--ease),
-    background var(--t-fast) var(--ease),
-    transform var(--t-fast) var(--ease);
+          border-color var(--t-fast) var(--ease),
+          background var(--t-fast) var(--ease),
+          transform var(--t-fast) var(--ease);
   box-sizing: border-box;
 }
 .ipo-item:hover { border-left-color: var(--border-strong); background: var(--surface-3); }
@@ -110,7 +111,6 @@
 
 .ipo-item-body { flex: 1; min-width: 0; }
 
-/* name row holds name + countdown badge inline */
 .ipo-name-row {
   display: flex;
   align-items: center;
@@ -129,7 +129,6 @@
   min-width: 0;
 }
 
-/* closing countdown badge */
 .ipo-countdown-badge {
   flex-shrink: 0;
   font-size: 10px;
@@ -166,7 +165,6 @@
 .ipo-radio.on { border-color: var(--accent); background: var(--accent); }
 .ipo-radio-dot { width: 6px; height: 6px; border-radius: 50%; background: #fff; }
 
-/* Toggle others */
 .ipo-others-wrap { margin-top: 4px; }
 
 .ipo-toggle-others {
@@ -196,7 +194,6 @@
 
 .ipo-others-content { margin-top: 6px; }
 
-/* Kitta stepper */
 .ipo-kitta-card {
   padding: 12px 14px;
 }
@@ -224,10 +221,10 @@
   justify-content: center;
   flex-shrink: 0;
   transition:
-    border-color var(--t-fast) var(--ease),
-    color var(--t-fast) var(--ease),
-    background var(--t-fast) var(--ease),
-    transform var(--t-fast) var(--ease);
+          border-color var(--t-fast) var(--ease),
+          color var(--t-fast) var(--ease),
+          background var(--t-fast) var(--ease),
+          transform var(--t-fast) var(--ease);
 }
 @media (min-width: 768px) { .kitta-btn { width: 44px; height: 44px; } }
 .kitta-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
@@ -270,7 +267,6 @@
   letter-spacing: 0.05em;
 }
 
-/* Accounts head */
 .ipo-accounts-head {
   display: flex;
   align-items: center;
@@ -297,7 +293,6 @@
 }
 .ipo-sel-all:hover { color: var(--accent-hover); text-decoration: underline; }
 
-/* Inline expandable search */
 .ipo-search-inline {
   display: flex;
   align-items: center;
@@ -353,12 +348,11 @@
 .ipo-search-inline-close:hover { color: var(--text); background: var(--surface-3); }
 
 @media (min-width: 768px) {
-  .ipo-search-inline { display: none; }
-  .ipo-search-inline.open { display: none; }
+  .ipo-search-inline { display: flex; }
+  .ipo-search-inline.open { display: flex; flex: 1; }
   .ipo-accounts-head::after { content: none; }
 }
 
-/* Account rows */
 .ipo-acc-list {
   display: grid;
   grid-template-columns: 1fr;
@@ -380,9 +374,9 @@
   border-radius: var(--r-lg);
   cursor: pointer;
   transition:
-    border-color var(--t-fast) var(--ease),
-    background var(--t-fast) var(--ease),
-    transform var(--t-fast) var(--ease);
+          border-color var(--t-fast) var(--ease),
+          background var(--t-fast) var(--ease),
+          transform var(--t-fast) var(--ease);
   box-sizing: border-box;
 }
 @media (min-width: 768px) { .ipo-acc-row { padding: 14px 16px; min-height: 55px; gap: 11px; } }
@@ -426,7 +420,6 @@
   text-overflow: ellipsis;
 }
 
-/* Desktop search bar kept for wider screens */
 .ipo-search-wrap { display: none; }
 @media (min-width: 768px) {
   .ipo-search-wrap {
@@ -467,7 +460,6 @@
 }
 .ipo-search-clear:hover { color: var(--text); background: var(--surface-3); }
 
-/* Apply button */
 .ipo-apply-btn {
   width: 100%;
   padding: 14px 20px;
@@ -486,10 +478,10 @@
   gap: 8px;
   letter-spacing: 0.01em;
   transition:
-    background var(--t-fast) var(--ease),
-    box-shadow var(--t-fast) var(--ease),
-    transform var(--t-fast) var(--ease),
-    opacity var(--t-fast) var(--ease);
+          background var(--t-fast) var(--ease),
+          box-shadow var(--t-fast) var(--ease),
+          transform var(--t-fast) var(--ease),
+          opacity var(--t-fast) var(--ease);
 }
 .ipo-apply-btn:hover:not(.disabled) {
   background: var(--accent-hover);
@@ -507,7 +499,6 @@
 .ipo-desktop-apply { display: none; }
 @media (min-width: 768px) { .ipo-desktop-apply { display: block; } }
 
-/* Sticky bar mobile only */
 .ipo-sticky-bar {
   position: fixed;
   bottom: calc(60px + env(safe-area-inset-bottom));
@@ -515,6 +506,7 @@
   right: 0;
   height: 64px;
   background: var(--surface);
+  backdrop-filter: blur(8px);
   border-top: 1px solid var(--border);
   box-shadow: var(--shadow-lg);
   padding: 10px 16px;
@@ -557,7 +549,6 @@
   font-size: 13px;
 }
 
-/* Results */
 .ipo-results-list { display: flex; flex-direction: column; }
 
 .ipo-result-row {
@@ -592,11 +583,9 @@
   color: var(--accent);
 }
 
-/* Skeleton rows */
 .ipo-skel-row { padding: 14px 0; border-bottom: 1px solid var(--border); }
 .ipo-skel-row:last-child { border-bottom: none; }
 
-/* Upcoming IPOs card */
 .ipo-upcoming-list {
   display: flex;
   flex-direction: column;
@@ -632,7 +621,6 @@
   font-family: var(--mono);
 }
 
-/* opening countdown badge */
 .ipo-opening-badge {
   flex-shrink: 0;
   font-size: 10px;
@@ -646,7 +634,282 @@
   white-space: nowrap;
 }
 
+.ipo-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(3px);
+}
+
+.ipo-confirm-modal {
+  width: min(100%, 420px);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 20px;
+}
+
+.ipo-confirm-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.ipo-confirm-eyebrow {
+  margin: 0 0 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-2);
+}
+
+.ipo-confirm-head h2 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.3;
+  color: var(--text);
+}
+
+.ipo-confirm-close {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--r);
+  background: var(--surface-2);
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.ipo-confirm-close:hover {
+  color: var(--text);
+  background: var(--surface-3);
+}
+
+.ipo-confirm-copy {
+  margin: 22px 0 14px;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.ipo-confirm-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.ipo-confirm-summary strong {
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 14px;
+}
+
+.ipo-confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.ipo-confirm-actions .ipo-apply-btn {
+  min-height: 44px;
+  padding: 10px 14px;
+}
+
+@supports not (backdrop-filter: blur(3px)) {
+  .ipo-confirm-backdrop {
+    background: rgba(0, 0, 0, 0.55);
+  }
+}
+
+@media (max-width: 479px) {
+  .ipo-confirm-backdrop {
+    align-items: flex-end;
+    padding: 10px;
+  }
+
+  .ipo-confirm-modal {
+    width: 100%;
+    max-height: calc(100dvh - 20px);
+    padding: 18px;
+  }
+
+  .ipo-confirm-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
 @keyframes spin {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
+}
+
+.ipo-item,
+.ipo-acc-row {
+  font-family: var(--font);
+  text-align: left;
+  width: 100%;
+}
+
+.ipo-item:focus-visible,
+.ipo-acc-row:focus-visible,
+.ipo-sel-all:focus-visible,
+.ipo-search-inline-trigger:focus-visible,
+.ipo-search-inline-close:focus-visible,
+.kitta-btn:focus-visible,
+.ipo-apply-btn:focus-visible,
+.ipo-progress-reopen:focus-visible,
+.ipo-toggle-others:focus-visible,
+.ipo-confirm-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.ipo-item {
+  appearance: none;
+}
+
+.ipo-acc-row {
+  appearance: none;
+}
+
+.ipo-desktop-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 2px 2px;
+  color: var(--text-2);
+  font-size: 12px;
+  font-family: var(--mono);
+}
+
+.ipo-desktop-summary span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ipo-kitta-error {
+  margin: 8px 0 0;
+  color: var(--danger);
+  font-size: 11px;
+}
+
+:root {
+  --ipo-mobile-nav-height: 60px;
+}
+
+@media (max-width: 767px) {
+  .ipo-page {
+    padding-bottom: calc(var(--ipo-mobile-nav-height) + 64px + env(safe-area-inset-bottom) + 16px);
+  }
+
+  .ipo-sticky-bar {
+    bottom: calc(var(--ipo-mobile-nav-height) + env(safe-area-inset-bottom));
+  }
+
+  .ipo-desktop-summary {
+    display: none;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1099px) {
+  .ipo-layout {
+    grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+    gap: 18px;
+  }
+
+  .ipo-acc-list {
+    grid-template-columns: 1fr;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+@media (min-width: 1100px) {
+  .ipo-layout {
+    grid-template-columns: 340px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 479px) {
+  .ipo-search-inline.open {
+    min-width: 0;
+  }
+
+  .ipo-accounts-head {
+    flex-wrap: wrap;
+  }
+
+  .ipo-search-inline.open {
+    order: 3;
+    flex-basis: 100%;
+  }
+
+  .ipo-acc-row {
+    min-height: 52px;
+  }
+
+  .kitta-btn {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+@media (max-width: 359px) {
+  .ipo-sticky-bar {
+    padding-left: 10px;
+    padding-right: 10px;
+    gap: 8px;
+  }
+
+  .ipo-sticky-apply {
+    padding: 0 12px;
+  }
+}
+
+@media (min-width: 768px) {
+  .ipo-search-inline-trigger {
+    padding: 7px;
+  }
+}
+
+@supports not (backdrop-filter: blur(8px)) {
+  .ipo-sticky-bar {
+    background: var(--surface);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ipo-page *,
+  .ipo-page *::before,
+  .ipo-page *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

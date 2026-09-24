@@ -277,12 +277,17 @@ button.btn-refresh:hover {
   box-sizing: border-box;
 }
 
-.th-btn:focus,
 .th-btn:active,
 .th-btn:hover {
   background: transparent;
   box-shadow: none;
   outline: none;
+}
+
+.th-btn:focus-visible {
+  background: transparent;
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 /* Align button contents based on parent cell alignment */
