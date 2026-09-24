@@ -117,8 +117,7 @@
 
 /* small devices: icon only toolbar, no label text */
 @media (max-width: 599px) {
-  .portfolio-subtitle,
-  .portfolio-updated {
+  .portfolio-subtitle{
     display: none;
   }
 
