@@ -253,6 +253,20 @@
   color: var(--text-2);
 }
 
+/* icon-in-circle above the empty message, matches the pattern used on Portfolio/Dashboard */
+.rc-empty-icon {
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 14px;
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+}
+.rc-empty-icon svg { width: 20px; height: 20px; }
+
 .empty-card p {
   font-size: 13px;
   margin-bottom: 12px;

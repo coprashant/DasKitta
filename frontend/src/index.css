@@ -339,6 +339,11 @@ select.input option { background: var(--surface); color: var(--text); }
 }
 
 .anim-fade-up    { animation: fade-up var(--t-slow) var(--ease) both; }
+/* short fade on top-level route change, applied once at the app shell */
+.route-fade { animation: fade-in var(--t) var(--ease) both; }
+@media (prefers-reduced-motion: reduce) {
+  .route-fade { animation: none; }
+}
 .anim-fade-in    { animation: fade-in var(--t) var(--ease) both; }
 
 /* SCROLLBAR */
@@ -364,6 +369,7 @@ select.input option { background: var(--surface); color: var(--text); }
   background: rgba(14, 22, 38, 0.55);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
+  cursor: pointer;
 }
 
 .modal-box {

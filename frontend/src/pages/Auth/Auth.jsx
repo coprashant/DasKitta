@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import OtpInput from "../../components/OtpInput/OtpInput";
-import { EyeIcon, EyeOffIcon, CloseIcon, SpinnerIcon } from "../../components/Icons";
+import { EyeIcon, EyeOffIcon, CloseIcon, SpinnerIcon, CheckIcon, IconAlertCircle } from "../../components/Icons";
 import { verifyOtpApi, resendOtpApi, forgotPasswordApi, resetPasswordApi } from "../../api/auth";
 import SEO from "../../seo/SEO.jsx";
 import "./Auth.css";
@@ -390,352 +390,357 @@ const Auth = () => {
                     <CloseIcon />
                 </button>
 
-                {/* Compact header with resized brand logo */}
-                <div className="auth-header">
-                    <button type="button" onClick={handleClose} className="auth-brand-link auth-inline-btn">
-                        <img src="/favicon.png" alt="" className="auth-brand-icon" />
-                        <span className="auth-brand-name">DasKitta</span>
-                    </button>
-                    <h1 className="auth-title" id="auth-title">
-                        {isOtpStage
-                            ? "Verify Your Account"
-                            : isForgotMode
-                                ? "Forgot Password"
-                                : isResetMode
-                                    ? "Reset Password"
-                                    : isLoginMode
-                                        ? "Welcome Back"
-                                        : "Create Account"}
-                    </h1>
-                    <p className="auth-sub">
-                        {isOtpStage ? (
-                            <>Enter the code sent to <strong className="auth-sub-highlight">{activeEmail}</strong></>
-                        ) : isForgotMode ? (
-                            "Enter your account email to receive a reset code"
-                        ) : isResetMode ? (
-                            <>Enter the code sent to <strong className="auth-sub-highlight">{activeResetEmail}</strong> and set a new password</>
-                        ) : isLoginMode ? (
-                            "Enter your credentials to access your account"
-                        ) : (
-                            "Get started in seconds"
-                        )}
-                    </p>
-                </div>
-
-                {errorMessage && (
-                    <div className="auth-error-banner" role="alert">
-                        {errorMessage}
-                    </div>
-                )}
-
-                {successMessage && (
-                    <div className="auth-success-banner" role="status">
-                        {successMessage}
-                    </div>
-                )}
-
-                {isOtpStage ? (
-                    <form onSubmit={handleOtpSubmit} className="auth-form">
-                        <div className="form-group">
-                            <label className="form-label">One-Time Password</label>
-                            <OtpInput
-                                value={otpCode}
-                                onChange={(val) => setOtpCode(val)}
-                                disabled={loading}
-                            />
-                        </div>
-
-                        <button
-                            type="submit"
-                            className="btn btn-primary btn-full btn-lg"
-                            disabled={loading || otpCode.length !== 6}
-                        >
-                            {loading ? <><SpinnerIcon /> Verifying...</> : "Verify & Activate"}
+                {/* re-keyed on stage change so it fades/lifts in each time the mode switches */}
+                <div className="auth-stage anim-fade-up" key={authMode}>
+                    {/* Compact header with resized brand logo */}
+                    <div className="auth-header">
+                        <button type="button" onClick={handleClose} className="auth-brand-link auth-inline-btn">
+                            <img src="/favicon.png" alt="" className="auth-brand-icon" />
+                            <span className="auth-brand-name">DasKitta</span>
                         </button>
-                    </form>
-                ) : isForgotMode ? (
-                    <form onSubmit={handleForgotPasswordSubmit} className="auth-form">
-                        <div className="form-group">
-                            <label className="form-label" htmlFor="forgot-email">Email Address</label>
-                            <input
-                                id="forgot-email"
-                                name="resetEmail"
-                                className={`input${fieldErrors.resetEmail ? " input-invalid" : ""}`}
-                                type="email"
-                                value={resetEmail}
-                                onChange={(e) => {
-                                    setErrorMessage("");
-                                    setSuccessMessage("");
-                                    setResetEmail(e.target.value);
-                                    if (fieldErrors.resetEmail) {
-                                        setFieldErrors((fe) => ({ ...fe, resetEmail: "" }));
-                                    }
-                                }}
-                                onBlur={handleFieldBlur}
-                                placeholder="your@email.com"
-                                required
-                                autoFocus
-                                autoComplete="email"
-                            />
-                            {fieldErrors.resetEmail && (
-                                <span className="field-error">{fieldErrors.resetEmail}</span>
+                        <h1 className="auth-title" id="auth-title">
+                            {isOtpStage
+                                ? "Verify Your Account"
+                                : isForgotMode
+                                    ? "Forgot Password"
+                                    : isResetMode
+                                        ? "Reset Password"
+                                        : isLoginMode
+                                            ? "Welcome Back"
+                                            : "Create Account"}
+                        </h1>
+                        <p className="auth-sub">
+                            {isOtpStage ? (
+                                <>Enter the code sent to <strong className="auth-sub-highlight">{activeEmail}</strong></>
+                            ) : isForgotMode ? (
+                                "Enter your account email to receive a reset code"
+                            ) : isResetMode ? (
+                                <>Enter the code sent to <strong className="auth-sub-highlight">{activeResetEmail}</strong> and set a new password</>
+                            ) : isLoginMode ? (
+                                "Enter your credentials to access your account"
+                            ) : (
+                                "Get started in seconds"
                             )}
-                        </div>
+                        </p>
+                    </div>
 
-                        <button
-                            type="submit"
-                            className="btn btn-primary btn-full btn-lg"
-                            disabled={loading}
-                        >
-                            {loading ? <><SpinnerIcon /> Sending...</> : "Send Reset Code"}
-                        </button>
-                    </form>
-                ) : isResetMode ? (
-                    <form onSubmit={handleResetPasswordSubmit} className="auth-form">
-                        <div className="form-group">
-                            <label className="form-label" htmlFor="reset-email">Email Address</label>
-                            <input
-                                id="reset-email"
-                                className="input"
-                                type="email"
-                                value={activeResetEmail}
-                                readOnly
-                                autoComplete="email"
-                            />
+                    {errorMessage && (
+                        <div className="auth-error-banner" role="alert">
+                            <IconAlertCircle />
+                            <span>{errorMessage}</span>
                         </div>
+                    )}
 
-                        <div className="form-group">
-                            <label className="form-label">One-Time Password</label>
-                            <OtpInput
-                                value={otpCode}
-                                onChange={(val) => {
-                                    setErrorMessage("");
-                                    setSuccessMessage("");
-                                    setOtpCode(val);
-                                }}
-                                disabled={loading}
-                            />
+                    {successMessage && (
+                        <div className="auth-success-banner" role="status">
+                            <CheckIcon />
+                            <span>{successMessage}</span>
                         </div>
+                    )}
 
-                        <div className="form-group">
-                            <label className="form-label" htmlFor="reset-password">New Password</label>
-                            <div className="input-password-wrap">
+                    {isOtpStage ? (
+                        <form onSubmit={handleOtpSubmit} className="auth-form">
+                            <div className="form-group">
+                                <label className="form-label">One-Time Password</label>
+                                <OtpInput
+                                    value={otpCode}
+                                    onChange={(val) => setOtpCode(val)}
+                                    disabled={loading}
+                                />
+                            </div>
+
+                            <button
+                                type="submit"
+                                className="btn btn-primary btn-full btn-lg"
+                                disabled={loading || otpCode.length !== 6}
+                            >
+                                {loading ? <><SpinnerIcon /> Verifying...</> : "Verify & Activate"}
+                            </button>
+                        </form>
+                    ) : isForgotMode ? (
+                        <form onSubmit={handleForgotPasswordSubmit} className="auth-form">
+                            <div className="form-group">
+                                <label className="form-label" htmlFor="forgot-email">Email Address</label>
                                 <input
-                                    id="reset-password"
-                                    name="newPassword"
-                                    className={`input input-password${fieldErrors.newPassword ? " input-invalid" : ""}`}
-                                    type={showPassword ? "text" : "password"}
-                                    value={newPassword}
+                                    id="forgot-email"
+                                    name="resetEmail"
+                                    className={`input${fieldErrors.resetEmail ? " input-invalid" : ""}`}
+                                    type="email"
+                                    value={resetEmail}
                                     onChange={(e) => {
                                         setErrorMessage("");
                                         setSuccessMessage("");
-                                        setNewPassword(e.target.value);
-                                        if (fieldErrors.newPassword) {
-                                            setFieldErrors((fe) => ({ ...fe, newPassword: "" }));
+                                        setResetEmail(e.target.value);
+                                        if (fieldErrors.resetEmail) {
+                                            setFieldErrors((fe) => ({ ...fe, resetEmail: "" }));
                                         }
                                     }}
                                     onBlur={handleFieldBlur}
-                                    placeholder="Min 6 characters"
-                                    required
-                                    minLength={6}
-                                    autoComplete="new-password"
-                                />
-                                <button
-                                    type="button"
-                                    className="password-toggle-btn"
-                                    onClick={() => setShowPassword((v) => !v)}
-                                    aria-label={showPassword ? "Hide password" : "Show password"}
-                                >
-                                    {showPassword ? <EyeOffIcon /> : <EyeIcon />}
-                                </button>
-                            </div>
-                            {fieldErrors.newPassword && (
-                                <span className="field-error">{fieldErrors.newPassword}</span>
-                            )}
-                        </div>
-
-                        <button
-                            type="submit"
-                            className="btn btn-primary btn-full btn-lg"
-                            disabled={loading || otpCode.length !== 6 || newPassword.length < 6}
-                        >
-                            {loading ? <><SpinnerIcon /> Resetting...</> : "Reset Password"}
-                        </button>
-                    </form>
-                ) : (
-                    <form onSubmit={handleSubmit} className="auth-form">
-                        <div className="form-group">
-                            <label className="form-label" htmlFor="auth-username">{isLoginMode ? "Username or Email" : "Username"}</label>
-                            <input
-                                id="auth-username"
-                                className={`input${fieldErrors.username ? " input-invalid" : ""}`}
-                                type="text"
-                                name="username"
-                                value={form.username}
-                                onChange={handleChange}
-                                onBlur={handleFieldBlur}
-                                placeholder={isLoginMode ? "Username or email address" : "Choose a username"}
-                                required
-                                autoFocus
-                                autoComplete="username"
-                                minLength={isLoginMode ? undefined : 3}
-                            />
-                            {fieldErrors.username && (
-                                <span className="field-error">{fieldErrors.username}</span>
-                            )}
-                        </div>
-
-                        {isRegisterMode && (
-                            <div className="form-group">
-                                <label className="form-label" htmlFor="auth-email">Email Address</label>
-                                <input
-                                    id="auth-email"
-                                    className={`input${fieldErrors.email ? " input-invalid" : ""}`}
-                                    type="email"
-                                    name="email"
-                                    value={form.email}
-                                    onChange={handleChange}
-                                    onBlur={handleFieldBlur}
                                     placeholder="your@email.com"
                                     required
+                                    autoFocus
                                     autoComplete="email"
                                 />
-                                {fieldErrors.email && (
-                                    <span className="field-error">{fieldErrors.email}</span>
+                                {fieldErrors.resetEmail && (
+                                    <span className="field-error">{fieldErrors.resetEmail}</span>
                                 )}
                             </div>
-                        )}
 
-                        <div className="form-group">
-                            <label className="form-label" htmlFor="auth-password">Password</label>
-                            <div className="input-password-wrap">
+                            <button
+                                type="submit"
+                                className="btn btn-primary btn-full btn-lg"
+                                disabled={loading}
+                            >
+                                {loading ? <><SpinnerIcon /> Sending...</> : "Send Reset Code"}
+                            </button>
+                        </form>
+                    ) : isResetMode ? (
+                        <form onSubmit={handleResetPasswordSubmit} className="auth-form">
+                            <div className="form-group">
+                                <label className="form-label" htmlFor="reset-email">Email Address</label>
                                 <input
-                                    id="auth-password"
-                                    className={`input input-password${fieldErrors.password ? " input-invalid" : ""}`}
-                                    type={showPassword ? "text" : "password"}
-                                    name="password"
-                                    value={form.password}
+                                    id="reset-email"
+                                    className="input"
+                                    type="email"
+                                    value={activeResetEmail}
+                                    readOnly
+                                    autoComplete="email"
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label className="form-label">One-Time Password</label>
+                                <OtpInput
+                                    value={otpCode}
+                                    onChange={(val) => {
+                                        setErrorMessage("");
+                                        setSuccessMessage("");
+                                        setOtpCode(val);
+                                    }}
+                                    disabled={loading}
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label className="form-label" htmlFor="reset-password">New Password</label>
+                                <div className="input-password-wrap">
+                                    <input
+                                        id="reset-password"
+                                        name="newPassword"
+                                        className={`input input-password${fieldErrors.newPassword ? " input-invalid" : ""}`}
+                                        type={showPassword ? "text" : "password"}
+                                        value={newPassword}
+                                        onChange={(e) => {
+                                            setErrorMessage("");
+                                            setSuccessMessage("");
+                                            setNewPassword(e.target.value);
+                                            if (fieldErrors.newPassword) {
+                                                setFieldErrors((fe) => ({ ...fe, newPassword: "" }));
+                                            }
+                                        }}
+                                        onBlur={handleFieldBlur}
+                                        placeholder="Min 6 characters"
+                                        required
+                                        minLength={6}
+                                        autoComplete="new-password"
+                                    />
+                                    <button
+                                        type="button"
+                                        className="password-toggle-btn"
+                                        onClick={() => setShowPassword((v) => !v)}
+                                        aria-label={showPassword ? "Hide password" : "Show password"}
+                                    >
+                                        {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                                    </button>
+                                </div>
+                                {fieldErrors.newPassword && (
+                                    <span className="field-error">{fieldErrors.newPassword}</span>
+                                )}
+                            </div>
+
+                            <button
+                                type="submit"
+                                className="btn btn-primary btn-full btn-lg"
+                                disabled={loading || otpCode.length !== 6 || newPassword.length < 6}
+                            >
+                                {loading ? <><SpinnerIcon /> Resetting...</> : "Reset Password"}
+                            </button>
+                        </form>
+                    ) : (
+                        <form onSubmit={handleSubmit} className="auth-form">
+                            <div className="form-group">
+                                <label className="form-label" htmlFor="auth-username">{isLoginMode ? "Username or Email" : "Username"}</label>
+                                <input
+                                    id="auth-username"
+                                    className={`input${fieldErrors.username ? " input-invalid" : ""}`}
+                                    type="text"
+                                    name="username"
+                                    value={form.username}
                                     onChange={handleChange}
                                     onBlur={handleFieldBlur}
-                                    placeholder={isLoginMode ? "Your password" : "Min 6 characters"}
+                                    placeholder={isLoginMode ? "Username or email address" : "Choose a username"}
                                     required
-                                    autoComplete={isLoginMode ? "current-password" : "new-password"}
-                                    minLength={isLoginMode ? undefined : 6}
+                                    autoFocus
+                                    autoComplete="username"
+                                    minLength={isLoginMode ? undefined : 3}
                                 />
-                                <button
-                                    type="button"
-                                    className="password-toggle-btn"
-                                    onClick={() => setShowPassword((v) => !v)}
-                                    aria-label={showPassword ? "Hide password" : "Show password"}
-                                >
-                                    {showPassword ? <EyeOffIcon /> : <EyeIcon />}
-                                </button>
+                                {fieldErrors.username && (
+                                    <span className="field-error">{fieldErrors.username}</span>
+                                )}
                             </div>
-                            {fieldErrors.password && (
-                                <span className="field-error">{fieldErrors.password}</span>
-                            )}
-                        </div>
 
-                        {isLoginMode && (
-                            <div className="form-group form-group-inline auth-login-options">
-                                <label className="checkbox-label" htmlFor="auth-remember-me">
+                            {isRegisterMode && (
+                                <div className="form-group">
+                                    <label className="form-label" htmlFor="auth-email">Email Address</label>
                                     <input
-                                        id="auth-remember-me"
-                                        type="checkbox"
-                                        checked={rememberMe}
-                                        onChange={(e) => setRememberMe(e.target.checked)}
+                                        id="auth-email"
+                                        className={`input${fieldErrors.email ? " input-invalid" : ""}`}
+                                        type="email"
+                                        name="email"
+                                        value={form.email}
+                                        onChange={handleChange}
+                                        onBlur={handleFieldBlur}
+                                        placeholder="your@email.com"
+                                        required
+                                        autoComplete="email"
                                     />
-                                    Remember me
-                                </label>
+                                    {fieldErrors.email && (
+                                        <span className="field-error">{fieldErrors.email}</span>
+                                    )}
+                                </div>
+                            )}
 
+                            <div className="form-group">
+                                <label className="form-label" htmlFor="auth-password">Password</label>
+                                <div className="input-password-wrap">
+                                    <input
+                                        id="auth-password"
+                                        className={`input input-password${fieldErrors.password ? " input-invalid" : ""}`}
+                                        type={showPassword ? "text" : "password"}
+                                        name="password"
+                                        value={form.password}
+                                        onChange={handleChange}
+                                        onBlur={handleFieldBlur}
+                                        placeholder={isLoginMode ? "Your password" : "Min 6 characters"}
+                                        required
+                                        autoComplete={isLoginMode ? "current-password" : "new-password"}
+                                        minLength={isLoginMode ? undefined : 6}
+                                    />
+                                    <button
+                                        type="button"
+                                        className="password-toggle-btn"
+                                        onClick={() => setShowPassword((v) => !v)}
+                                        aria-label={showPassword ? "Hide password" : "Show password"}
+                                    >
+                                        {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                                    </button>
+                                </div>
+                                {fieldErrors.password && (
+                                    <span className="field-error">{fieldErrors.password}</span>
+                                )}
+                            </div>
+
+                            {isLoginMode && (
+                                <div className="form-group form-group-inline auth-login-options">
+                                    <label className="checkbox-label" htmlFor="auth-remember-me">
+                                        <input
+                                            id="auth-remember-me"
+                                            type="checkbox"
+                                            checked={rememberMe}
+                                            onChange={(e) => setRememberMe(e.target.checked)}
+                                        />
+                                        Remember me
+                                    </label>
+
+                                    <button
+                                        type="button"
+                                        onClick={handleForgotNavigation}
+                                        className="auth-link auth-inline-btn auth-forgot-btn"
+                                    >
+                                        Forgot Password?
+                                    </button>
+                                </div>
+                            )}
+
+                            <button
+                                type="submit"
+                                className="btn btn-primary btn-full btn-lg"
+                                disabled={loading}
+                            >
+                                {loading ? (
+                                    <><SpinnerIcon /> {isLoginMode ? "Signing in..." : "Creating account..."}</>
+                                ) : (
+                                    isLoginMode ? "Sign in" : "Create account"
+                                )}
+                            </button>
+
+                            {isRegisterMode && (
+                                <p className="auth-legal-notice">
+                                    By creating an account, you agree to our{" "}
+                                    <Link to="/terms" className="auth-link" target="_blank" rel="noopener noreferrer">
+                                        Terms of Service
+                                    </Link>{" "}
+                                    and{" "}
+                                    <Link to="/privacy" className="auth-link" target="_blank" rel="noopener noreferrer">
+                                        Privacy Policy
+                                    </Link>.
+                                </p>
+                            )}
+                        </form>
+                    )}
+
+                    <div className="auth-footer-text">
+                        {isOtpStage ? (
+                            <>
+                                Didn't get a code?{" "}
                                 <button
                                     type="button"
-                                    onClick={handleForgotNavigation}
-                                    className="auth-link auth-inline-btn auth-forgot-btn"
+                                    onClick={handleResend}
+                                    disabled={resending || timer > 0}
+                                    className="auth-link auth-inline-btn"
                                 >
-                                    Forgot Password?
+                                    {resending
+                                        ? "Sending..."
+                                        : timer > 0
+                                            ? `Resend code in ${timer}s`
+                                            : "Resend code"}
                                 </button>
-                            </div>
+                            </>
+                        ) : isForgotMode || isResetMode ? (
+                            <>
+                                Back to login{" "}
+                                <button
+                                    type="button"
+                                    onClick={handleBackToLogin}
+                                    className="auth-link auth-inline-btn"
+                                >
+                                    Sign in
+                                </button>
+                            </>
+                        ) : isLoginMode ? (
+                            <>
+                                Don't have an account?{" "}
+                                <button
+                                    type="button"
+                                    onClick={() => handleSwitchMode("/register")}
+                                    className="auth-link auth-inline-btn"
+                                >
+                                    Create one
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                Already have an account?{" "}
+                                <button
+                                    type="button"
+                                    onClick={() => handleSwitchMode("/login")}
+                                    className="auth-link auth-inline-btn"
+                                >
+                                    Sign in
+                                </button>
+                            </>
                         )}
-
-                        <button
-                            type="submit"
-                            className="btn btn-primary btn-full btn-lg"
-                            disabled={loading}
-                        >
-                            {loading ? (
-                                <><SpinnerIcon /> {isLoginMode ? "Signing in..." : "Creating account..."}</>
-                            ) : (
-                                isLoginMode ? "Sign in" : "Create account"
-                            )}
-                        </button>
-
-                        {isRegisterMode && (
-                            <p className="auth-legal-notice">
-                                By creating an account, you agree to our{" "}
-                                <Link to="/terms" className="auth-link" target="_blank" rel="noopener noreferrer">
-                                    Terms of Service
-                                </Link>{" "}
-                                and{" "}
-                                <Link to="/privacy" className="auth-link" target="_blank" rel="noopener noreferrer">
-                                    Privacy Policy
-                                </Link>.
-                            </p>
-                        )}
-                    </form>
-                )}
-
-                <div className="auth-footer-text">
-                    {isOtpStage ? (
-                        <>
-                            Didn't get a code?{" "}
-                            <button
-                                type="button"
-                                onClick={handleResend}
-                                disabled={resending || timer > 0}
-                                className="auth-link auth-inline-btn"
-                            >
-                                {resending
-                                    ? "Sending..."
-                                    : timer > 0
-                                        ? `Resend code in ${timer}s`
-                                        : "Resend code"}
-                            </button>
-                        </>
-                    ) : isForgotMode || isResetMode ? (
-                        <>
-                            Back to login{" "}
-                            <button
-                                type="button"
-                                onClick={handleBackToLogin}
-                                className="auth-link auth-inline-btn"
-                            >
-                                Sign in
-                            </button>
-                        </>
-                    ) : isLoginMode ? (
-                        <>
-                            Don't have an account?{" "}
-                            <button
-                                type="button"
-                                onClick={() => handleSwitchMode("/register")}
-                                className="auth-link auth-inline-btn"
-                            >
-                                Create one
-                            </button>
-                        </>
-                    ) : (
-                        <>
-                            Already have an account?{" "}
-                            <button
-                                type="button"
-                                onClick={() => handleSwitchMode("/login")}
-                                className="auth-link auth-inline-btn"
-                            >
-                                Sign in
-                            </button>
-                        </>
-                    )}
+                    </div>
                 </div>
             </div>
         </div>

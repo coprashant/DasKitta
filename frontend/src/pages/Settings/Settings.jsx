@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import Layout from "../../components/Layout/Layout.jsx";
 import "./Settings.css";
 
@@ -29,6 +29,8 @@ function SettingsMenu() {
 }
 
 export default function Settings() {
+    const { pathname } = useLocation();
+
     return (
         <Layout>
             <div className="page stg-page">
@@ -41,7 +43,8 @@ export default function Settings() {
 
                 <SettingsMenu />
 
-                <main className="stg-content anim-fade-up">
+                {/* re-keyed on route change so switching sub-views fades/lifts in */}
+                <main className="stg-content anim-fade-up" key={pathname}>
                     <Outlet />
                 </main>
             </div>

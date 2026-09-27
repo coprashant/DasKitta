@@ -97,6 +97,49 @@ const Portfolio = () => {
     const activeAccountIdRef = useRef(null);
     const exportMenuRef = useRef(null);
 
+    // last seen price per script, used to flash a cell when a background
+    // refresh brings in a changed value
+    const prevPricesRef = useRef({});
+    const flashTimeoutsRef = useRef({});
+    const [flashMap, setFlashMap] = useState({});
+
+    const flashPriceChanges = useCallback((data) => {
+        const items = data?.items ?? [];
+        const nextPrices = {};
+        items.forEach((it) => { nextPrices[it.script] = it.lastTransactionPrice; });
+
+        const hadPrev = Object.keys(prevPricesRef.current).length > 0;
+        if (hadPrev) {
+            const changed = {};
+            items.forEach((it) => {
+                const prevPrice = prevPricesRef.current[it.script];
+                if (prevPrice === undefined || prevPrice === it.lastTransactionPrice) return;
+                changed[it.script] = it.lastTransactionPrice > prevPrice ? "up" : "down";
+            });
+
+            if (Object.keys(changed).length) {
+                setFlashMap((m) => ({ ...m, ...changed }));
+                Object.keys(changed).forEach((script) => {
+                    clearTimeout(flashTimeoutsRef.current[script]);
+                    flashTimeoutsRef.current[script] = setTimeout(() => {
+                        setFlashMap((m) => {
+                            const next = { ...m };
+                            delete next[script];
+                            return next;
+                        });
+                    }, 700);
+                });
+            }
+        }
+
+        prevPricesRef.current = nextPrices;
+    }, []);
+
+    useEffect(() => () => {
+        // clear any pending flash timers on unmount
+        Object.values(flashTimeoutsRef.current).forEach(clearTimeout);
+    }, []);
+
     // single fetch path used by both auto load and manual refresh, so
     // there is one place that owns loading state and stale-response checks
     const fetchPortfolio = useCallback(async (id, { background = false } = {}) => {
@@ -115,6 +158,7 @@ const Portfolio = () => {
             const res = await getPortfolioApi(id);
             if (activeAccountIdRef.current !== id) return;
             const data = res?.data ?? null;
+            flashPriceChanges(data);
             setPortfolio(data);
             setLastUpdated(Date.now());
             setError(null);
@@ -134,13 +178,16 @@ const Portfolio = () => {
                 setIsRefreshing(false);
             }
         }
-    }, []);
+    }, [flashPriceChanges]);
 
     useEffect(() => {
         if (accountLoading) return;
 
         const id = activeAccount?.id ?? null;
         activeAccountIdRef.current = id;
+        // reset flash tracking, prices from a different account are not comparable
+        prevPricesRef.current = {};
+        setFlashMap({});
 
         if (!id) {
             setPortfolio(null);
@@ -459,7 +506,7 @@ const Portfolio = () => {
                                                             <span className="cell-mono">{fmtUnits(item.currentBalance)}</span>
                                                         </td>
                                                         <td className="col-right">
-                                                                <span className={`cell-mono ltp-val ${gc}`}>
+                                                                <span className={`cell-mono ltp-val ${gc}${flashMap[item.script] ? ` flash-${flashMap[item.script]}` : ""}`}>
                                                                     {fmt(item.lastTransactionPrice)}
                                                                 </span>
                                                         </td>

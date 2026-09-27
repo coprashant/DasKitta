@@ -375,6 +375,21 @@ button.btn-refresh:hover {
 .ltp-val.positive { color: var(--success); }
 .ltp-val.negative { color: var(--danger); }
 
+/* brief tint when a background refresh changes a price, draws the eye without a layout shift */
+.flash-up { animation: price-flash-up 700ms ease; border-radius: 4px; }
+.flash-down { animation: price-flash-down 700ms ease; border-radius: 4px; }
+@keyframes price-flash-up {
+  0% { background: color-mix(in srgb, var(--success) 35%, transparent); }
+  100% { background: transparent; }
+}
+@keyframes price-flash-down {
+  0% { background: color-mix(in srgb, var(--danger) 35%, transparent); }
+  100% { background: transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flash-up, .flash-down { animation: none; }
+}
+
 /* total row no fill top divider */
 .tfoot-row { background: transparent; border-top: 2px solid var(--border); }
 .tfoot-label {

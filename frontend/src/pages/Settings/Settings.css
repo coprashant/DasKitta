@@ -189,6 +189,7 @@
 
 .stg-row-form {
     padding: 0 0 20px;
+    animation: fade-up var(--t) var(--ease) both;
 }
 
 .stg-form-note {
@@ -461,6 +462,7 @@
     margin-top: 14px;
     padding-top: 14px;
     border-top: 1px solid var(--border);
+    animation: fade-up var(--t) var(--ease) both;
 }
 
 .edit-panel-head {

@@ -6,7 +6,7 @@ import {
 } from "../../api/ipo";
 import { useAuth } from "../../context/AuthContext";
 import Layout from "../../components/Layout/Layout.jsx";
-import { SpinnerIcon, WarnIcon } from "../../components/Icons";
+import { SpinnerIcon, WarnIcon, IconSearch } from "../../components/Icons";
 import toast from "react-hot-toast";
 import SEO from "../../seo/SEO.jsx";
 import { RESULT_CHECKER_JSONLD } from "../../seo/jsonLd.js";
@@ -272,17 +272,20 @@ const ResultChecker = () => {
                                         </>
                                     ) : (
                                         <>
-                                        <p>No results found for this selection.</p>
-                                        <a
-                                        href="https://iporesult.cdsc.com.np"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="btn-cdsc"
-                                        >
-                                        Check on CDSC Portal &rarr;
-                                        </a>
+                                            <div className="rc-empty-icon">
+                                                <IconSearch />
+                                            </div>
+                                            <p>No results found for this selection.</p>
+                                            <a
+                                                href="https://iporesult.cdsc.com.np"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="btn-cdsc"
+                                            >
+                                                Check on CDSC Portal &rarr;
+                                            </a>
                                         </>
-                                        )}
+                                    )}
                                 </div>
                             )}
 
