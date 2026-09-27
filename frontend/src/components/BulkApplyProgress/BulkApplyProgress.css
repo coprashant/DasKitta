@@ -164,22 +164,23 @@
   border-color: var(--accent);
 }
 
+/* status colors use theme tokens so they adapt in dark mode */
 .ipo-progress-pill.success {
-  color: #0a7a3e;
-  background: #d9f6e7;
-  border-color: #8ad7b0;
+  color: var(--success);
+  background: var(--success-dim);
+  border-color: color-mix(in srgb, var(--success) 40%, transparent);
 }
 
 .ipo-progress-pill.failed {
-  color: #9b2020;
-  background: #ffe7e7;
-  border-color: #f0a7a7;
+  color: var(--danger);
+  background: var(--danger-dim);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
 }
 
 .ipo-progress-pill.cancelled {
-  color: #635f4a;
-  background: #f6f2de;
-  border-color: #ddd19a;
+  color: var(--warning);
+  background: var(--warning-dim);
+  border-color: color-mix(in srgb, var(--warning) 40%, transparent);
 }
 
 .ipo-progress-foot {
@@ -225,12 +226,12 @@
 }
 
 .ipo-progress-action.danger {
-  border-color: #cc4a4a;
-  color: #b02828;
-  background: #ffe7e7;
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+  color: var(--danger);
+  background: var(--danger-dim);
 }
 
 .ipo-progress-action.danger:hover {
-  border-color: #b02828;
-  color: #941f1f;
+  border-color: var(--danger);
+  color: var(--danger);
 }

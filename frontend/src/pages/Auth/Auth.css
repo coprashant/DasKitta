@@ -205,11 +205,11 @@
   margin-top: 2px;
 }
 
-/* Error message banner */
+/* Error message banner, uses theme tokens so it adapts in dark mode */
 .auth-error-banner {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.25);
-  color: #ef4444;
+  background: var(--danger-dim);
+  border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
+  color: var(--danger);
   font-size: 12px;
   padding: 8px 10px;
   border-radius: var(--r, 8px);
@@ -220,9 +220,9 @@
 }
 
 .auth-success-banner {
-  background: rgba(34, 197, 94, 0.1);
-  border: 1px solid rgba(34, 197, 94, 0.25);
-  color: #15803d;
+  background: var(--success-dim);
+  border: 1px solid color-mix(in srgb, var(--success) 25%, transparent);
+  color: var(--success);
   font-size: 12px;
   padding: 8px 10px;
   border-radius: var(--r, 8px);

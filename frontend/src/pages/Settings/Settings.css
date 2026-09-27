@@ -449,7 +449,7 @@
 }
 
 .account-menu-item-danger {
-    color: #e53e3e;
+    color: var(--danger);
 }
 
 .account-menu-item-danger:hover {
@@ -696,8 +696,8 @@
     width: 30px;
     height: 30px;
     border-radius: var(--r-sm);
-    background: rgba(229, 62, 62, 0.14);
-    color: #e53e3e;
+    background: var(--danger-dim);
+    color: var(--danger);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -708,7 +708,7 @@
     margin: 0;
     font-size: 14px;
     font-weight: 600;
-    color: #e53e3e;
+    color: var(--danger);
 }
 
 .stg-danger-desc {
@@ -718,23 +718,23 @@
 }
 
 .stg-danger-card .stg-row {
-    border-top: 1px solid rgba(229, 62, 62, 0.2);
+    border-top: 1px solid color-mix(in srgb, var(--danger) 20%, transparent);
     border-bottom: none;
 }
 
 .stg-danger-card .stg-row-label {
-    color: #c53030;
+    color: var(--danger);
 }
 
 .stg-danger-card .stg-row-summary:hover .stg-row-value {
-    color: #c53030;
+    color: var(--danger);
 }
 
-/* danger button */
+/* danger button, filled style overrides the ghost .btn-danger from index.css on this page */
 .btn-danger {
-    background: #e53e3e;
+    background: var(--danger);
     color: #fff;
-    border: 1px solid #e53e3e;
+    border: 1px solid var(--danger);
 }
 
 .btn-danger:hover {

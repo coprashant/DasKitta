@@ -109,7 +109,14 @@ const ProfileDropdown = ({ onClose, showDownloadApp, onDownloadApp }) => {
 const BellButton = () => {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
+  const buttonRef = useRef(null);
   const { unreadCount } = useNotifications();
+
+  // closes the panel and puts focus back on the bell, for keyboard users
+  const closePanel = () => {
+    setOpen(false);
+    buttonRef.current?.focus();
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -122,7 +129,7 @@ const BellButton = () => {
 
   useEffect(() => {
     if (!open) return;
-    const handler = (e) => { if (e.key === "Escape") setOpen(false); };
+    const handler = (e) => { if (e.key === "Escape") closePanel(); };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, [open]);
@@ -135,6 +142,7 @@ const BellButton = () => {
   return (
       <div className="bell-btn-wrap" ref={wrapRef}>
         <button
+            ref={buttonRef}
             className={`navbar-bell-btn${open ? " active" : ""}`}
             onClick={handleToggle}
             aria-label={`Notifications${unreadCount ? ` (${unreadCount} unread)` : ""}`}
@@ -150,7 +158,7 @@ const BellButton = () => {
           {open && <span className="navbar-indicator-dot" aria-hidden="true" />}
         </button>
         {open && (
-            <NotificationPanel onClose={() => setOpen(false)} />
+            <NotificationPanel onClose={closePanel} />
         )}
       </div>
   );
@@ -164,18 +172,26 @@ const Navbar = () => {
   const [profileOpen, setProfileOpen] = useState(false);
   const [showInstallHelp, setShowInstallHelp] = useState(false);
   const profileRef = useRef(null);
+  const profileButtonRef = useRef(null);
   const { isInstalled, canInstallNatively, isMobile, installGuide, handleInstallClick } = PWAInstall();
   const showDownloadApp = !isInstalled && (canInstallNatively || isMobile);
 
   const desktopLinks = user ? [...authLinks, ...secondaryLinks] : guestLinks;
 
+  // closes the profile menu and puts focus back on its trigger, for keyboard users
+  const closeProfile = () => {
+    setProfileOpen(false);
+    profileButtonRef.current?.focus();
+  };
+
   useEffect(() => { setProfileOpen(false); }, [pathname]);
 
   useEffect(() => {
-    const handler = (e) => { if (e.key === "Escape") setProfileOpen(false); };
+    if (!profileOpen) return;
+    const handler = (e) => { if (e.key === "Escape") closeProfile(); };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, []);
+  }, [profileOpen]);
 
   useEffect(() => {
     if (!profileOpen) return;
@@ -191,7 +207,10 @@ const Navbar = () => {
     if (!showInstallHelp) return;
 
     const handler = (e) => {
-      if (e.key === "Escape") setShowInstallHelp(false);
+      if (e.key === "Escape") {
+        setShowInstallHelp(false);
+        profileButtonRef.current?.focus();
+      }
     };
 
     document.addEventListener("keydown", handler);
@@ -212,80 +231,83 @@ const Navbar = () => {
 
   return (
       <>
+        <a href="#main-content" className="skip-link">Skip to content</a>
+
         <nav className="navbar" aria-label="Main navigation">
-        <div className="navbar-inner">
-          <Link to="/" className="navbar-brand">
-            <img src="/favicon.png" className="navbar-logo" alt="DasKitta" />
-            <span className="navbar-name">DasKitta</span>
-          </Link>
+          <div className="navbar-inner">
+            <Link to="/" className="navbar-brand">
+              <img src="/favicon.png" className="navbar-logo" alt="DasKitta" />
+              <span className="navbar-name">DasKitta</span>
+            </Link>
 
-          <div className="navbar-links">
-            {desktopLinks.map((l) => (
-                <Link
-                    key={l.path}
-                    to={l.path}
-                    className={`navbar-link${pathname === l.path ? " active" : ""}`}
-                    aria-current={pathname === l.path ? "page" : undefined}
-                >
-                  {l.label}
-                </Link>
-            ))}
-          </div>
-
-          <div className="navbar-right">
-            {user && <BellButton />}
-
-            <span className="navbar-divider" aria-hidden="true" />
-
-            <button
-                className="navbar-theme-btn"
-                onClick={toggle}
-                aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-                title={theme === "dark" ? "Light mode" : "Dark mode"}
-            >
-              {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-            </button>
-
-            {user ? (
-                <div className="profile-btn-wrap" ref={profileRef}>
-                  <button
-                      className={`navbar-profile-btn${profileOpen ? " active" : ""}`}
-                      onClick={() => setProfileOpen((v) => !v)}
-                      aria-label="Profile menu"
-                      aria-expanded={profileOpen}
-                      aria-haspopup="true"
-                  >
-                    <ProfileIcon />
-                    {profileOpen && <span className="navbar-indicator-dot" aria-hidden="true" />}
-                  </button>
-                  {profileOpen && (
-                      <ProfileDropdown
-                        onClose={() => setProfileOpen(false)}
-                        showDownloadApp={showDownloadApp}
-                        onDownloadApp={handleDownloadApp}
-                      />
-                  )}
-                </div>
-            ) : (
-                <>
+            <div className="navbar-links">
+              {desktopLinks.map((l) => (
                   <Link
-                      to="/login"
-                      state={{ background: location.state?.background || location }}
-                      className="navbar-link navbar-link-ghost"
+                      key={l.path}
+                      to={l.path}
+                      className={`navbar-link${pathname === l.path ? " active" : ""}`}
+                      aria-current={pathname === l.path ? "page" : undefined}
                   >
-                    Sign in
+                    {l.label}
                   </Link>
-                  <Link
-                      to="/register"
-                      state={{ background: location.state?.background || location }}
-                      className="btn btn-primary btn-sm"
-                  >
-                    Get started
-                  </Link>
-                </>
-            )}
+              ))}
+            </div>
+
+            <div className="navbar-right">
+              {user && <BellButton />}
+
+              <span className="navbar-divider" aria-hidden="true" />
+
+              <button
+                  className="navbar-theme-btn"
+                  onClick={toggle}
+                  aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                  title={theme === "dark" ? "Light mode" : "Dark mode"}
+              >
+                {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+              </button>
+
+              {user ? (
+                  <div className="profile-btn-wrap" ref={profileRef}>
+                    <button
+                        ref={profileButtonRef}
+                        className={`navbar-profile-btn${profileOpen ? " active" : ""}`}
+                        onClick={() => setProfileOpen((v) => !v)}
+                        aria-label="Profile menu"
+                        aria-expanded={profileOpen}
+                        aria-haspopup="true"
+                    >
+                      <ProfileIcon />
+                      {profileOpen && <span className="navbar-indicator-dot" aria-hidden="true" />}
+                    </button>
+                    {profileOpen && (
+                        <ProfileDropdown
+                            onClose={closeProfile}
+                            showDownloadApp={showDownloadApp}
+                            onDownloadApp={handleDownloadApp}
+                        />
+                    )}
+                  </div>
+              ) : (
+                  <>
+                    <Link
+                        to="/login"
+                        state={{ background: location.state?.background || location }}
+                        className="navbar-link navbar-link-ghost"
+                    >
+                      Sign in
+                    </Link>
+                    <Link
+                        to="/register"
+                        state={{ background: location.state?.background || location }}
+                        className="btn btn-primary btn-sm"
+                    >
+                      Get started
+                    </Link>
+                  </>
+              )}
+            </div>
           </div>
-        </div>
         </nav>
 
         {showInstallHelp && (
@@ -294,14 +316,14 @@ const Navbar = () => {
                   type="button"
                   className="modal-blur profile-install-help-blur"
                   aria-label="Close install help"
-                  onClick={() => setShowInstallHelp(false)}
+                  onClick={() => { setShowInstallHelp(false); profileButtonRef.current?.focus(); }}
               />
 
               <div className="modal-box profile-install-help">
                 <button
                     type="button"
                     className="profile-install-help-close"
-                    onClick={() => setShowInstallHelp(false)}
+                    onClick={() => { setShowInstallHelp(false); profileButtonRef.current?.focus(); }}
                     aria-label="Close"
                 >
                   <CloseIcon />

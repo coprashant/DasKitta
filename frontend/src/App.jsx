@@ -1,6 +1,6 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
-import { Toaster } from "react-hot-toast";
+import { Toaster, toast } from "react-hot-toast";
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { AccountProvider } from "./context/AccountContext";
@@ -8,6 +8,33 @@ import { NotificationProvider } from "./context/NotificationContext";
 import AccountSync from "./components/AccountSync";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
+
+const OFFLINE_TOAST_ID = "network-status";
+
+// tells the user when the connection drops or comes back, useful in a PWA on mobile data
+const useNetworkStatusToast = () => {
+    useEffect(() => {
+        const handleOffline = () => {
+            toast.error("You're offline. Some actions won't work until you reconnect.", {
+                id: OFFLINE_TOAST_ID,
+                duration: Infinity,
+            });
+        };
+        const handleOnline = () => {
+            toast.success("Back online", { id: OFFLINE_TOAST_ID, duration: 2500 });
+        };
+
+        window.addEventListener("offline", handleOffline);
+        window.addEventListener("online", handleOnline);
+
+        if (!navigator.onLine) handleOffline();
+
+        return () => {
+            window.removeEventListener("offline", handleOffline);
+            window.removeEventListener("online", handleOnline);
+        };
+    }, []);
+};
 
 // route pages are loaded on demand so first load only ships what is needed
 const PrivacyPolicy    = lazy(() => import("./pages/Legal/PrivacyPolicy.jsx"));
@@ -44,13 +71,14 @@ const PageLoader = () => (
         >
             <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
         </svg>
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
 );
 
 const AppContent = () => {
     const location = useLocation();
     const background = location.state?.background;
+
+    useNetworkStatusToast();
 
     return (
         <>

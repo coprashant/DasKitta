@@ -319,6 +319,12 @@
   border-radius: var(--r);
   padding: 4px 8px;
   gap: 4px;
+  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+/* visible focus ring on the wrapper, matches other inputs in the app */
+.ipo-search-inline.open:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
 }
 
 .ipo-search-inline-input {

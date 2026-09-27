@@ -389,6 +389,25 @@ img {
   transition: filter var(--t) var(--ease);
 }
 
+/* skip link, hidden until keyboard focus, jumps past the navbar */
+.skip-link {
+  position: absolute;
+  top: -48px;
+  left: 8px;
+  z-index: 1000;
+  background: var(--accent);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: var(--r);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: top var(--t-fast) var(--ease);
+}
+.skip-link:focus {
+  top: 8px;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

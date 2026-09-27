@@ -29,6 +29,41 @@
 @media (min-width: 480px) { .site-footer { padding: 22px 20px; } }
 @media (min-width: 768px) { .site-footer { padding: 24px 40px; } }
 
+/* compact mobile link row, replaces the full footer below 768px */
+.footer-mobile-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 16px;
+}
+.footer-mobile-link {
+  font-size: 11px;
+  color: var(--text-2);
+  text-decoration: none;
+  padding: 4px 2px;
+}
+.footer-mobile-link:hover,
+.footer-mobile-link:focus-visible {
+  color: var(--accent);
+}
+@media (min-width: 768px) { .footer-mobile-bar { display: none; } }
+
+/* clears the fixed mobile tab bar when logged in */
+@media (max-width: 767px) {
+  .footer-inner { display: none; }
+  .site-footer { padding: 14px 16px; }
+  .site-footer.has-tabbar {
+    padding-bottom: calc(14px + 60px + env(safe-area-inset-bottom));
+  }
+}
+
+/* Hide footer under 768px on non home pages */
+@media (max-width: 767px) {
+  .site-footer.hide-on-mobile {
+    display: none;
+  }
+}
+
 .footer-inner {
   max-width: 1160px;
   margin: 0 auto;
