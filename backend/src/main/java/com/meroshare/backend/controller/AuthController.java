@@ -149,13 +149,18 @@ public class AuthController {
         boolean allowCrossSiteNone = crossSiteCookie && cookieSecure;
         String sameSite = allowCrossSiteNone ? "None" : "Lax";
 
-        return ResponseCookie.from(REFRESH_COOKIE_NAME, value)
+        ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(REFRESH_COOKIE_NAME, value)
                 .httpOnly(true)
                 .secure(cookieSecure)
                 .sameSite(sameSite)
                 .path("/api/auth")
-                .maxAge(ttl)
-                .build();
+                .maxAge(ttl);
+
+        if (allowCrossSiteNone) {
+            builder.partitioned(true);
+        }
+
+        return builder.build();
     }
 
     private String readCookie(HttpServletRequest request, String name) {
