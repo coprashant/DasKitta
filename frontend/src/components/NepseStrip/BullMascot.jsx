@@ -1,9 +1,18 @@
-import { DotLottieReact } from "@lottiefiles/dotlottie-react";
+import { LottieLight as Lottie } from "../../../node_modules/lottie-react/build/animation/LottieLight.js";
+import angryBullAnimation from "../../assets/bull/angry_bull.json";
+import meditatingBullAnimation from "../../assets/bull/meditating_bull.json";
+import runningBullAnimation from "../../assets/bull/Bull_running.json";
 
 function getBullAnimationPath(isOpen, pts) {
     if (!isOpen) return "/bull/meditating_bull.json";
     if (pts >= 0) return "/bull/Bull_running.json";
     return "/bull/angry_bull.json";
+}
+
+function getBullAnimationData(animationPath) {
+    if (animationPath.includes("Bull_running")) return runningBullAnimation;
+    if (animationPath.includes("meditating_bull")) return meditatingBullAnimation;
+    return angryBullAnimation;
 }
 
 function getMascotScale(animationPath) {
@@ -42,6 +51,7 @@ function getDefaultBullPlacement(isOpen, position, mascotHalfSize) {
 
 export default function BullMascot({ isOpen, pts, position }) {
     const animationPath = getBullAnimationPath(isOpen, pts);
+    const animationData = getBullAnimationData(animationPath);
     const isRunningBull = animationPath.includes("Bull_running");
     const mascotScale = getMascotScale(animationPath);
     const mascotSize = `calc(var(--mascot-size, 42px) * ${mascotScale})`;
@@ -63,11 +73,11 @@ export default function BullMascot({ isOpen, pts, position }) {
                 transition: "left 0.3s ease, top 0.3s ease"
             }}
         >
-            <DotLottieReact
+            <Lottie
                 key={animationPath}
-                src={animationPath}
-                loop
-                autoplay
+                animationData={animationData}
+                loop={true}
+                autoplay={true}
                 className="bull-lottie-player"
                 style={{ width: mascotSize, height: mascotSize }}
             />
