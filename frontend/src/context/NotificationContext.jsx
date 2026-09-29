@@ -1,5 +1,5 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { useAuth } from "./AuthContext";
+import { createContext, useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useAuth } from "../hooks/useAuth";
 import {
   clearNotificationsApi,
   deleteNotificationApi,
@@ -8,7 +8,7 @@ import {
   markNotificationReadApi,
 } from "../api/notifications";
 
-const NotificationContext = createContext(null);
+export const NotificationContext = createContext(null);
 const FETCH_THROTTLE_MS = 60000;
 
 export const NotificationProvider = ({ children }) => {
@@ -162,5 +162,3 @@ export const NotificationProvider = ({ children }) => {
       </NotificationContext.Provider>
   );
 };
-
-export const useNotifications = () => useContext(NotificationContext);

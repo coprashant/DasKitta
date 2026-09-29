@@ -1,4 +1,4 @@
-/* auth modal is a compact variant of the shared modal-box */
+/* compact variant of the shared modal box */
 .modal-box {
   max-width: 360px;
   max-height: calc(100vh - 32px);
@@ -10,7 +10,7 @@
   .modal-box { padding: 24px; }
 }
 
-/* Header typography and logo */
+/* header */
 .auth-header {
   margin-bottom: 14px;
 }
@@ -61,7 +61,7 @@
   font-weight: 500;
 }
 
-/* Form structure */
+/* form structure */
 .auth-form {
   display: flex;
   flex-direction: column;
@@ -102,7 +102,7 @@
   color: var(--text, #0f172a);
 }
 
-/* Password field wrapper */
+/* password field wrapper */
 .input-password-wrap {
   position: relative;
   display: flex;
@@ -142,7 +142,7 @@
   outline-offset: -2px;
 }
 
-/* Implicit legal notice style */
+/* legal notice */
 .auth-legal-notice {
   font-size: 11px;
   color: var(--text-3, #94a3b8);
@@ -151,7 +151,7 @@
   margin-top: 2px;
 }
 
-/* Error message banner, uses theme tokens so it adapts in dark mode */
+/* banners use theme tokens for dark mode */
 .auth-error-banner {
   display: flex;
   align-items: center;
@@ -198,7 +198,7 @@
   line-height: 1.2;
 }
 
-/* Bottom footer text link layout */
+/* footer link row */
 .auth-footer-text {
   text-align: center;
   font-size: 12.5px;
@@ -233,7 +233,7 @@
   text-decoration: none;
 }
 
-/* Top corner close button */
+/* top corner close button */
 .modal-close-btn {
   position: absolute;
   top: 14px;

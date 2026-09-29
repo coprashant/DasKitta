@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { getHistoryApi } from "../../api/ipo";
-import { useAccount } from "../../context/AccountContext";
+import { useAccount } from "../../hooks/useAccount";
 import Layout from "../../components/Layout/Layout.jsx";
 import AccountSwitcher from "../../components/AccountSwitcher/AccountSwitcher.jsx";
 import SEO from "../../seo/SEO.jsx";

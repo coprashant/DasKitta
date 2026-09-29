@@ -21,17 +21,27 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    // unverified account trying to login, frontend uses code to route to otp screen
+    // unverified login, frontend uses the code to open the otp screen
     @ExceptionHandler(UnverifiedAccountException.class)
     public ResponseEntity<Map<String, Object>> handleUnverified(UnverifiedAccountException ex) {
         log.warn("[EXCEPTION] Unverified account login attempt", ex);
-        return buildResponse(HttpStatus.FORBIDDEN, "UNVERIFIED_ACCOUNT", "Account verification required");
+        Map<String, Object> body = new HashMap<>();
+        body.put("timestamp", LocalDateTime.now().toString());
+        body.put("status", HttpStatus.FORBIDDEN.value());
+        body.put("code", "UNVERIFIED_ACCOUNT");
+        body.put("message", "Account verification required");
+        body.put("email", ex.getEmail());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
     }
 
-    /**
-     * Handles all untyped business logic errors (RuntimeException).
-     * We log at WARN since these are expected error paths (duplicate user, etc.)
-     */
+    // input errors with a message that is safe to show
+    @ExceptionHandler(UserInputException.class)
+    public ResponseEntity<Map<String, Object>> handleUserInput(UserInputException ex) {
+        log.debug("[EXCEPTION] Invalid input: {}", ex.getMessage());
+        return buildResponse(HttpStatus.BAD_REQUEST, "INVALID_INPUT", ex.getMessage());
+    }
+
+    // all other untyped business errors, message stays hidden
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, Object>> handleRuntime(RuntimeException ex) {
         log.warn("[EXCEPTION] RuntimeException", ex);
@@ -40,7 +50,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<Map<String, Object>> handleBadCredentials(BadCredentialsException ex) {
-        // Don't log at ERROR — wrong passwords are expected
+        // wrong passwords are expected so no error log
         log.debug("[EXCEPTION] BadCredentials", ex);
         return buildResponse(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "Invalid username or password");
     }
@@ -57,17 +67,14 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.FORBIDDEN, "ACCOUNT_LOCKED", "Your account is locked");
     }
 
-    /**
-     * Handles @Valid failures — returns field-level errors so the frontend
-     * can display inline validation messages.
-     */
+    // valid failures return field errors for inline messages
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidation(
             MethodArgumentNotValidException ex) {
 
         Map<String, String> fieldErrors = new HashMap<>();
         for (FieldError error : ex.getBindingResult().getFieldErrors()) {
-            // Keep the first error per field (don't overwrite with subsequent ones)
+            // keep the first error per field
             fieldErrors.putIfAbsent(error.getField(), error.getDefaultMessage());
         }
 
@@ -88,9 +95,7 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.BAD_REQUEST, "MISSING_PARAMETER", "Missing required request parameter");
     }
 
-    /**
-     * Catch-all for unexpected exceptions — log at ERROR for investigation.
-     */
+    // catch all for unexpected errors
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneric(Exception ex) {
         log.error("[EXCEPTION] Unexpected error", ex);

@@ -7,6 +7,7 @@ import com.meroshare.backend.dto.RegisterRequest;
 import com.meroshare.backend.dto.UserDetailsResponse;
 import com.meroshare.backend.entity.AppUser;
 import com.meroshare.backend.exception.UnverifiedAccountException;
+import com.meroshare.backend.exception.UserInputException;
 import com.meroshare.backend.repository.AppUserRepository;
 import com.meroshare.backend.security.JwtUtil;
 import com.meroshare.backend.security.RefreshTokenService;
@@ -20,10 +21,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
@@ -40,7 +44,17 @@ public class AuthService {
 
     private final SecureRandom secureRandom = new SecureRandom();
 
-    // hours an unverified account can sit before its username and email are freed
+    // rules apply to new values only
+    // login and existing accounts are never checked
+    // request dtos check the same rules first
+    private static final Pattern USERNAME_RE = Pattern.compile("^[A-Za-z0-9._]{3,20}$");
+    private static final Pattern LETTER_RE = Pattern.compile("[A-Za-z]");
+    private static final Pattern DIGIT_RE = Pattern.compile("\\d");
+    private static final int PASSWORD_MIN = 8;
+    private static final int PASSWORD_MAX = 64;
+    private static final int BCRYPT_MAX_BYTES = 72;
+
+    // hours before an unverified account frees its username
     @Value("${account.unverified-expiry-hours:24}")
     private long unverifiedExpiryHours;
 
@@ -57,10 +71,33 @@ public class AuthService {
         return input.trim();
     }
 
+    // username rule check
+    private void validateUsername(String username) {
+        if (username == null || !USERNAME_RE.matcher(username).matches()) {
+            throw new UserInputException("Username must be 3 to 20 letters, numbers, dots or underscores.");
+        }
+    }
+
+    // password rule check
+    private void validatePassword(String password) {
+        boolean valid = password != null
+                && password.length() >= PASSWORD_MIN
+                && password.length() <= PASSWORD_MAX
+                && password.getBytes(StandardCharsets.UTF_8).length <= BCRYPT_MAX_BYTES
+                && LETTER_RE.matcher(password).find()
+                && DIGIT_RE.matcher(password).find();
+        if (!valid) {
+            throw new UserInputException("Password must be 8 to 64 characters with letters and numbers.");
+        }
+    }
+
     @Transactional
     public AuthResponse register(RegisterRequest request) {
         String sanitizedEmail = cleanEmail(request.getEmail());
         String sanitizedUsername = cleanInput(request.getUsername());
+
+        validateUsername(sanitizedUsername);
+        validatePassword(request.getPassword());
 
         Optional<AppUser> existingByEmail = appUserRepository.findByEmail(sanitizedEmail);
 
@@ -68,16 +105,16 @@ public class AuthService {
             AppUser existing = existingByEmail.get();
 
             if (existing.isEnabled()) {
-                // same shape response as a fresh signup, do not reveal the account exists
+                // same response as a fresh signup so nothing leaks
                 return new AuthResponse(null, sanitizedUsername, sanitizedEmail);
             }
 
             releaseUsernameIfStale(sanitizedUsername, existing.getId());
 
-            boolean usernameTakenByOther = appUserRepository.existsByUsername(sanitizedUsername)
+            boolean usernameTakenByOther = appUserRepository.existsByUsernameIgnoreCase(sanitizedUsername)
                     && !existing.getUsername().equalsIgnoreCase(sanitizedUsername);
             if (usernameTakenByOther) {
-                throw new RuntimeException("Username already taken");
+                throw new UserInputException("Username already taken");
             }
 
             existing.setUsername(sanitizedUsername);
@@ -90,8 +127,8 @@ public class AuthService {
 
         releaseUsernameIfStale(sanitizedUsername, null);
 
-        if (appUserRepository.existsByUsername(sanitizedUsername)) {
-            throw new RuntimeException("Username already taken");
+        if (appUserRepository.existsByUsernameIgnoreCase(sanitizedUsername)) {
+            throw new UserInputException("Username already taken");
         }
 
         AppUser user = AppUser.builder()
@@ -108,23 +145,22 @@ public class AuthService {
         return new AuthResponse(null, user.getUsername(), user.getEmail());
     }
 
-    // deletes a stale unverified account holding this username so it can be reused
+    // deletes stale unverified accounts holding this username
     private void releaseUsernameIfStale(String username, Long excludeUserId) {
-        Optional<AppUser> holder = appUserRepository.findByUsername(username);
-        if (holder.isEmpty()) {
-            return;
-        }
-        AppUser candidate = holder.get();
-        if (excludeUserId != null && candidate.getId().equals(excludeUserId)) {
-            return;
-        }
-        if (candidate.isEnabled()) {
-            return;
-        }
+        List<AppUser> holders = appUserRepository.findAllByUsernameIgnoreCase(username);
         LocalDateTime cutoff = LocalDateTime.now().minusHours(unverifiedExpiryHours);
-        if (candidate.getCreatedAt() != null && candidate.getCreatedAt().isBefore(cutoff)) {
-            otpService.clearOtp(candidate.getEmail());
-            appUserRepository.delete(candidate);
+
+        for (AppUser candidate : holders) {
+            if (excludeUserId != null && candidate.getId().equals(excludeUserId)) {
+                continue;
+            }
+            if (candidate.isEnabled()) {
+                continue;
+            }
+            if (candidate.getCreatedAt() != null && candidate.getCreatedAt().isBefore(cutoff)) {
+                otpService.clearOtp(candidate.getEmail());
+                appUserRepository.delete(candidate);
+            }
         }
     }
 
@@ -132,22 +168,22 @@ public class AuthService {
         String sanitizedIdentifier = cleanInput(request.getLoginIdentifier());
 
         AppUser user = appUserRepository
-            .findByUsernameIgnoreCaseOrEmailIgnoreCase(sanitizedIdentifier, sanitizedIdentifier)
-            .orElseThrow(() -> new BadCredentialsException("Invalid username or password"));
+                .findByUsernameIgnoreCaseOrEmailIgnoreCase(sanitizedIdentifier, sanitizedIdentifier)
+                .orElseThrow(() -> new BadCredentialsException("Invalid username or password"));
 
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
-                user.getUsername(),
+                        user.getUsername(),
                         request.getPassword()
                 )
         );
 
         if (!user.isEnabled()) {
-            // credentials are correct so send a fresh code, ignore cooldown failure
+            // right credentials so send a fresh code
             try {
                 sendRegistrationOtp(user.getEmail());
             } catch (RuntimeException ignored) {
-                // resend cooldown active, user can use the manual resend button
+                // cooldown active so user can resend manually
             }
             throw new UnverifiedAccountException(
                     "Account is not verified. A new code has been sent to your email.",
@@ -160,12 +196,7 @@ public class AuthService {
         return new SessionResult(accessToken, refresh.rawToken(), refresh.ttl(), user.getUsername(), user.getEmail());
     }
 
-    /*
-     Exchanges a still valid refresh token for a new access token and a
-     rotated refresh token. Called silently by the frontend when an
-     access token has expired, this is what keeps a user signed in
-     without asking for a password again.
-    */
+    // swaps a valid refresh token for new access and refresh tokens
     public SessionResult refresh(String rawRefreshToken) {
         RefreshTokenService.Rotated rotated = refreshTokenService.validateAndRotate(rawRefreshToken);
         if (rotated == null) {
@@ -180,10 +211,7 @@ public class AuthService {
                 user.getUsername(), user.getEmail());
     }
 
-    /*
-     Revokes only the refresh token for this device or browser, other
-     signed in devices are not affected.
-    */
+    // revokes the refresh token of this device only
     public void logout(String rawRefreshToken) {
         refreshTokenService.revoke(rawRefreshToken);
     }
@@ -274,6 +302,9 @@ public class AuthService {
     public void resetPassword(String email, String code, String newPassword) {
         String sanitizedEmail = cleanEmail(email);
 
+        // check first so a bad password does not burn the code
+        validatePassword(newPassword);
+
         otpService.verifyOtp(sanitizedEmail, code);
 
         AppUser user = appUserRepository.findByEmail(sanitizedEmail)
@@ -290,18 +321,20 @@ public class AuthService {
 
     @Transactional
     public void updatePassword(String username, String oldPassword, String newPassword) {
+        validatePassword(newPassword);
+
         AppUser user = appUserRepository.findByUsername(cleanInput(username))
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         boolean matches = passwordEncoder.matches(oldPassword, user.getPassword());
         if (!matches) {
-            throw new RuntimeException("Current password is incorrect");
+            throw new UserInputException("Current password is incorrect");
         }
 
         user.setPassword(passwordEncoder.encode(newPassword));
         appUserRepository.save(user);
 
-        // password changed, any token issued before this point is now revoked
+        // old tokens stop working after a password change
         tokenValidityService.invalidateTokensBefore(user.getUsername());
         refreshTokenService.revokeAllForUser(user.getUsername());
     }
@@ -311,15 +344,17 @@ public class AuthService {
         String sanitizedCurrent = cleanInput(currentUsername);
         String sanitizedNew = cleanInput(newUsername);
 
+        validateUsername(sanitizedNew);
+
         AppUser user = appUserRepository.findByUsername(sanitizedCurrent)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         if (sanitizedCurrent.equalsIgnoreCase(sanitizedNew)) {
-            throw new RuntimeException("New username must be different from current username");
+            throw new UserInputException("New username must be different from current username");
         }
 
-        if (appUserRepository.existsByUsername(sanitizedNew)) {
-            throw new RuntimeException("Username already taken");
+        if (appUserRepository.existsByUsernameIgnoreCase(sanitizedNew)) {
+            throw new UserInputException("Username already taken");
         }
 
         user.setUsername(sanitizedNew);
@@ -393,7 +428,7 @@ public class AuthService {
 
         boolean matches = passwordEncoder.matches(password, user.getPassword());
         if (!matches) {
-            throw new RuntimeException("Password is incorrect");
+            throw new UserInputException("Password is incorrect");
         }
 
         otpService.clearOtp(user.getEmail());

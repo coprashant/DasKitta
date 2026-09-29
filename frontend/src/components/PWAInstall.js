@@ -62,7 +62,7 @@ const isMobileDevice = () => {
     return /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
 };
 
-export function PWAInstall() {
+export function usePWAInstall() {
     const [installPrompt, setInstallPrompt] = useState(null);
     const [isInstallable, setIsInstallable] = useState(false);
     const [isInstalled, setIsInstalled] = useState(false);

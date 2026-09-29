@@ -1,11 +1,14 @@
 package com.meroshare.backend.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 @Data
 public class UpdateUsernameRequest {
 
     @NotBlank(message = "New username is required")
+    @Pattern(regexp = "^[A-Za-z0-9._]{3,20}$",
+            message = "Username must be 3 to 20 letters, numbers, dots or underscores.")
     private String newUsername;
 }

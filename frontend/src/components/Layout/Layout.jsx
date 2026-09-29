@@ -1,4 +1,4 @@
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../hooks/useAuth";
 import Navbar from "../Navbar/Navbar";
 import Footer from "../Footer/Footer";
 import MobileTabBar from "../MobileTabBar/MobileTabBar";

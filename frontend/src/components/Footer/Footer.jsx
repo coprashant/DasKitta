@@ -1,12 +1,12 @@
 import { Link, useLocation } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext.jsx";
-import { PWAInstall } from "../PWAInstall.js";
+import { useAuth } from "../../hooks/useAuth";
+import { usePWAInstall } from "../PWAInstall.js";
 import { ArrowIcon, CodeIcon } from "../Icons.jsx";
 import "./Footer.css";
 
 const Footer = () => {
   const { user } = useAuth();
-  const { isInstallable, handleInstallClick } = PWAInstall();
+  const { isInstallable, handleInstallClick } = usePWAInstall();
   const location = useLocation();
 
   // Check if current page is homepage

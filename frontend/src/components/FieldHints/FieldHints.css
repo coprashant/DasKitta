@@ -1,0 +1,38 @@
+/* subtle hint under a field */
+.field-hint {
+    font-size: 11px;
+    color: var(--text-3, #94a3b8);
+    line-height: 1.35;
+}
+
+/* password strength meter */
+.pw-strength {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pw-strength-bars {
+    display: flex;
+    gap: 3px;
+    flex: 0 0 64px;
+}
+
+.pw-strength-bars span {
+    flex: 1;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--border, #e2e8f0);
+    transition: background-color 0.2s ease;
+}
+
+.pw-strength-bars[data-score="1"] span.on { background: var(--danger, #ef4444); }
+.pw-strength-bars[data-score="2"] span.on { background: var(--warning, #f59e0b); }
+.pw-strength-bars[data-score="3"] span.on,
+.pw-strength-bars[data-score="4"] span.on { background: var(--success, #22c55e); }
+
+.pw-strength-text {
+    font-size: 11px;
+    color: var(--text-3, #94a3b8);
+    line-height: 1.35;
+}

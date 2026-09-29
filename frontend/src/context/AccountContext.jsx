@@ -1,8 +1,8 @@
-import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { createContext, useState, useEffect, useCallback } from "react";
 import { getAccountsApi } from "../api/accounts";
-import { useAuth } from "./AuthContext";
+import { useAuth } from "../hooks/useAuth";
 
-const AccountContext = createContext(null);
+export const AccountContext = createContext(null);
 
 // only the id is kept client side, not name, boid, dp code etc
 const STORAGE_KEY = "dk-active-account-id";
@@ -131,5 +131,3 @@ export const AccountProvider = ({ children }) => {
       </AccountContext.Provider>
   );
 };
-
-export const useAccount = () => useContext(AccountContext);

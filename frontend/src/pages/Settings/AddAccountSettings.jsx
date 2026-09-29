@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { addAccountApi, getDpListApi, getBankByDpApi } from "../../api/accounts";
-import { useAccount } from "../../context/AccountContext";
+import { useAccount } from "../../hooks/useAccount";
 import { InfoIcon, SpinnerIcon, EyeIcon, EyeOffIcon } from "../../components/Icons";
 import toast from "react-hot-toast";
 

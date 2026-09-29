@@ -6,13 +6,23 @@ import {
     confirmEmailChangeApi,
     getUserDetailsApi,
 } from "../../api/auth.js";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../hooks/useAuth";
 import { ChevronIcon, EyeIcon, EyeOffIcon } from "../../components/Icons";
 import OtpInput from "../../components/OtpInput/OtpInput.jsx";
+import { PasswordStrength } from "../../components/FieldHints/FieldHints";
+import {
+    USERNAME_MAX,
+    PASSWORD_MAX,
+    checkUsername,
+    checkNewPassword,
+} from "../../authRules";
 
 function readError(err, fallback) {
     const data = err?.response?.data;
     if (typeof data === "string" && data.trim()) return data;
+    // first field message from server validation
+    const fieldMsg = data?.errors && Object.values(data.errors)[0];
+    if (typeof fieldMsg === "string" && fieldMsg) return fieldMsg;
     if (data?.message) return data.message;
     if (err?.message) return err.message;
     return fallback;
@@ -148,10 +158,27 @@ function UsernameSection({ username, onUpdated, open, onToggle }) {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!newUsername.trim()) {
+        const candidate = newUsername.trim();
+
+        if (!candidate) {
             setAlert({
                 type: "error",
                 text: "Enter a username first",
+            });
+            return;
+        }
+
+        // new username must follow current rules
+        const rulesError = checkUsername(candidate);
+        if (rulesError) {
+            setAlert({ type: "error", text: rulesError });
+            return;
+        }
+
+        if (candidate.toLowerCase() === (username || "").toLowerCase()) {
+            setAlert({
+                type: "error",
+                text: "Enter a different username",
             });
             return;
         }
@@ -160,14 +187,14 @@ function UsernameSection({ username, onUpdated, open, onToggle }) {
         setAlert(null);
 
         try {
-            const res = await updateUsernameApi(newUsername.trim());
+            const res = await updateUsernameApi(candidate);
 
             setAlert({
                 type: "success",
                 text: res.data || "Username updated",
             });
 
-            onUpdated(newUsername.trim());
+            onUpdated(candidate);
             setNewUsername("");
         } catch (err) {
             setAlert({
@@ -199,9 +226,15 @@ function UsernameSection({ username, onUpdated, open, onToggle }) {
                         type="text"
                         placeholder="Enter a new username"
                         value={newUsername}
-                        onChange={(e) => setNewUsername(e.target.value)}
+                        onChange={(e) =>
+                            setNewUsername(e.target.value.replace(/\s/g, ""))
+                        }
                         disabled={loading}
                         autoComplete="off"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        maxLength={USERNAME_MAX}
                     />
                 </div>
 
@@ -413,6 +446,13 @@ function PasswordSection({ open, onToggle }) {
             return;
         }
 
+        // new password must follow current rules
+        const rulesError = checkNewPassword(newPassword);
+        if (rulesError) {
+            setAlert({ type: "error", text: `New password: ${rulesError}` });
+            return;
+        }
+
         if (newPassword !== confirmPassword) {
             setAlert({
                 type: "error",
@@ -515,6 +555,8 @@ function PasswordSection({ open, onToggle }) {
                                 }
                                 disabled={loading}
                                 autoComplete="new-password"
+                                maxLength={PASSWORD_MAX}
+                                aria-describedby="new-password-hint"
                             />
 
                             <button
@@ -536,6 +578,8 @@ function PasswordSection({ open, onToggle }) {
                                 )}
                             </button>
                         </div>
+
+                        <PasswordStrength value={newPassword} id="new-password-hint" />
                     </div>
 
                     <div className="form-group">
@@ -562,6 +606,7 @@ function PasswordSection({ open, onToggle }) {
                                 }
                                 disabled={loading}
                                 autoComplete="new-password"
+                                maxLength={PASSWORD_MAX}
                             />
 
                             <button

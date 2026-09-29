@@ -2,7 +2,7 @@ package com.meroshare.backend.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 @Data
@@ -16,6 +16,7 @@ public class ResetPasswordRequest {
     private String code;
 
     @NotBlank(message = "New password is required")
-    @Size(min = 6, message = "Password must be at least 6 characters")
+    @Pattern(regexp = "^(?=.*[A-Za-z])(?=.*\\d).{8,64}$",
+            message = "Password must be 8 to 64 characters with letters and numbers.")
     private String newPassword;
 }

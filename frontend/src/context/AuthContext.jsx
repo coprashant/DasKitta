@@ -1,11 +1,11 @@
-import { createContext, useContext, useState, useCallback, useRef, useEffect } from "react";
+import { createContext, useState, useCallback, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { loginApi, registerApi, deleteAccountApi, logoutApi } from "../api/auth";
 import { attemptRefresh } from "../api/client";
 import { setToken, clearToken } from "../api/tokenStore";
 import { registerPushSubscription } from "../api/notifications";
 import toast from "react-hot-toast";
-const AuthContext = createContext(null);
+export const AuthContext = createContext(null);
 
 const SESSION_HINT_KEY = "session_hint";
 
@@ -149,10 +149,19 @@ export const AuthProvider = ({ children }) => {
       if (onLoginRef.current) await onLoginRef.current();
       registerPushSubscription().catch(() => {});
       toast.success("Signed in successfully");
-      navigate("/dashboard");
+      return { ok: true, username, email };
     } catch (err) {
-      const msg = err.response?.data?.message || err.response?.data?.errors?.loginIdentifier || "Login failed";
-      toast.error(msg);
+      const data = err?.response?.data;
+      const code = data?.code || null;
+      const email = data?.email || null;
+      const message = data?.message || data?.errors?.loginIdentifier || "Login failed";
+
+      if (code === "UNVERIFIED_ACCOUNT") {
+        return { ok: false, code, message, email };
+      }
+
+      toast.error(message);
+      return { ok: false, code, message, email };
     } finally {
       setIsLoading(false);
     }
@@ -218,4 +227,3 @@ export const AuthProvider = ({ children }) => {
       </AuthContext.Provider>
   );
 };
-export const useAuth = () => useContext(AuthContext);

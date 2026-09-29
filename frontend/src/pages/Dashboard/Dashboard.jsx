@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
-import { useAccount } from "../../context/AccountContext";
+import { useAuth } from "../../hooks/useAuth";
+import { useAccount } from "../../hooks/useAccount";
 import { getPortfolioApi } from "../../api/accounts";
 import { getHistoryApi, getCdscSummaryApi } from "../../api/ipo";
 import { getCompanySectors, isNepseError } from "../../api/nepse";

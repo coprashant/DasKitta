@@ -2,14 +2,15 @@ package com.meroshare.backend.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 @Data
 public class RegisterRequest {
 
     @NotBlank(message = "Username is required")
-    @Size(min = 3, max = 20, message = "Username must be between 3 and 20 characters")
+    @Pattern(regexp = "^[A-Za-z0-9._]{3,20}$",
+            message = "Username must be 3 to 20 letters, numbers, dots or underscores.")
     private String username;
 
     @NotBlank(message = "Email is required")
@@ -17,6 +18,7 @@ public class RegisterRequest {
     private String email;
 
     @NotBlank(message = "Password is required")
-    @Size(min = 6, message = "Password must be at least 6 characters")
+    @Pattern(regexp = "^(?=.*[A-Za-z])(?=.*\\d).{8,64}$",
+            message = "Password must be 8 to 64 characters with letters and numbers.")
     private String password;
 }

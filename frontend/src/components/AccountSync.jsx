@@ -1,6 +1,6 @@
 import { useEffect } from "react";
-import { useAuth } from "../context/AuthContext";
-import { useAccount } from "../context/AccountContext";
+import { useAuth } from "../hooks/useAuth";
+import { useAccount } from "../hooks/useAccount";
 
 const AccountSync = () => {
   const { registerOnLogin, registerOnLogout } = useAuth();

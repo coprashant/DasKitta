@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useNotifications } from "../../context/NotificationContext.jsx";
+import { useNotifications } from "../../hooks/useNotifications";
 import {
   IconBell, IconBellOff, IconRefresh, IconTrash,
   IconAlertCircle, IconCalendarClock, IconSparkle, IconX

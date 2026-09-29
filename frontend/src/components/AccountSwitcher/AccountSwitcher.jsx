@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { useAccount } from "../../context/AccountContext.jsx";
+import { useAccount } from "../../hooks/useAccount";
 import { IconPlus, IconChevronDown, IconCheckSmall } from "../Icons.jsx";
 import "./AccountSwitcher.css";
 

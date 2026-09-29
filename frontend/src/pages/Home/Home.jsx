@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../hooks/useAuth";
 import Layout from "../../components/Layout/Layout.jsx";
 import NepseStrip, { NepseHeroCard } from "../../components/NepseStrip/NepseStrip.jsx";
 import { useNepaliDateTime } from "../../dateUtils";

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, memo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { updateAccountApi, deleteAccountApi } from "../../api/accounts";
-import { useAccount } from "../../context/AccountContext";
+import { useAccount } from "../../hooks/useAccount";
 import {
     SpinnerIcon,
     EyeIcon,

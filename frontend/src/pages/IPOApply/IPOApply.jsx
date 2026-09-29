@@ -23,7 +23,7 @@ import ipoData from "../../ipo_data.json";
 import { bsToAd, nowNepal } from "../../dateUtils";
 import SEO from "../../seo/SEO.jsx";
 import BulkApplyProgress from "../../components/BulkApplyProgress/BulkApplyProgress.jsx";
-import { useNotifications } from "../../context/NotificationContext.jsx";
+import { useNotifications } from "../../hooks/useNotifications";
 import "./IPOApply.css";
 
 const STATUS_BADGE_MAP = {

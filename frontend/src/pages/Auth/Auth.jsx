@@ -1,44 +1,45 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../hooks/useAuth";
 import OtpInput from "../../components/OtpInput/OtpInput";
+import { PasswordStrength } from "../../components/FieldHints/FieldHints";
 import { EyeIcon, EyeOffIcon, CloseIcon, SpinnerIcon, CheckIcon, IconAlertCircle } from "../../components/Icons";
 import { verifyOtpApi, resendOtpApi, forgotPasswordApi, resetPasswordApi } from "../../api/auth";
+import {
+    USERNAME_MIN,
+    USERNAME_MAX,
+    PASSWORD_MIN,
+    PASSWORD_MAX,
+    checkUsername,
+    checkNewPassword,
+} from "../../authRules";
 import SEO from "../../seo/SEO.jsx";
 import "./Auth.css";
 
 const RESEND_COOLDOWN = 60;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// field level checks used on blur, name matches the input's name or id
+// field checks used on blur and submit
+// username and password rules apply to new values only
 const validateField = (name, value, mode) => {
     const trimmed = (value || "").trim();
     switch (name) {
         case "username":
-            if (mode === "register" && trimmed && trimmed.length < 3) {
-                return "Must be at least 3 characters.";
-            }
-            return "";
+            return mode === "register" ? checkUsername(value) : "";
         case "email":
             if (trimmed && !EMAIL_RE.test(trimmed)) {
                 return "Enter a valid email address.";
             }
             return "";
         case "password":
-            if (mode === "register" && value && value.length < 6) {
-                return "Must be at least 6 characters.";
-            }
-            return "";
+            return mode === "register" ? checkNewPassword(value) : "";
         case "resetEmail":
             if (trimmed && !EMAIL_RE.test(trimmed)) {
                 return "Enter a valid email address.";
             }
             return "";
         case "newPassword":
-            if (value && value.length < 6) {
-                return "Must be at least 6 characters.";
-            }
-            return "";
+            return checkNewPassword(value);
         default:
             return "";
     }
@@ -85,6 +86,14 @@ const Auth = () => {
         }
         if (err?.response?.status >= 500) {
             return "A server error occurred. Please try again later.";
+        }
+        // first field message from server validation
+        const fieldMsgs = err?.response?.data?.errors;
+        if (fieldMsgs && typeof fieldMsgs === "object") {
+            const first = Object.values(fieldMsgs)[0];
+            if (typeof first === "string" && first.length < 100) {
+                return first;
+            }
         }
         const msg = err?.response?.data?.message;
         if (typeof msg === "string" && msg.length < 100 && !msg.includes("Exception") && !msg.includes("Error:")) {
@@ -143,7 +152,12 @@ const Auth = () => {
     }, [timer]);
 
     const handleChange = (e) => {
-        const { name, value } = e.target;
+        const { name } = e.target;
+        let { value } = e.target;
+        // no spaces in new usernames
+        if (name === "username" && isRegisterMode) {
+            value = value.replace(/\s/g, "");
+        }
         setErrorMessage("");
         setSuccessMessage("");
         setForm((f) => ({ ...f, [name]: value }));
@@ -224,24 +238,34 @@ const Auth = () => {
 
         try {
             if (isLoginMode) {
-                await login({ loginIdentifier: form.username.trim(), password: form.password, rememberMe });
-                handleClose();
+                const result = await login({ loginIdentifier: form.username.trim(), password: form.password, rememberMe });
+                if (result?.ok) {
+                    handleClose();
+                } else if (result?.code === "UNVERIFIED_ACCOUNT") {
+                    const email = (result.email || form.email || form.username || "").trim().toLowerCase();
+                    if (email) {
+                        setSubmittedEmail(email);
+                        setAuthMode("otp");
+                        setTimer(RESEND_COOLDOWN);
+                        setErrorMessage(result.message || "Your account is not verified yet. A new code has been sent to your email.");
+                    } else {
+                        setErrorMessage(result.message || "Your account is not verified yet. Check your email for the verification code.");
+                    }
+                } else {
+                    setErrorMessage(result?.message || "Unable to authenticate. Please try again.");
+                }
             } else {
-                await register(form);
+                await register({
+                    ...form,
+                    username: form.username.trim(),
+                    email: form.email.trim(),
+                });
                 setSubmittedEmail(form.email.trim().toLowerCase());
                 setAuthMode("otp");
                 setTimer(RESEND_COOLDOWN);
             }
         } catch (err) {
-            if (err?.response?.data?.code === "UNVERIFIED_ACCOUNT") {
-                const email = err.response.data.email || form.email;
-                setSubmittedEmail(email.trim().toLowerCase());
-                setAuthMode("otp");
-                setTimer(RESEND_COOLDOWN);
-                setErrorMessage("Your account is not verified yet. A new code has been sent to your email.");
-            } else {
-                setErrorMessage(sanitizeErrorMessage(err, "Unable to authenticate. Please try again."));
-            }
+            setErrorMessage(sanitizeErrorMessage(err, "Unable to authenticate. Please try again."));
         } finally {
             setLoading(false);
         }
@@ -390,9 +414,8 @@ const Auth = () => {
                     <CloseIcon />
                 </button>
 
-                {/* re-keyed on stage change so it fades/lifts in each time the mode switches */}
+                {/* keyed on mode so each stage animates in */}
                 <div className="auth-stage anim-fade-up" key={authMode}>
-                    {/* Compact header with resized brand logo */}
                     <div className="auth-header">
                         <button type="button" onClick={handleClose} className="auth-brand-link auth-inline-btn">
                             <img src="/favicon.png" alt="" className="auth-brand-icon" />
@@ -539,10 +562,12 @@ const Auth = () => {
                                             }
                                         }}
                                         onBlur={handleFieldBlur}
-                                        placeholder="Min 6 characters"
+                                        placeholder={`Min ${PASSWORD_MIN} characters`}
                                         required
-                                        minLength={6}
+                                        minLength={PASSWORD_MIN}
+                                        maxLength={PASSWORD_MAX}
                                         autoComplete="new-password"
+                                        aria-describedby={fieldErrors.newPassword || newPassword ? "reset-password-hint" : undefined}
                                     />
                                     <button
                                         type="button"
@@ -553,15 +578,17 @@ const Auth = () => {
                                         {showPassword ? <EyeOffIcon /> : <EyeIcon />}
                                     </button>
                                 </div>
-                                {fieldErrors.newPassword && (
-                                    <span className="field-error">{fieldErrors.newPassword}</span>
+                                {fieldErrors.newPassword ? (
+                                    <span className="field-error" id="reset-password-hint">{fieldErrors.newPassword}</span>
+                                ) : (
+                                    <PasswordStrength value={newPassword} id="reset-password-hint" />
                                 )}
                             </div>
 
                             <button
                                 type="submit"
                                 className="btn btn-primary btn-full btn-lg"
-                                disabled={loading || otpCode.length !== 6 || newPassword.length < 6}
+                                disabled={loading || otpCode.length !== 6 || newPassword.length < PASSWORD_MIN}
                             >
                                 {loading ? <><SpinnerIcon /> Resetting...</> : "Reset Password"}
                             </button>
@@ -582,11 +609,16 @@ const Auth = () => {
                                     required
                                     autoFocus
                                     autoComplete="username"
-                                    minLength={isLoginMode ? undefined : 3}
+                                    autoCapitalize="none"
+                                    autoCorrect="off"
+                                    spellCheck={false}
+                                    minLength={isLoginMode ? undefined : USERNAME_MIN}
+                                    maxLength={isLoginMode ? undefined : USERNAME_MAX}
+                                    aria-describedby={fieldErrors.username ? "username-hint" : undefined}
                                 />
-                                {fieldErrors.username && (
-                                    <span className="field-error">{fieldErrors.username}</span>
-                                )}
+                                {fieldErrors.username ? (
+                                    <span className="field-error" id="username-hint">{fieldErrors.username}</span>
+                                ) : null}
                             </div>
 
                             {isRegisterMode && (
@@ -621,10 +653,12 @@ const Auth = () => {
                                         value={form.password}
                                         onChange={handleChange}
                                         onBlur={handleFieldBlur}
-                                        placeholder={isLoginMode ? "Your password" : "Min 6 characters"}
+                                        placeholder={isLoginMode ? "Your password" : `Min ${PASSWORD_MIN} characters`}
                                         required
                                         autoComplete={isLoginMode ? "current-password" : "new-password"}
-                                        minLength={isLoginMode ? undefined : 6}
+                                        minLength={isLoginMode ? undefined : PASSWORD_MIN}
+                                        maxLength={isLoginMode ? undefined : PASSWORD_MAX}
+                                        aria-describedby={fieldErrors.password ? "password-hint" : isRegisterMode && form.password ? "password-hint" : undefined}
                                     />
                                     <button
                                         type="button"
@@ -635,9 +669,11 @@ const Auth = () => {
                                         {showPassword ? <EyeOffIcon /> : <EyeIcon />}
                                     </button>
                                 </div>
-                                {fieldErrors.password && (
-                                    <span className="field-error">{fieldErrors.password}</span>
-                                )}
+                                {fieldErrors.password ? (
+                                    <span className="field-error" id="password-hint">{fieldErrors.password}</span>
+                                ) : isRegisterMode ? (
+                                    <PasswordStrength value={form.password} id="password-hint" />
+                                ) : null}
                             </div>
 
                             {isLoginMode && (

@@ -4,7 +4,7 @@ import {
     checkResultStreamApi,
     getAppliedCompaniesApi,
 } from "../../api/ipo";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../hooks/useAuth";
 import Layout from "../../components/Layout/Layout.jsx";
 import { SpinnerIcon, WarnIcon, IconSearch } from "../../components/Icons";
 import toast from "react-hot-toast";

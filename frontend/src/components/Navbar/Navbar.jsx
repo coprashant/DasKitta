@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../hooks/useAuth";
 import { useTheme } from "../../context/ThemeContext";
-import { useAccount } from "../../context/AccountContext";
-import { useNotifications } from "../../context/NotificationContext";
+import { useAccount } from "../../hooks/useAccount";
+import { useNotifications } from "../../hooks/useNotifications";
 import NotificationPanel from "../NotificationPanel/NotificationPanel";
-import { PWAInstall } from "../PWAInstall";
+import { usePWAInstall } from "../PWAInstall";
 import {
   BellIcon, SunIcon, MoonIcon, ProfileIcon, CheckIcon,
   PlusIcon, SettingsIcon, SignOutIcon, UsersIcon, IconDownload, IconShare, CloseIcon
@@ -173,7 +173,7 @@ const Navbar = () => {
   const [showInstallHelp, setShowInstallHelp] = useState(false);
   const profileRef = useRef(null);
   const profileButtonRef = useRef(null);
-  const { isInstalled, canInstallNatively, isMobile, installGuide, handleInstallClick } = PWAInstall();
+  const { isInstalled, canInstallNatively, isMobile, installGuide, handleInstallClick } = usePWAInstall();
   const showDownloadApp = !isInstalled && (canInstallNatively || isMobile);
 
   const desktopLinks = user ? [...authLinks, ...secondaryLinks] : guestLinks;
