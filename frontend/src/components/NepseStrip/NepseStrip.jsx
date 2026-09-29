@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, Suspense, lazy } from "react";
+import { Link } from "react-router-dom";
 import {
     getNepseIndex,
     getDailyNepseIndexGraph,
@@ -198,7 +199,9 @@ export function NepseHeroCard() {
         return (
             <div className="nepse-flat-hero">
                 <div className="nepse-hero-header">
-                    <span className="terminal-label">NEPSE MARKET INDEX</span>
+                    <Link className="terminal-label" to="/nepse" aria-label="Open NEPSE page">
+                        NEPSE MARKET INDEX
+                    </Link>
                     <div className="skeleton-text skeleton-status base-pulse" />
                 </div>
                 <div className="nepse-hero-metrics">
@@ -215,7 +218,9 @@ export function NepseHeroCard() {
     return (
         <div className="nepse-flat-hero">
             <div className="nepse-hero-header">
-                <span className="terminal-label">NEPSE MARKET INDEX</span>
+                <Link className="terminal-label" to="/nepse" aria-label="Open NEPSE page">
+                    NEPSE MARKET INDEX
+                </Link>
                 <span className={`terminal-indicator ${isOpen ? "open" : "closed"}`}>
                     {isOpen ? "Market Open" : "Market Closed"}
                 </span>

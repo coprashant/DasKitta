@@ -94,6 +94,16 @@
   color: var(--text-3);
   letter-spacing: 0.02em;
   white-space: nowrap;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.terminal-label:hover,
+.terminal-label:focus,
+.terminal-label:focus-visible {
+  color: var(--text);
+  text-decoration: none;
+  outline: none;
 }
 
 .terminal-indicator {
