@@ -12,3 +12,7 @@
 .term-back:hover {
     color: var(--accent);
 }
+
+.term-brand-line .watch-btn {
+    margin-top: 1px;
+}

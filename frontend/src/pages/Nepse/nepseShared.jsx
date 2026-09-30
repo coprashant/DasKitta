@@ -4,25 +4,38 @@ import {
     useRef,
     useId,
     useMemo,
+    useCallback,
 } from "react";
-import { useNavigate } from "react-router-dom";
-import { getPriceVolume, isNepseError } from "../../api/nepse";
-import { IconSearch } from "../../components/Icons.jsx";
+import { Link, useNavigate } from "react-router-dom";
+import {
+    IconSearch,
+    ClearIcon,
+    ChevronLeft,
+    ChevronRight,
+    IconRefresh,
+    IconStar,
+    WarnIcon,
+} from "../../components/Icons.jsx";
 
 import {
     fmt,
+    fmtSigned,
+    fmtClock,
     dirClass,
     tooltipAlign,
     buildChart,
+    buildSegments,
     useChartHover,
+    SEG_RISE,
+    SEG_FALL,
 } from "./nepseUtils";
-import { useDragScroll } from "./nepseHooks";
+import { useDragScroll, usePriceVolume } from "./nepseHooks";
 
 export function EmptyRow({ label }) {
     return <p className="ledger-empty">{label}</p>;
 }
 
-// count only bar, or a grid matched skeleton when columns is given
+// count only bar or grid matched skeleton when columns is given
 export function SkeletonRows({ count = 3, columns = 1 }) {
     if (columns <= 1) {
         return Array.from({ length: count }, (_, i) => (
@@ -68,15 +81,346 @@ export function Arrow({ up, flat }) {
     );
 }
 
-function getHover(chart, index) {
+// symbol that opens the company page
+export function SymbolLink({ symbol }) {
+    if (!symbol) return <span className="ledger-sym">--</span>;
+
+    return (
+        <Link
+            className="ledger-sym ledger-sym-link"
+            to={`/nepse/company/${encodeURIComponent(symbol)}`}
+        >
+            {symbol}
+        </Link>
+    );
+}
+
+// star toggle for the watchlist
+export function WatchButton({ symbol, active, onToggle }) {
+    return (
+        <button
+            type="button"
+            className={`watch-btn ${active ? "on" : ""}`}
+            aria-pressed={active}
+            aria-label={
+                active
+                    ? `Remove ${symbol} from watchlist`
+                    : `Add ${symbol} to watchlist`
+            }
+            title={active ? "Remove from watchlist" : "Add to watchlist"}
+            onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onToggle(symbol);
+            }}
+        >
+            <IconStar filled={active} />
+        </button>
+    );
+}
+
+// error or info line with an optional retry action
+export function InlineNotice({ message, onRetry, busy = false }) {
+    if (!message) return null;
+
+    return (
+        <div className="inline-notice" role="alert">
+            <WarnIcon />
+
+            <span className="inline-notice-text">{message}</span>
+
+            {onRetry && (
+                <button
+                    type="button"
+                    className="inline-retry"
+                    onClick={onRetry}
+                    disabled={busy}
+                >
+                    <IconRefresh spinning={busy} />
+                    retry
+                </button>
+            )}
+        </div>
+    );
+}
+
+// scrollable tab list with edge fades and arrow key support
+export function TabStrip({ tabs, active, onChange, label = "Sections" }) {
+    const listRef = useRef(null);
+    const [edge, setEdge] = useState({ left: false, right: false });
+
+    const update = useCallback(() => {
+        const el = listRef.current;
+        if (!el) return;
+
+        const left = el.scrollLeft > 2;
+        const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
+
+        setEdge((cur) =>
+            cur.left === left && cur.right === right ? cur : { left, right }
+        );
+    }, []);
+
+    useEffect(() => {
+        const el = listRef.current;
+        if (!el) return undefined;
+
+        update();
+        el.addEventListener("scroll", update, { passive: true });
+        window.addEventListener("resize", update);
+
+        let observer = null;
+
+        if (typeof ResizeObserver !== "undefined") {
+            observer = new ResizeObserver(update);
+            observer.observe(el);
+        }
+
+        return () => {
+            el.removeEventListener("scroll", update);
+            window.removeEventListener("resize", update);
+            if (observer) observer.disconnect();
+        };
+    }, [update, tabs.length]);
+
+    // keep the active tab centered when it changes
+    useEffect(() => {
+        const el = listRef.current;
+        const tab = el?.querySelector('[aria-selected="true"]');
+        if (!el || !tab) return;
+
+        const reduce =
+            typeof window.matchMedia === "function" &&
+            window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+        el.scrollTo({
+            left: Math.max(0, tab.offsetLeft - (el.clientWidth - tab.offsetWidth) / 2),
+            behavior: reduce ? "auto" : "smooth",
+        });
+    }, [active]);
+
+    const nudge = (dir) => {
+        listRef.current?.scrollBy({
+            left: dir * listRef.current.clientWidth * 0.6,
+            behavior: "smooth",
+        });
+    };
+
+    const onKeyDown = (e) => {
+        const index = tabs.indexOf(active);
+        let next = -1;
+
+        if (e.key === "ArrowRight") next = (index + 1) % tabs.length;
+        else if (e.key === "ArrowLeft") next = (index - 1 + tabs.length) % tabs.length;
+        else if (e.key === "Home") next = 0;
+        else if (e.key === "End") next = tabs.length - 1;
+
+        if (next < 0) return;
+
+        e.preventDefault();
+        onChange(tabs[next]);
+
+        window.requestAnimationFrame(() => {
+            listRef.current?.querySelectorAll('[role="tab"]')[next]?.focus();
+        });
+    };
+
+    return (
+        <div
+            className={`ledger-tabs-wrap ${edge.left ? "fade-left" : ""} ${
+                edge.right ? "fade-right" : ""
+            }`}
+        >
+            {edge.left && (
+                <button
+                    type="button"
+                    className="tabs-nudge left"
+                    tabIndex={-1}
+                    aria-hidden="true"
+                    onClick={() => nudge(-1)}
+                >
+                    <ChevronLeft />
+                </button>
+            )}
+
+            <div
+                className="ledger-tabs"
+                role="tablist"
+                aria-label={label}
+                ref={listRef}
+                onKeyDown={onKeyDown}
+            >
+                {tabs.map((tab) => (
+                    <button
+                        key={tab}
+                        type="button"
+                        role="tab"
+                        aria-selected={active === tab}
+                        tabIndex={active === tab ? 0 : -1}
+                        className={`ledger-tab ${active === tab ? "active" : ""}`}
+                        onClick={() => onChange(tab)}
+                    >
+                        {tab}
+                    </button>
+                ))}
+            </div>
+
+            {edge.right && (
+                <button
+                    type="button"
+                    className="tabs-nudge right"
+                    tabIndex={-1}
+                    aria-hidden="true"
+                    onClick={() => nudge(1)}
+                >
+                    <ChevronRight />
+                </button>
+            )}
+        </div>
+    );
+}
+
+// prev next page control
+export function Pagination({ page, totalPages, onChange, loading = false }) {
+    if (totalPages <= 1) return null;
+
+    return (
+        <div className="ledger-pagination" aria-label="Table pagination">
+            <button
+                type="button"
+                className="page-btn page-btn-arrow"
+                disabled={page === 0 || loading}
+                onClick={() => onChange(page - 1)}
+                aria-label="Previous page"
+            >
+                <ChevronLeft />
+            </button>
+
+            <span className="page-info" aria-live="polite">
+                {page + 1}/{totalPages}
+            </span>
+
+            <button
+                type="button"
+                className="page-btn page-btn-arrow"
+                disabled={page >= totalPages - 1 || loading}
+                onClick={() => onChange(page + 1)}
+                aria-label="Next page"
+            >
+                <ChevronRight />
+            </button>
+        </div>
+    );
+}
+
+// advancing declining and unchanged split for the whole market
+export function BreadthBar({ rows }) {
+    const stats = useMemo(() => {
+        let up = 0;
+        let down = 0;
+        let flat = 0;
+
+        for (const row of rows ?? []) {
+            const pct = Number(row?.percentageChange);
+            if (!Number.isFinite(pct)) continue;
+
+            if (pct > 0) up += 1;
+            else if (pct < 0) down += 1;
+            else flat += 1;
+        }
+
+        return { up, down, flat, total: up + down + flat };
+    }, [rows]);
+
+    if (!stats.total) return null;
+
+    return (
+        <div
+            className="breadth"
+            role="img"
+            aria-label={`Market breadth, ${stats.up} advancing, ${stats.down} declining, ${stats.flat} unchanged`}
+        >
+            <div className="breadth-head">
+                <span className="ledger-label">breadth</span>
+
+                <span className="breadth-counts">
+                    <span className="up">
+                        <Arrow up />
+                        {stats.up}
+                    </span>
+                    <span className="flat">{stats.flat}</span>
+                    <span className="down">
+                        <Arrow up={false} />
+                        {stats.down}
+                    </span>
+                </span>
+            </div>
+
+            <div className="breadth-bar" aria-hidden="true">
+                <span className="breadth-seg up" style={{ flexGrow: stats.up }} />
+                <span className="breadth-seg flat" style={{ flexGrow: stats.flat }} />
+                <span className="breadth-seg down" style={{ flexGrow: stats.down }} />
+            </div>
+        </div>
+    );
+}
+
+// low to high bar with a marker at the current price
+export function RangeBar({ label, low, high, value }) {
+    const lo = Number(low);
+    const hi = Number(high);
+    const v = Number(value);
+
+    if (low == null || high == null) return null;
+    if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi <= lo) return null;
+
+    const pos =
+        Number.isFinite(v) && v > 0
+            ? Math.min(1, Math.max(0, (v - lo) / (hi - lo)))
+            : null;
+
+    return (
+        <div className="range-bar">
+            <span className="ledger-label range-label">{label}</span>
+            <span className="range-val">{fmt(lo)}</span>
+
+            <span className="range-track">
+                {pos !== null && (
+                    <span
+                        className="range-marker"
+                        style={{ left: `${pos * 100}%` }}
+                    />
+                )}
+            </span>
+
+            <span className="range-val">{fmt(hi)}</span>
+        </div>
+    );
+}
+
+function getHover(chart, index, ref, detailed) {
     if (!chart || index == null) return null;
 
-    const [x, y] = chart.coords[index];
+    const point = chart.coords[index];
+    if (!point) return null;
+
+    const [x, y] = point;
+    const value = chart.values[index];
+
+    let pct = null;
+
+    if (detailed) {
+        const base = ref ?? chart.values[0];
+        if (base) pct = ((value - base) / base) * 100;
+    }
 
     return {
         x,
         y,
-        value: chart.values[index],
+        value,
+        pct,
+        color: chart.segments.colorAt[index],
+        time: detailed ? fmtClock(chart.times[index]) : null,
     };
 }
 
@@ -129,7 +473,19 @@ function HoverTooltip({
                 top: `${(hover.y / height) * 100}%`,
             }}
         >
-            {fmt(hover.value)}
+            <span>{fmt(hover.value)}</span>
+
+            {hover.time && (
+                <span className="term-tooltip-sub">{hover.time}</span>
+            )}
+
+            {hover.pct != null && (
+                <span
+                    className={`term-tooltip-sub ${dirClass(hover.pct)}`}
+                >
+                    {fmtSigned(hover.pct)}%
+                </span>
+            )}
         </div>
     );
 }
@@ -138,18 +494,22 @@ function ChartSvg({
                       chart,
                       width,
                       height,
-                      color,
                       hover,
                       gradientId,
+                      label,
                       area = false,
                       radius = 5,
                       strokeWidth = 1.6,
                   }) {
+    const trendColor = chart.positive ? SEG_RISE : SEG_FALL;
+
     return (
         <svg
             viewBox={`0 0 ${width} ${height}`}
             preserveAspectRatio="none"
             className={area ? "hero-svg" : "mini-spark-svg"}
+            role="img"
+            aria-label={label}
         >
             {area && (
                 <defs>
@@ -162,12 +522,12 @@ function ChartSvg({
                     >
                         <stop
                             offset="0%"
-                            stopColor={color}
-                            stopOpacity="0.20"
+                            stopColor={trendColor}
+                            stopOpacity="0.16"
                         />
                         <stop
                             offset="100%"
-                            stopColor={color}
+                            stopColor={trendColor}
                             stopOpacity="0"
                         />
                     </linearGradient>
@@ -182,23 +542,51 @@ function ChartSvg({
                 />
             )}
 
-            <polyline
-                points={chart.line}
-                fill="none"
-                stroke={color}
-                strokeWidth={strokeWidth}
-                strokeLinejoin="round"
-                strokeLinecap="round"
-            />
+            {area && chart.refY != null && (
+                <line
+                    x1="0"
+                    y1={chart.refY}
+                    x2={width}
+                    y2={chart.refY}
+                    className="term-ref-line"
+                    vectorEffect="non-scaling-stroke"
+                />
+            )}
+
+            {chart.segments.runs.map((run, i) => (
+                <polyline
+                    key={i}
+                    points={run.points}
+                    fill="none"
+                    stroke={run.color}
+                    strokeWidth={strokeWidth}
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                    vectorEffect="non-scaling-stroke"
+                />
+            ))}
 
             <HoverMarker
                 hover={hover}
                 height={height}
-                color={color}
+                color={hover?.color}
                 radius={radius}
             />
         </svg>
     );
+}
+
+// chart data with segment colors built once per data change
+function useChartModel(data, width, height, ref) {
+    return useMemo(() => {
+        const chart = buildChart(data, width, height, ref);
+        if (!chart) return null;
+
+        return {
+            ...chart,
+            segments: buildSegments(chart.coords, chart.values),
+        };
+    }, [data, width, height, ref]);
 }
 
 export function HeroChart({
@@ -207,13 +595,21 @@ export function HeroChart({
                               value,
                               changeVal,
                               changePct,
+                              baseline = null,
+                              baselineLabel = "prev close",
                               eyebrow = "NEPSE INDEX",
                           }) {
-    // fix: useId returns colons, strip them so url(#id) stays safe everywhere
+    // fix useId returns colons so strip them to keep url ids safe
     const gradientId = useId().replace(/:/g, "");
     const width = 1000;
     const height = 380;
-    const chart = buildChart(data, width, height);
+
+    const ref =
+        typeof baseline === "number" && Number.isFinite(baseline) && baseline > 0
+            ? baseline
+            : null;
+
+    const chart = useChartModel(data, width, height, ref);
 
     const {
         containerRef,
@@ -221,12 +617,8 @@ export function HeroChart({
         handlers,
     } = useChartHover(chart?.values.length ?? 0);
 
-    const hover = getHover(chart, hoverIndex);
+    const hover = getHover(chart, hoverIndex, ref, true);
     const positive = changeVal >= 0;
-
-    const lineColor = chart?.positive
-        ? "var(--success)"
-        : "var(--danger)";
 
     return (
         <div className="hero-canvas">
@@ -281,11 +673,22 @@ export function HeroChart({
                             chart={chart}
                             width={width}
                             height={height}
-                            color={lineColor}
                             hover={hover}
                             gradientId={gradientId}
+                            label={`${eyebrow} price chart with ${chart.values.length} points`}
                             area
                         />
+
+                        {chart.refY != null && (
+                            <span
+                                className="term-ref-label"
+                                style={{
+                                    top: `${(chart.refY / height) * 100}%`,
+                                }}
+                            >
+                                {baselineLabel} {fmt(ref)}
+                            </span>
+                        )}
 
                         <HoverTooltip
                             hover={hover}
@@ -295,12 +698,13 @@ export function HeroChart({
                     </>
                 ) : (
                     <div className="hero-chart-empty">
-                        no chart data
+                        chart data unavailable
                     </div>
                 )}
 
                 <div className="hero-baseline" />
             </div>
+
         </div>
     );
 }
@@ -310,7 +714,7 @@ export function MiniSpark({
                               width = 280,
                               height = 46,
                           }) {
-    const chart = buildChart(data, width, height);
+    const chart = useChartModel(data, width, height, null);
 
     const {
         containerRef,
@@ -326,11 +730,7 @@ export function MiniSpark({
         );
     }
 
-    const hover = getHover(chart, hoverIndex);
-
-    const lineColor = chart.positive
-        ? "var(--success)"
-        : "var(--danger)";
+    const hover = getHover(chart, hoverIndex, null, false);
 
     return (
         <div
@@ -342,10 +742,10 @@ export function MiniSpark({
                 chart={chart}
                 width={width}
                 height={height}
-                color={lineColor}
                 hover={hover}
                 radius={3.5}
                 strokeWidth={1.4}
+                label={`Trend chart with ${chart.values.length} points`}
             />
 
             <HoverTooltip
@@ -362,31 +762,14 @@ export function TermSearch({
                                placeholder = "search symbol or company",
                            }) {
     const navigate = useNavigate();
+    const listId = useId().replace(/:/g, "");
     const [query, setQuery] = useState("");
-    const [allStocks, setAllStocks] = useState([]);
     const [open, setOpen] = useState(false);
+    const [active, setActive] = useState(0);
     const wrapRef = useRef(null);
+    const inputRef = useRef(null);
 
-    useEffect(() => {
-        let alive = true;
-
-        getPriceVolume()
-            .then((r) => {
-                if (!alive) return;
-
-                if (isNepseError(r.data)) {
-                    setAllStocks([]);
-                    return;
-                }
-
-                setAllStocks(Array.isArray(r.data) ? r.data : []);
-            })
-            .catch(() => {});
-
-        return () => {
-            alive = false;
-        };
-    }, []);
+    const { rows: allStocks, error: stocksError } = usePriceVolume();
 
     const results = useMemo(() => {
         const q = query.trim().toUpperCase();
@@ -401,6 +784,11 @@ export function TermSearch({
                         ?.toUpperCase()
                         .includes(q)
             )
+            .sort((a, b) => {
+                const aStarts = a.symbol?.toUpperCase().startsWith(q) ? 0 : 1;
+                const bStarts = b.symbol?.toUpperCase().startsWith(q) ? 0 : 1;
+                return aStarts - bStarts;
+            })
             .slice(0, 7);
     }, [query, allStocks]);
 
@@ -420,10 +808,34 @@ export function TermSearch({
             );
     }, []);
 
+    // slash key jumps to search from anywhere on the page
+    useEffect(() => {
+        const onKey = (e) => {
+            if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
+
+            const tag = e.target?.tagName;
+            if (
+                tag === "INPUT" ||
+                tag === "TEXTAREA" ||
+                tag === "SELECT" ||
+                e.target?.isContentEditable
+            ) {
+                return;
+            }
+
+            e.preventDefault();
+            inputRef.current?.focus();
+        };
+
+        document.addEventListener("keydown", onKey);
+
+        return () => document.removeEventListener("keydown", onKey);
+    }, []);
+
     const goToCompany = (stock) => {
         setOpen(false);
         setQuery("");
-        // fix: encode symbol in case it has special characters
+        // encode symbol in case it has special characters
         navigate(`/nepse/company/${encodeURIComponent(stock.symbol)}`);
     };
 
@@ -432,52 +844,93 @@ export function TermSearch({
         setOpen(false);
     };
 
+    const onInputKeyDown = (e) => {
+        if (e.key === "Enter" && results.length) {
+            goToCompany(results[active] ?? results[0]);
+            return;
+        }
+
+        if (e.key === "ArrowDown" && results.length) {
+            e.preventDefault();
+            setOpen(true);
+            setActive((i) => Math.min(i + 1, results.length - 1));
+            return;
+        }
+
+        if (e.key === "ArrowUp" && results.length) {
+            e.preventDefault();
+            setActive((i) => Math.max(i - 1, 0));
+            return;
+        }
+
+        if (e.key === "Escape") {
+            setOpen(false);
+            e.currentTarget.blur();
+        }
+    };
+
+    const hasQuery = query.trim().length > 0;
+    const showDrop = open && hasQuery;
+
     return (
         <div className="term-search" ref={wrapRef}>
             <div className="term-search-box">
                 <IconSearch />
 
                 <input
+                    ref={inputRef}
                     className="term-search-input"
                     placeholder={placeholder}
                     value={query}
+                    role="combobox"
+                    aria-expanded={showDrop}
+                    aria-controls={listId}
+                    aria-autocomplete="list"
                     onChange={(e) => {
                         const next = e.target.value;
                         setQuery(next);
+                        setActive(0);
                         setOpen(next.trim().length > 0);
                     }}
                     onFocus={() =>
                         results.length && setOpen(true)
                     }
-                    onKeyDown={(e) => {
-                        if (
-                            e.key === "Enter" &&
-                            results[0]
-                        ) {
-                            goToCompany(results[0]);
-                        }
-                    }}
+                    onKeyDown={onInputKeyDown}
                 />
 
-                {query && (
+                {query ? (
                     <button
                         className="term-search-clear"
                         onClick={clear}
                         aria-label="clear search"
                     >
-                        x
+                        <ClearIcon />
                     </button>
+                ) : (
+                    <span className="term-search-kbd" aria-hidden="true">
+                        /
+                    </span>
                 )}
             </div>
 
-            {open && results.length > 0 && (
-                <div className="term-search-drop">
-                    {results.map((stock) => (
+            {showDrop && (
+                <div className="term-search-drop" id={listId} role="listbox">
+                    {!results.length && (
+                        <div className="term-search-note">
+                            {stocksError ?? "no matching stock"}
+                        </div>
+                    )}
+
+                    {results.map((stock, i) => (
                         <div
                             key={stock.symbol}
-                            className="term-search-row"
-                            role="button"
+                            className={`term-search-row ${
+                                i === active ? "is-active" : ""
+                            }`}
+                            role="option"
+                            aria-selected={i === active}
                             tabIndex={0}
+                            onMouseEnter={() => setActive(i)}
                             onClick={() =>
                                 goToCompany(stock)
                             }

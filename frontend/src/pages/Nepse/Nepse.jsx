@@ -39,14 +39,26 @@ import {
     EmptyRow,
     SkeletonRows,
     ScrollTicker,
+    SymbolLink,
+    WatchButton,
+    BreadthBar,
+    InlineNotice,
+    TabStrip,
+    Pagination,
 } from "./nepseShared.jsx";
+import {
+    IconRefresh,
+    IconArrowUp,
+    IconArrowDown,
+    IconChevronDown,
+} from "../../components/Icons.jsx";
 import {
     fmt,
     fmtCompact,
     dirClass,
     resolveHeroKey,
 } from "./nepseUtils";
-import { useClock } from "./nepseHooks";
+import { useClock, usePriceVolume, useWatchlist } from "./nepseHooks";
 import SEO from "../../seo/SEO.jsx";
 import { NEPSE_JSONLD } from "../../seo/jsonLd.js";
 import "./Nepse.css";
@@ -56,6 +68,7 @@ const PROMOTER_PAGE_SIZE = 20;
 const GAINER_PAGE_SIZE = 5;
 const LOSER_PAGE_SIZE = 5;
 const BOND_PAGE_SIZE = 10;
+const SCREENER_PAGE_SIZE = 12;
 const CACHE_KEY = "nepse_cache_v1";
 
 const SECTOR_GRAPH_RULES = [
@@ -75,6 +88,7 @@ const SECTOR_GRAPH_RULES = [
 
 const FEEDS = [
     "Movers",
+    "Stocks",
     "Turnover",
     "Activity",
     "Sectors",
@@ -82,10 +96,6 @@ const FEEDS = [
     "Promoters",
     "Floorsheet",
 ];
-
-function safe(raw) {
-    return isNepseError(raw) ? null : raw;
-}
 
 function toList(raw) {
     if (isNepseError(raw)) return [];
@@ -110,7 +120,7 @@ function matchSectorGraph(name = "") {
     );
 }
 
-// offline cache helpers, plain data only
+// offline cache helpers plain data only
 function loadCache() {
     try {
         const raw = window.localStorage.getItem(CACHE_KEY);
@@ -127,7 +137,7 @@ function saveCache(data) {
             JSON.stringify({ ...data, savedAt: Date.now() })
         );
     } catch {
-        // storage unavailable or full, ignore silently
+        // storage unavailable or full ignore silently
     }
 }
 
@@ -146,7 +156,7 @@ function MoverRow({ item, tone }) {
 
     return (
         <div className="ledger-row ledger-row-movers">
-            <span className="ledger-sym">{item.symbol}</span>
+            <SymbolLink symbol={item.symbol} />
             <span className="ledger-ltp">{fmt(item.ltp)}</span>
 
             <span className={`ledger-pct ${tone}`}>
@@ -158,40 +168,9 @@ function MoverRow({ item, tone }) {
     );
 }
 
-// generic prev next page control, replaces old more less buttons
-function Pagination({ page, totalPages, onChange, loading = false }) {
-    if (totalPages <= 1) return null;
-
-    return (
-        <div className="ledger-pagination" aria-label="Table pagination">
-            <button
-                className="page-btn page-btn-arrow"
-                disabled={page === 0 || loading}
-                onClick={() => onChange(page - 1)}
-                aria-label="Previous page"
-            >
-                <span aria-hidden="true">‹</span>
-            </button>
-
-            <span className="page-info">
-                {page + 1}/{totalPages}
-            </span>
-
-            <button
-                className="page-btn page-btn-arrow"
-                disabled={page >= totalPages - 1 || loading}
-                onClick={() => onChange(page + 1)}
-                aria-label="Next page"
-            >
-                <span aria-hidden="true">›</span>
-            </button>
-        </div>
-    );
-}
-
 function TickerItems({ summary }) {
     return Object.entries(summary).map(([key, value]) => {
-        // fix: do not pass stringified objects into a numeric formatter
+        // fix do not pass stringified objects into a numeric formatter
         const num =
             typeof value === "object" && value !== null
                 ? value.value ?? value.currentValue ?? null
@@ -238,6 +217,221 @@ function GroupLegend({ groups, activeGroup, onSelect }) {
     );
 }
 
+function StockRow({ row, watched, onToggle }) {
+    const pct = Number(row.percentageChange);
+    const hasPct = Number.isFinite(pct);
+    const ltp = row.lastTradedPrice ?? row.closePrice;
+    const volume = row.totalTradeQuantity ?? row.shareTraded ?? row.volume;
+
+    return (
+        <div className="ledger-row ledger-row-4">
+            <span className="ledger-symwrap">
+                <WatchButton
+                    symbol={row.symbol}
+                    active={watched}
+                    onToggle={onToggle}
+                />
+                <SymbolLink symbol={row.symbol} />
+            </span>
+
+            <span className="ledger-ltp">{ltp != null ? fmt(ltp) : "--"}</span>
+
+            {hasPct ? (
+                <span className={`ledger-pct ${dirClass(pct)}`}>
+                    <Arrow up={pct >= 0} flat={pct === 0} />
+                    {pct > 0 ? "+" : ""}
+                    {fmt(pct)}%
+                </span>
+            ) : (
+                <span className="ledger-pct flat">--</span>
+            )}
+
+            <span className="ledger-num">
+                {volume != null ? fmtCompact(volume) : "--"}
+            </span>
+        </div>
+    );
+}
+
+const SCREENER_COLUMNS = [
+    { key: "symbol", label: "Symbol", align: "left" },
+    { key: "ltp", label: "LTP", align: "right" },
+    { key: "change", label: "Chg", align: "right" },
+    { key: "volume", label: "Vol", align: "right" },
+];
+
+function sortValue(row, key) {
+    if (key === "symbol") return String(row.symbol ?? "");
+    if (key === "ltp") return Number(row.lastTradedPrice ?? row.closePrice);
+    if (key === "change") return Number(row.percentageChange);
+
+    return Number(row.totalTradeQuantity ?? row.shareTraded ?? row.volume);
+}
+
+// every listed stock with scope switch search and sortable columns
+function StocksFeed({ rows, loading, error, onRetry, watchlist }) {
+    const [scope, setScope] = useState("all");
+    const [query, setQuery] = useState("");
+    const [sort, setSort] = useState({ key: "volume", dir: "desc" });
+    const [page, setPage] = useState(0);
+
+    const source = useMemo(() => {
+        if (scope === "all") return rows;
+
+        const bySymbol = new Map(
+            rows.map((row) => [String(row.symbol).toUpperCase(), row])
+        );
+
+        return watchlist.list.map((symbol) => bySymbol.get(symbol) ?? { symbol });
+    }, [scope, rows, watchlist.list]);
+
+    const visible = useMemo(() => {
+        const q = query.trim().toUpperCase();
+
+        const filtered = q
+            ? source.filter(
+                (row) =>
+                    row.symbol?.toUpperCase().includes(q) ||
+                    row.securityName?.toUpperCase().includes(q)
+            )
+            : source;
+
+        const factor = sort.dir === "asc" ? 1 : -1;
+
+        return [...filtered].sort((a, b) => {
+            const av = sortValue(a, sort.key);
+            const bv = sortValue(b, sort.key);
+
+            if (sort.key === "symbol") return av.localeCompare(bv) * factor;
+
+            const an = Number.isFinite(av) ? av : -Infinity;
+            const bn = Number.isFinite(bv) ? bv : -Infinity;
+
+            return (an - bn) * factor;
+        });
+    }, [source, query, sort]);
+
+    const totalPages = Math.max(1, Math.ceil(visible.length / SCREENER_PAGE_SIZE));
+    const pageSafe = Math.min(page, totalPages - 1);
+    const pageRows = visible.slice(
+        pageSafe * SCREENER_PAGE_SIZE,
+        pageSafe * SCREENER_PAGE_SIZE + SCREENER_PAGE_SIZE
+    );
+
+    const changeSort = (key) => {
+        setPage(0);
+        setSort((current) =>
+            current.key === key
+                ? { key, dir: current.dir === "asc" ? "desc" : "asc" }
+                : { key, dir: key === "symbol" ? "asc" : "desc" }
+        );
+    };
+
+    const pick = (next) => {
+        setScope(next);
+        setPage(0);
+    };
+
+    const emptyLabel = query
+        ? "no stocks match"
+        : scope === "watch"
+            ? "star a stock to track it here"
+            : "no stock data yet";
+
+    return (
+        <>
+            <div className="group-legend stocks-scope" role="group" aria-label="Stock list">
+                <button
+                    type="button"
+                    className={`group-chip ${scope === "all" ? "active" : ""}`}
+                    aria-pressed={scope === "all"}
+                    onClick={() => pick("all")}
+                >
+                    All
+                </button>
+
+                <button
+                    type="button"
+                    className={`group-chip ${scope === "watch" ? "active" : ""}`}
+                    aria-pressed={scope === "watch"}
+                    onClick={() => pick("watch")}
+                >
+                    Watchlist{watchlist.list.length ? ` ${watchlist.list.length}` : ""}
+                </button>
+            </div>
+
+            <input
+                className="ledger-filter"
+                type="search"
+                placeholder="filter by symbol or name"
+                aria-label="Filter stocks"
+                value={query}
+                onChange={(e) => {
+                    setQuery(e.target.value);
+                    setPage(0);
+                }}
+            />
+
+            {error && !rows.length && scope === "all" && (
+                <InlineNotice message={error} onRetry={onRetry} busy={loading} />
+            )}
+
+            <div className="ledger-header ledger-row-4" role="row">
+                {SCREENER_COLUMNS.map((col) => {
+                    const on = sort.key === col.key;
+
+                    return (
+                        <span
+                            key={col.key}
+                            role="columnheader"
+                            className={col.align}
+                            aria-sort={
+                                on ? (sort.dir === "asc" ? "ascending" : "descending") : "none"
+                            }
+                        >
+                            <button
+                                type="button"
+                                className={`ledger-sort ${on ? "active" : ""}`}
+                                onClick={() => changeSort(col.key)}
+                            >
+                                {col.label}
+                                {on && (
+                                    <span className="sort-ico" aria-hidden="true">
+                                        {sort.dir === "asc" ? <IconArrowUp /> : <IconArrowDown />}
+                                    </span>
+                                )}
+                            </button>
+                        </span>
+                    );
+                })}
+            </div>
+
+            {loading && !rows.length ? (
+                <SkeletonRows count={8} columns={4} />
+            ) : pageRows.length ? (
+                <>
+                    {pageRows.map((row) => (
+                        <StockRow
+                            key={row.symbol}
+                            row={row}
+                            watched={watchlist.has(row.symbol)}
+                            onToggle={watchlist.toggle}
+                        />
+                    ))}
+
+                    <Pagination
+                        page={pageSafe}
+                        totalPages={totalPages}
+                        onChange={setPage}
+                    />
+                </>
+            ) : error && !rows.length && scope === "all" ? null : (
+                <EmptyRow label={emptyLabel} />
+            )}
+        </>
+    );
+}
+
 export default function Nepse() {
     const clock = useClock();
     const cacheRef = useRef(loadCache());
@@ -257,6 +451,15 @@ export default function Nepse() {
     );
 
     const [feed, setFeed] = useState("Movers");
+    const [refreshing, setRefreshing] = useState(false);
+
+    const {
+        rows: priceRows,
+        loading: priceLoading,
+        error: priceError,
+        refresh: refreshPrices,
+    } = usePriceVolume(REFRESH_INTERVAL);
+    const watchlist = useWatchlist();
 
     const [gainers, setGainers] = useState(initialCache?.gainers ?? []);
     const [losers, setLosers] = useState(initialCache?.losers ?? []);
@@ -273,6 +476,8 @@ export default function Nepse() {
     const [floorsheet, setFloorsheet] = useState(null);
     const [floorUnavailable, setFloorUnavailable] = useState(false);
     const [feedLoading, setFeedLoading] = useState(true);
+    const [feedErrors, setFeedErrors] = useState({});
+    const [feedRetry, setFeedRetry] = useState(0);
 
     const promoterCacheRef = useRef({});
     const [promoterRows, setPromoterRows] = useState([]);
@@ -292,14 +497,7 @@ export default function Nepse() {
         }
 
         try {
-            const [
-                openRes,
-                indexRes,
-                summaryRes,
-                graphRes,
-                gainerRes,
-                loserRes,
-            ] = await Promise.all([
+            const results = await Promise.allSettled([
                 isNepseOpen(),
                 getNepseIndex(),
                 getSummary(),
@@ -308,40 +506,58 @@ export default function Nepse() {
                 getTopLosers(),
             ]);
 
-            const open = safe(openRes.data);
-            const index = safe(indexRes.data);
-            const summaryData = safe(summaryRes.data);
-            const graphList = toList(graphRes.data);
-            const gainerList = isNepseError(gainerRes.data)
-                ? []
-                : gainerRes.data ?? [];
-            const loserList = isNepseError(loserRes.data)
-                ? []
-                : loserRes.data ?? [];
+            if (results.every((r) => r.status === "rejected")) {
+                throw new Error("offline");
+            }
 
-            setMarketOpen(open);
-            setIndices(index);
-            setSummary(summaryData);
-            setGraphData(graphList);
-            setGainers(gainerList);
-            setLosers(loserList);
+            // usable payload or null so one failure never wipes the page
+            const pick = (r) =>
+                r.status === "fulfilled" && !isNepseError(r.value?.data)
+                    ? r.value.data
+                    : null;
+
+            const [open, index, summaryData, graphRaw, gainerRaw, loserRaw] =
+                results.map(pick);
+
+            const graphList = graphRaw ? toList(graphRaw) : [];
+            const gainerList = gainerRaw ? toList(gainerRaw) : null;
+            const loserList = loserRaw ? toList(loserRaw) : null;
+
+            if (open !== null) setMarketOpen(open);
+            if (index) setIndices(index);
+            if (summaryData) setSummary(summaryData);
+            if (graphList.length) setGraphData(graphList);
+            if (gainerList) setGainers(gainerList);
+            if (loserList) setLosers(loserList);
+
             setIsOffline(false);
 
             if (index) {
+                const previous = loadCache() ?? {};
+
                 saveCache({
+                    ...previous,
                     indices: index,
-                    graphData: graphList,
-                    gainers: gainerList.slice(0, 5),
-                    losers: loserList.slice(0, 5),
+                    graphData: graphList.length ? graphList : previous.graphData,
+                    gainers: gainerList ? gainerList.slice(0, 5) : previous.gainers,
+                    losers: loserList ? loserList.slice(0, 5) : previous.losers,
                 });
+
                 const now = Date.now();
                 cacheRef.current = { savedAt: now };
                 setLastUpdated(now);
             }
 
+            const missing = [
+                open === null && "market status",
+                index === null && "indices",
+                summaryData === null && "summary",
+                !graphList.length && "chart",
+            ].filter(Boolean);
+
             setError(
-                open == null || index == null || summaryData == null
-                    ? "Some market data is temporarily unavailable"
+                missing.length
+                    ? `Some data is unavailable (${missing.join(", ")})`
                     : null
             );
         } catch {
@@ -355,6 +571,19 @@ export default function Nepse() {
             setLoading(false);
         }
     }, []);
+
+    const handleRefresh = useCallback(async () => {
+        setRefreshing(true);
+
+        try {
+            await Promise.allSettled([
+                fetchCore({ force: true }),
+                refreshPrices(),
+            ]);
+        } finally {
+            setRefreshing(false);
+        }
+    }, [fetchCore, refreshPrices]);
 
     useEffect(() => {
         let intervalId = null;
@@ -414,7 +643,7 @@ export default function Nepse() {
             );
             const raw = response.data;
 
-            if (isNepseError(raw)) return;
+            if (isNepseError(raw)) throw new Error("unavailable");
 
             const rows = raw?.content ?? [];
             const total = raw?.totalElements ?? rows.length;
@@ -425,8 +654,13 @@ export default function Nepse() {
                 Math.max(1, Math.ceil(total / PROMOTER_PAGE_SIZE))
             );
             setPromoterPage(page);
+            setFeedErrors((cur) => (cur.Promoters ? { ...cur, Promoters: null } : cur));
         } catch {
-            // keep previously shown rows on error
+            // keep previously shown rows and surface the failure
+            setFeedErrors((cur) => ({
+                ...cur,
+                Promoters: "Could not load promoter shares",
+            }));
         } finally {
             setPromoterLoading(false);
         }
@@ -435,71 +669,81 @@ export default function Nepse() {
     useEffect(() => {
         let alive = true;
 
+        const setFeedError = (message) => {
+            if (!alive) return;
+
+            setFeedErrors((cur) =>
+                (cur[feed] ?? null) === message ? cur : { ...cur, [feed]: message }
+            );
+        };
+
+        // request a list and store it or throw when the feed reports an error
+        const loadList = async (request, setter) => {
+            const response = await request();
+
+            if (!alive) return;
+            if (isNepseError(response.data)) throw new Error("unavailable");
+
+            setter(toList(response.data));
+        };
+
         const loadFeed = async () => {
             setFeedLoading(true);
 
             try {
                 if (feed === "Turnover" && !turnover.length) {
-                    const response = await getTopTurnover();
-
-                    if (!alive) return;
-
-                    setTurnover(
-                        isNepseError(response.data)
-                            ? []
-                            : response.data ?? []
-                    );
+                    setFeedError(null);
+                    await loadList(getTopTurnover, setTurnover);
                 }
 
                 if (
                     feed === "Activity" &&
                     (!topTrade.length || !topTransaction.length)
                 ) {
-                    const [tradeRes, transactionRes] =
-                        await Promise.all([
-                            getTopTrade(),
-                            getTopTransaction(),
-                        ]);
+                    setFeedError(null);
+
+                    const results = await Promise.allSettled([
+                        getTopTrade(),
+                        getTopTransaction(),
+                        getSupplyDemand(),
+                    ]);
 
                     if (!alive) return;
 
-                    setTopTrade(
-                        isNepseError(tradeRes.data)
-                            ? []
-                            : tradeRes.data ?? []
-                    );
+                    const pick = (r) =>
+                        r.status === "fulfilled" && !isNepseError(r.value?.data)
+                            ? r.value.data
+                            : null;
 
-                    setTopTransaction(
-                        isNepseError(transactionRes.data)
-                            ? []
-                            : transactionRes.data ?? []
-                    );
+                    const [trade, txn, demand] = results.map(pick);
 
-                    try {
-                        const response = await getSupplyDemand();
+                    if (trade) setTopTrade(toList(trade));
+                    if (txn) setTopTransaction(toList(txn));
+                    if (demand) setSupplyDemand(toList(demand));
 
-                        if (!alive) return;
+                    if (!trade && !txn && !demand) {
+                        throw new Error("unavailable");
+                    }
 
-                        setSupplyDemand(toList(response.data));
-                    } catch {
-                        if (alive) setSupplyDemand([]);
+                    if (!trade || !txn || !demand) {
+                        setFeedError("Some activity data is unavailable");
                     }
                 }
 
                 if (feed === "Sectors" && !sectors.length) {
+                    setFeedError(null);
+
                     const response = await getNepseSubIndices();
 
                     if (!alive) return;
+                    if (isNepseError(response.data)) throw new Error("unavailable");
 
                     setSectors(toNamedList(response.data));
                 }
 
                 if (feed === "Bonds" && !bonds.length) {
-                    const response = await getGovernmentBonds();
-
-                    if (!alive) return;
-
-                    setBonds(toList(response.data));
+                    setFeedError(null);
+                    await loadList(getGovernmentBonds, setBonds);
                 }
 
                 if (feed === "Promoters" && !promoterRows.length) {
@@ -507,18 +751,22 @@ export default function Nepse() {
                 }
 
                 if (feed === "Promoters" && !shareGroups.length) {
-                    const response = await getShareGroups();
+                    try {
+                        const response = await getShareGroups();
 
-                    if (!alive) return;
+                        if (!alive) return;
 
-                    setShareGroups(
-                        isNepseError(response.data)
-                            ? []
-                            : response.data ?? []
-                    );
+                        setShareGroups(
+                            isNepseError(response.data) ? [] : response.data ?? []
+                        );
+                    } catch {
+                        // group filter is optional so the table still works
+                    }
                 }
 
                 if (feed === "Floorsheet" && floorsheet === null) {
+                    setFeedError(null);
+
                     const response = await getFloorsheet();
 
                     if (!alive) return;
@@ -531,6 +779,8 @@ export default function Nepse() {
                         setFloorUnavailable(false);
                     }
                 }
+            } catch {
+                setFeedError("Could not load this section");
             } finally {
                 if (alive) setFeedLoading(false);
             }
@@ -543,6 +793,7 @@ export default function Nepse() {
         };
     }, [
         feed,
+        feedRetry,
         turnover.length,
         topTrade.length,
         topTransaction.length,
@@ -554,6 +805,13 @@ export default function Nepse() {
         floorsheet,
     ]);
 
+    const retryFeed = useCallback(() => setFeedRetry((n) => n + 1), []);
+
+    // hide the empty label when the section failed to load
+    const feedError = feedErrors[feed] ?? null;
+    const emptyRow = (label) =>
+        feedError ? null : <EmptyRow label={label} />;
+
     const heroKey = resolveHeroKey(indices);
     const heroEntry = heroKey ? indices?.[heroKey] : null;
 
@@ -562,6 +820,13 @@ export default function Nepse() {
 
     const heroPct =
         heroEntry?.percentageChange ?? heroEntry?.perChange ?? 0;
+
+    const heroPrev =
+        Number(heroEntry?.previousClose) > 0
+            ? Number(heroEntry.previousClose)
+            : heroValue > 0
+                ? heroValue - heroChange
+                : null;
 
     const secondaryIndices = useMemo(
         () =>
@@ -599,8 +864,31 @@ export default function Nepse() {
         [sectors, indices]
     );
 
+    const loadSectorGraph = useCallback(async (name) => {
+        // clearing the entry shows the loading skeleton again
+        setSectorGraphs((current) => {
+            const next = { ...current };
+            delete next[name];
+            return next;
+        });
+
+        try {
+            const response = await matchSectorGraph(name)();
+
+            if (isNepseError(response.data)) throw new Error("unavailable");
+
+            setSectorGraphs((current) => ({
+                ...current,
+                [name]: toList(response.data),
+            }));
+        } catch {
+            // null marks a failed load so the retry button can show
+            setSectorGraphs((current) => ({ ...current, [name]: null }));
+        }
+    }, []);
+
     const toggleSector = useCallback(
-        async (name) => {
+        (name) => {
             if (expandedSector === name) {
                 setExpandedSector(null);
                 return;
@@ -610,21 +898,9 @@ export default function Nepse() {
 
             if (sectorGraphs[name]) return;
 
-            try {
-                const response = await matchSectorGraph(name)();
-
-                setSectorGraphs((current) => ({
-                    ...current,
-                    [name]: toList(response.data),
-                }));
-            } catch {
-                setSectorGraphs((current) => ({
-                    ...current,
-                    [name]: current[name] ?? [],
-                }));
-            }
+            void loadSectorGraph(name);
         },
-        [expandedSector, sectorGraphs]
+        [expandedSector, sectorGraphs, loadSectorGraph]
     );
 
     // clamp pages so a shrinking dataset never leaves a page out of range
@@ -686,6 +962,23 @@ export default function Nepse() {
                     <TermSearch />
 
                     <div className="term-header-right">
+                        {lastUpdated && (
+                            <span className="term-updated">
+                                updated {timeAgo(lastUpdated)}
+                            </span>
+                        )}
+
+                        <button
+                            type="button"
+                            className="term-refresh"
+                            onClick={handleRefresh}
+                            disabled={refreshing}
+                            aria-label="Refresh market data"
+                            title="Refresh market data"
+                        >
+                            <IconRefresh spinning={refreshing} />
+                        </button>
+
                         <span
                             className={`term-status ${
                                 openBool ? "open" : "closed"
@@ -708,14 +1001,26 @@ export default function Nepse() {
                 </header>
 
                 {error && (
-                    <div className="term-alert">
-                        {error}
-                        {isOffline && lastUpdated && (
-                            <span className="term-alert-time">
-                                {" "}
-                                last update {timeAgo(lastUpdated)}
-                            </span>
-                        )}
+                    <div className="term-alert" role="alert">
+                        <span className="term-alert-text">
+                            {error}
+                            {isOffline && lastUpdated && (
+                                <span className="term-alert-time">
+                                    {" "}
+                                    last update {timeAgo(lastUpdated)}
+                                </span>
+                            )}
+                        </span>
+
+                        <button
+                            type="button"
+                            className="inline-retry"
+                            onClick={handleRefresh}
+                            disabled={refreshing}
+                        >
+                            <IconRefresh spinning={refreshing} />
+                            retry
+                        </button>
                     </div>
                 )}
 
@@ -727,6 +1032,7 @@ export default function Nepse() {
                             value={heroValue}
                             changeVal={heroChange}
                             changePct={heroPct}
+                            baseline={heroPrev}
                         />
 
                         {summary && !loading && (
@@ -734,6 +1040,8 @@ export default function Nepse() {
                                 <TickerItems summary={summary} />
                             </ScrollTicker>
                         )}
+
+                        {!priceLoading && <BreadthBar rows={priceRows} />}
 
                         <div className="index-strip">
                             {loading && !secondaryIndices.length
@@ -790,21 +1098,22 @@ export default function Nepse() {
                     </div>
 
                     <aside className="term-ledger">
-                        <div className="ledger-tabs">
-                            {FEEDS.map((item) => (
-                                <button
-                                    key={item}
-                                    className={`ledger-tab ${
-                                        feed === item ? "active" : ""
-                                    }`}
-                                    onClick={() => setFeed(item)}
-                                >
-                                    {item}
-                                </button>
-                            ))}
-                        </div>
+                        <TabStrip
+                            tabs={FEEDS}
+                            active={feed}
+                            onChange={setFeed}
+                            label="Market sections"
+                        />
 
-                        <div className="ledger-body">
+                        <div className="ledger-body" role="tabpanel" aria-label={feed}>
+                            {feedError && feed !== "Movers" && feed !== "Stocks" && (
+                                <InlineNotice
+                                    message={feedError}
+                                    onRetry={retryFeed}
+                                    busy={feedLoading || promoterLoading}
+                                />
+                            )}
+
                             {feed === "Movers" && (
                                 <>
                                     <p className="ledger-heading up">
@@ -877,6 +1186,16 @@ export default function Nepse() {
                                 </>
                             )}
 
+                            {feed === "Stocks" && (
+                                <StocksFeed
+                                    rows={priceRows}
+                                    loading={priceLoading}
+                                    error={priceError}
+                                    onRetry={refreshPrices}
+                                    watchlist={watchlist}
+                                />
+                            )}
+
                             {feed === "Turnover" && (
                                 <>
                                     <p className="ledger-heading">
@@ -900,9 +1219,7 @@ export default function Nepse() {
                                                     className="ledger-row ledger-row-4"
                                                     key={row.symbol}
                                                 >
-                                                    <span className="ledger-sym">
-                                                        {row.symbol}
-                                                    </span>
+                                                    <SymbolLink symbol={row.symbol} />
                                                     <span className="ledger-num">
                                                         {fmtCompact(
                                                             row.turnover
@@ -919,7 +1236,7 @@ export default function Nepse() {
                                                 </div>
                                             ))
                                     ) : (
-                                        <EmptyRow label="no turnover data yet" />
+                                        emptyRow("no turnover data yet")
                                     )}
                                 </>
                             )}
@@ -945,9 +1262,7 @@ export default function Nepse() {
                                                     className="ledger-row"
                                                     key={row.symbol}
                                                 >
-                                                    <span className="ledger-sym">
-                                                        {row.symbol}
-                                                    </span>
+                                                    <SymbolLink symbol={row.symbol} />
                                                     <span className="ledger-num">
                                                         {fmtCompact(
                                                             row.shareTraded ??
@@ -957,7 +1272,7 @@ export default function Nepse() {
                                                 </div>
                                             ))
                                     ) : (
-                                        <EmptyRow label="no trade data yet" />
+                                        emptyRow("no trade data yet")
                                     )}
 
                                     <p className="ledger-heading">
@@ -979,9 +1294,7 @@ export default function Nepse() {
                                                     className="ledger-row"
                                                     key={row.symbol}
                                                 >
-                                                    <span className="ledger-sym">
-                                                        {row.symbol}
-                                                    </span>
+                                                    <SymbolLink symbol={row.symbol} />
                                                     <span className="ledger-num">
                                                         {fmtCompact(
                                                             row.totalTrades ??
@@ -991,7 +1304,7 @@ export default function Nepse() {
                                                 </div>
                                             ))
                                     ) : (
-                                        <EmptyRow label="no transaction data yet" />
+                                        emptyRow("no transaction data yet")
                                     )}
 
                                     <p className="ledger-heading">
@@ -1048,7 +1361,7 @@ export default function Nepse() {
                                                 );
                                             })
                                     ) : (
-                                        <EmptyRow label="no imbalance data yet" />
+                                        emptyRow("no imbalance data yet")
                                     )}
                                 </>
                             )}
@@ -1091,6 +1404,7 @@ export default function Nepse() {
                                                         className="ledger-row sector-row"
                                                         role="button"
                                                         tabIndex={0}
+                                                        aria-expanded={expanded}
                                                         onClick={() =>
                                                             toggleSector(
                                                                 name
@@ -1113,8 +1427,13 @@ export default function Nepse() {
                                                         }}
                                                     >
                                                         <span className="ledger-sym">
-                                                            <span className="sector-chevron">
-                                                                {expanded ? "\u25be " : "\u25b8 "}
+                                                            <span
+                                                                className={`sector-chevron ${
+                                                                    expanded ? "open" : ""
+                                                                }`}
+                                                                aria-hidden="true"
+                                                            >
+                                                                <IconChevronDown />
                                                             </span>
                                                             {name}
                                                         </span>
@@ -1146,6 +1465,13 @@ export default function Nepse() {
                                                                 ] ===
                                                             undefined ? (
                                                                 <div className="skel mini-spark-skel" />
+                                                            ) : sectorGraphs[name] === null ? (
+                                                                <InlineNotice
+                                                                    message="Trend unavailable"
+                                                                    onRetry={() =>
+                                                                        loadSectorGraph(name)
+                                                                    }
+                                                                />
                                                             ) : (
                                                                 <MiniSpark
                                                                     data={
@@ -1161,7 +1487,7 @@ export default function Nepse() {
                                             );
                                         })
                                     ) : (
-                                        <EmptyRow label="no sector data yet" />
+                                        emptyRow("no sector data yet")
                                     )}
                                 </>
                             )}
@@ -1206,7 +1532,7 @@ export default function Nepse() {
                                             />
                                         </>
                                     ) : (
-                                        <EmptyRow label="no bond data yet" />
+                                        emptyRow("no bond data yet")
                                     )}
                                 </>
                             )}
@@ -1238,9 +1564,7 @@ export default function Nepse() {
                                                     className="ledger-row ledger-row-3"
                                                     key={row.id}
                                                 >
-                                                    <span className="ledger-sym">
-                                                        {row.symbol}
-                                                    </span>
+                                                    <SymbolLink symbol={row.symbol} />
                                                     <span className="ledger-num">
                                                         {row.shareGroupId?.name ?? "--"}
                                                     </span>
@@ -1258,13 +1582,11 @@ export default function Nepse() {
                                             />
                                         </>
                                     ) : (
-                                        <EmptyRow
-                                            label={
-                                                selectedPromoterGroup
-                                                    ? "no shares in this group on this page"
-                                                    : "no promoter share data yet"
-                                            }
-                                        />
+                                        emptyRow(
+                                            selectedPromoterGroup
+                                                ? "no shares in this group on this page"
+                                                : "no promoter share data yet"
+                                        )
                                     )}
                                 </>
                             )}
@@ -1291,9 +1613,7 @@ export default function Nepse() {
                                                     className="ledger-row ledger-row-3"
                                                     key={row.id ?? index}
                                                 >
-                                                    <span className="ledger-sym">
-                                                        {row.stockSymbol}
-                                                    </span>
+                                                    <SymbolLink symbol={row.stockSymbol} />
 
                                                     <span className="ledger-num">
                                                         {fmt(
@@ -1310,13 +1630,11 @@ export default function Nepse() {
                                                 </div>
                                             ))
                                     ) : (
-                                        <EmptyRow
-                                            label={
-                                                floorUnavailable
-                                                    ? "floorsheet temporarily unavailable"
-                                                    : "no contracts yet"
-                                            }
-                                        />
+                                        emptyRow(
+                                            floorUnavailable
+                                                ? "floorsheet temporarily unavailable"
+                                                : "no contracts yet"
+                                        )
                                     )}
                                 </>
                             )}

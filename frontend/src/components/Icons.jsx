@@ -444,3 +444,10 @@ export const IconShare = () => (
         <line x1="15.4" y1="6.6" x2="8.6" y2="10.5" />
     </svg>
 );
+
+export const IconStar = ({ filled }) => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"}
+         stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 3 L14.7 9 L21 9.6 L16.2 13.9 L17.6 20.2 L12 17 L6.4 20.2 L7.8 13.9 L3 9.6 L9.3 9 Z" />
+    </svg>
+);

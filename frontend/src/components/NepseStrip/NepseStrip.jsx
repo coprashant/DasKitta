@@ -11,11 +11,16 @@ import {
 import { buildSparkline, useChartHover, tooltipAlign } from "../../pages/Nepse/nepseUtils.js";
 import "./NepseStrip.css";
 
-// lazy loaded so the lottie renderer is not part of the initial homepage chunk
+// lazy load mascot
 const BullMascot = lazy(() => import("./BullMascot.jsx"));
 
 const MOVERS_ROW_COUNT = 5;
 const CACHE_KEY = "nepse_cache_v1";
+
+// segment colors live in css variables
+const COLOR_RISE = "var(--spark-up)";
+const COLOR_FALL = "var(--spark-down)";
+const COLOR_FLAT = "var(--spark-flat)";
 
 function loadNepseCache() {
     if (typeof window === "undefined") return null;
@@ -32,6 +37,46 @@ function toList(raw) {
     if (isNepseError(raw)) return [];
     if (Array.isArray(raw)) return raw;
     return raw?.data ?? Object.values(raw ?? {});
+}
+
+// color for one segment from previous and current value
+function segmentColor(prevValue, currValue, fallbackColor) {
+    if (currValue > prevValue) return COLOR_RISE;
+    if (currValue < prevValue) return COLOR_FALL;
+    return fallbackColor;
+}
+
+// group consecutive same color segments into runs
+function buildColoredRuns(coords, values) {
+    const runs = [];
+    const colorAt = new Array(values.length).fill(COLOR_FLAT);
+    if (!coords || !values || values.length < 2) return { runs, colorAt };
+
+    let lastColor = COLOR_FLAT;
+
+    for (let i = 1; i < values.length; i++) {
+        const color = segmentColor(Number(values[i - 1]), Number(values[i]), lastColor);
+        const lastRun = runs[runs.length - 1];
+
+        if (lastRun && lastRun.color === color) {
+            lastRun.coords.push(coords[i]);
+        } else {
+            runs.push({ color, coords: [coords[i - 1], coords[i]] });
+        }
+
+        colorAt[i] = color;
+        lastColor = color;
+    }
+
+    colorAt[0] = colorAt[1];
+
+    return {
+        runs: runs.map((run) => ({
+            color: run.color,
+            points: run.coords.map((c) => `${c[0]},${c[1]}`).join(" "),
+        })),
+        colorAt,
+    };
 }
 
 function SkeletonGraphSVG({ width = 340, height = 100 }) {
@@ -62,11 +107,21 @@ function Sparkline({ data, isOpen, pts, width = 340, height = 100 }) {
     );
     const { containerRef, index: hoverIndex, handlers } = useChartHover(result?.values.length ?? 0);
 
-    if (!result) return <SkeletonGraphSVG width={width} height={height} />;
+    // hooks stay above the early return
+    const segments = useMemo(
+        () => (result ? buildColoredRuns(result.coords, result.values) : null),
+        [result]
+    );
 
-    const color = result.isPositive ? "var(--success)" : "var(--danger)";
+    if (!result || !segments) return <SkeletonGraphSVG width={width} height={height} />;
+
     const hover = hoverIndex != null
-        ? { x: result.coords[hoverIndex][0], y: result.coords[hoverIndex][1], value: result.values[hoverIndex] }
+        ? {
+            x: result.coords[hoverIndex][0],
+            y: result.coords[hoverIndex][1],
+            value: result.values[hoverIndex],
+            color: segments.colorAt[hoverIndex] ?? COLOR_FLAT,
+        }
         : null;
 
     const coords = result.coords || [];
@@ -75,7 +130,7 @@ function Sparkline({ data, isOpen, pts, width = 340, height = 100 }) {
         : coords[coords.length - 1] || [width, height * 0.5];
 
     const mascotPos = targetCoord
-        ? { x: (targetCoord[0] / width) * 100, y: (targetCoord[1] / height) * 100 } // Percentage for Y keeps mascot positioned accurately on tall graphs
+        ? { x: (targetCoord[0] / width) * 100, y: (targetCoord[1] / height) * 100 }
         : null;
 
     return (
@@ -86,18 +141,23 @@ function Sparkline({ data, isOpen, pts, width = 340, height = 100 }) {
                 className="sparkline-svg"
                 style={{ width: "100%", height: "100%", overflow: "visible" }}
             >
-                <polyline
-                    points={result.points}
-                    fill="none"
-                    stroke={color}
-                    strokeWidth="1.5"
-                    strokeLinejoin="round"
-                    strokeLinecap="round"
-                />
+                {segments.runs.map((run, i) => (
+                    <polyline
+                        key={i}
+                        className="spark-segment"
+                        points={run.points}
+                        fill="none"
+                        stroke={run.color}
+                        strokeWidth="1.5"
+                        strokeLinejoin="round"
+                        strokeLinecap="round"
+                        vectorEffect="non-scaling-stroke"
+                    />
+                ))}
                 {hover && (
                     <g>
                         <line x1={hover.x} y1="0" x2={hover.x} y2={height} className="spark-hover-line" />
-                        <circle cx={hover.x} cy={hover.y} r="4" className="spark-hover-dot" style={{ fill: color }} />
+                        <circle cx={hover.x} cy={hover.y} r="4" className="spark-hover-dot" style={{ fill: hover.color }} />
                     </g>
                 )}
             </svg>
