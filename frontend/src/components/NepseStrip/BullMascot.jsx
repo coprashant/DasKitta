@@ -1,4 +1,4 @@
-import { LottieLight as Lottie } from "../../../node_modules/lottie-react/build/animation/LottieLight.js";
+import { LottieLight as Lottie } from "lottie-react";
 import angryBullAnimation from "../../assets/bull/angry_bull.json";
 import meditatingBullAnimation from "../../assets/bull/meditating_bull.json";
 import runningBullAnimation from "../../assets/bull/Bull_running.json";
@@ -75,7 +75,7 @@ export default function BullMascot({ isOpen, pts, position }) {
         >
             <Lottie
                 key={animationPath}
-                animationData={animationData}
+                src={animationData}
                 loop={true}
                 autoplay={true}
                 className="bull-lottie-player"

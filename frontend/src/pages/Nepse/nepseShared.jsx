@@ -26,6 +26,7 @@ import {
     buildChart,
     buildSegments,
     useChartHover,
+    clampChartWindow,
     SEG_RISE,
     SEG_FALL,
 } from "./nepseUtils";
@@ -681,10 +682,19 @@ export function HeroChart({
     }, [data]);
 
     const handleWheel = useCallback((event) => {
-        event.preventDefault();
         if (!Array.isArray(data) || !data.length || !containerRef.current) return;
 
         const rect = containerRef.current.getBoundingClientRect();
+        if (
+            event.clientX < rect.left ||
+            event.clientX > rect.right ||
+            event.clientY < rect.top ||
+            event.clientY > rect.bottom
+        ) {
+            return;
+        }
+
+        event.preventDefault();
         const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
         const factor = event.deltaY < 0 ? 0.8 : 1.2;
 
@@ -741,6 +751,22 @@ export function HeroChart({
     const handleTouchStart = useCallback((event) => {
         if (!Array.isArray(data) || !data.length || event.touches.length !== 2) return;
 
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (!rect) return;
+
+        const midpointX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
+        const midpointY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+        if (
+            midpointX < rect.left ||
+            midpointX > rect.right ||
+            midpointY < rect.top ||
+            midpointY > rect.bottom
+        ) {
+            return;
+        }
+
+        event.preventDefault();
+
         pinchRef.current = {
             distance: getTouchDistance(event.touches[0], event.touches[1]),
             start: viewport.start,
@@ -751,18 +777,28 @@ export function HeroChart({
     const handleTouchMove = useCallback((event) => {
         if (!pinchRef.current || !Array.isArray(data) || !data.length || event.touches.length !== 2) return;
 
-        event.preventDefault();
-
         const rect = containerRef.current?.getBoundingClientRect();
+        if (!rect) return;
+
         const distance = getTouchDistance(event.touches[0], event.touches[1]);
         const ratio = distance / pinchRef.current.distance;
         const total = data.length;
         const currentSize = pinchRef.current.size;
         const nextSize = clampChartWindow(total, 0, Math.round(currentSize / ratio), MIN_VISIBLE).size;
 
-        if (!rect) return;
-
         const midpoint = (event.touches[0].clientX + event.touches[1].clientX) / 2;
+        const midpointY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+        if (
+            midpoint < rect.left ||
+            midpoint > rect.right ||
+            midpointY < rect.top ||
+            midpointY > rect.bottom
+        ) {
+            return;
+        }
+
+        event.preventDefault();
+
         const focusRatio = Math.min(1, Math.max(0, (midpoint - rect.left) / rect.width));
         const focus = pinchRef.current.start + currentSize * focusRatio;
         const nextStart = clampChartWindow(
@@ -779,10 +815,26 @@ export function HeroChart({
         pinchRef.current = null;
     }, []);
 
-    const visibleRange =
-        Array.isArray(data) && data.length
-            ? `${Math.min(data.length, viewport.start + 1)}-${Math.min(data.length, viewport.start + (viewport.size || data.length))}/${data.length}`
-            : "0/0";
+    useEffect(() => {
+        const el = containerRef.current;
+        if (!el || !chart) return undefined;
+
+        const options = { passive: false };
+
+        el.addEventListener("wheel", handleWheel, options);
+        el.addEventListener("touchstart", handleTouchStart, options);
+        el.addEventListener("touchmove", handleTouchMove, options);
+        el.addEventListener("touchend", handleTouchEnd, options);
+        el.addEventListener("touchcancel", handleTouchEnd, options);
+
+        return () => {
+            el.removeEventListener("wheel", handleWheel, options);
+            el.removeEventListener("touchstart", handleTouchStart, options);
+            el.removeEventListener("touchmove", handleTouchMove, options);
+            el.removeEventListener("touchend", handleTouchEnd, options);
+            el.removeEventListener("touchcancel", handleTouchEnd, options);
+        };
+    }, [chart, containerRef, handleTouchEnd, handleTouchMove, handleTouchStart, handleWheel]);
 
     const mergedHandlers = {
         ...hoverHandlers,
@@ -837,18 +889,6 @@ export function HeroChart({
                 )}
             </div>
 
-            {!loading && chart && (
-                <div className="hero-chart-toolbar">
-                    <span className="hero-chart-range">{visibleRange}</span>
-
-                    <div className="hero-chart-controls" aria-label="Chart controls">
-                        <button type="button" className="hero-chart-btn" onClick={() => applyZoom(1.18, 0.5)} aria-label="Zoom out chart">-</button>
-                        <button type="button" className="hero-chart-btn" onClick={() => applyZoom(0.82, 0.5)} aria-label="Zoom in chart">+</button>
-                        <button type="button" className="hero-chart-btn hero-chart-btn-reset" onClick={() => setViewport({ start: 0, size: data.length })} aria-label="Reset chart view">reset</button>
-                    </div>
-                </div>
-            )}
-
             <div
                 className="hero-chart-wrap"
                 ref={containerRef}
@@ -859,6 +899,7 @@ export function HeroChart({
                 ) : chart ? (
                     <>
                         <ChartSvg
+                            key={`${viewport.start}-${viewport.size}`}
                             chart={chart}
                             width={width}
                             height={height}
