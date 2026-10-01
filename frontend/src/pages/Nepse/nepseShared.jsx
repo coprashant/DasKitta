@@ -603,22 +603,199 @@ export function HeroChart({
     const gradientId = useId().replace(/:/g, "");
     const width = 1000;
     const height = 380;
+    const MIN_VISIBLE = 12;
 
     const ref =
         typeof baseline === "number" && Number.isFinite(baseline) && baseline > 0
             ? baseline
             : null;
 
-    const chart = useChartModel(data, width, height, ref);
+    const [viewport, setViewport] = useState({ start: 0, size: 0 });
+    const dragRef = useRef(null);
+    const pinchRef = useRef(null);
+
+    useEffect(() => {
+        if (!Array.isArray(data) || !data.length) {
+            setViewport({ start: 0, size: 0 });
+            return;
+        }
+
+        setViewport((prev) => {
+            const total = data.length;
+            const nextSize = Math.max(MIN_VISIBLE, Math.min(total, prev.size || total));
+            const windowed = clampChartWindow(total, prev.start || 0, nextSize, MIN_VISIBLE);
+
+            return windowed.size === prev.size && windowed.start === prev.start
+                ? prev
+                : windowed;
+        });
+    }, [data]);
+
+    const visibleData = useMemo(() => {
+        if (!Array.isArray(data) || !data.length) return [];
+
+        const total = data.length;
+        const safeWindow = clampChartWindow(
+            total,
+            viewport.start,
+            viewport.size || total,
+            MIN_VISIBLE
+        );
+
+        return data.slice(safeWindow.start, safeWindow.start + safeWindow.size);
+    }, [data, viewport]);
+
+    const chart = useChartModel(visibleData, width, height, ref);
 
     const {
         containerRef,
         index: hoverIndex,
-        handlers,
+        handlers: hoverHandlers,
     } = useChartHover(chart?.values.length ?? 0);
 
     const hover = getHover(chart, hoverIndex, ref, true);
     const positive = changeVal >= 0;
+
+    const applyZoom = useCallback((factor, ratio = 0.5) => {
+        if (!Array.isArray(data) || !data.length) return;
+
+        setViewport((prev) => {
+            const total = data.length;
+            const currentSize = Math.max(MIN_VISIBLE, prev.size || total);
+            const nextSize = clampChartWindow(
+                total,
+                0,
+                Math.round(currentSize * factor),
+                MIN_VISIBLE
+            ).size;
+            const focus = (prev.start || 0) + currentSize * Math.min(1, Math.max(0, ratio));
+            const nextStart = clampChartWindow(
+                total,
+                focus - nextSize * Math.min(1, Math.max(0, ratio)),
+                nextSize,
+                MIN_VISIBLE
+            ).start;
+
+            return clampChartWindow(total, nextStart, nextSize, MIN_VISIBLE);
+        });
+    }, [data]);
+
+    const handleWheel = useCallback((event) => {
+        event.preventDefault();
+        if (!Array.isArray(data) || !data.length || !containerRef.current) return;
+
+        const rect = containerRef.current.getBoundingClientRect();
+        const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+        const factor = event.deltaY < 0 ? 0.8 : 1.2;
+
+        applyZoom(factor, ratio);
+    }, [applyZoom, containerRef, data]);
+
+    const handlePointerDown = useCallback((event) => {
+        if (!Array.isArray(data) || !data.length) return;
+
+        dragRef.current = {
+            x: event.clientX,
+            start: viewport.start,
+            size: viewport.size || data.length,
+        };
+
+        event.currentTarget?.setPointerCapture?.(event.pointerId);
+        hoverHandlers.onPointerDown?.(event);
+    }, [data, hoverHandlers, viewport]);
+
+    const handlePointerMove = useCallback((event) => {
+        if (!dragRef.current || !Array.isArray(data) || !data.length) {
+            hoverHandlers.onPointerMove?.(event);
+            return;
+        }
+
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (!rect) return;
+
+        const delta = event.clientX - dragRef.current.x;
+        const shift = Math.round((delta / rect.width) * dragRef.current.size);
+        const nextStart = Math.min(
+            Math.max(0, dragRef.current.start - shift),
+            Math.max(0, data.length - dragRef.current.size)
+        );
+
+        setViewport((prev) => ({
+            ...prev,
+            start: nextStart,
+        }));
+    }, [containerRef, data, hoverHandlers]);
+
+    const handlePointerUp = useCallback((event) => {
+        dragRef.current = null;
+        event.currentTarget?.releasePointerCapture?.(event.pointerId);
+        hoverHandlers.onPointerLeave?.(event);
+    }, [hoverHandlers]);
+
+    const getTouchDistance = useCallback((touchA, touchB) => {
+        const dx = touchA.clientX - touchB.clientX;
+        const dy = touchA.clientY - touchB.clientY;
+        return Math.hypot(dx, dy) || 1;
+    }, []);
+
+    const handleTouchStart = useCallback((event) => {
+        if (!Array.isArray(data) || !data.length || event.touches.length !== 2) return;
+
+        pinchRef.current = {
+            distance: getTouchDistance(event.touches[0], event.touches[1]),
+            start: viewport.start,
+            size: viewport.size || data.length,
+        };
+    }, [data, getTouchDistance, viewport]);
+
+    const handleTouchMove = useCallback((event) => {
+        if (!pinchRef.current || !Array.isArray(data) || !data.length || event.touches.length !== 2) return;
+
+        event.preventDefault();
+
+        const rect = containerRef.current?.getBoundingClientRect();
+        const distance = getTouchDistance(event.touches[0], event.touches[1]);
+        const ratio = distance / pinchRef.current.distance;
+        const total = data.length;
+        const currentSize = pinchRef.current.size;
+        const nextSize = clampChartWindow(total, 0, Math.round(currentSize / ratio), MIN_VISIBLE).size;
+
+        if (!rect) return;
+
+        const midpoint = (event.touches[0].clientX + event.touches[1].clientX) / 2;
+        const focusRatio = Math.min(1, Math.max(0, (midpoint - rect.left) / rect.width));
+        const focus = pinchRef.current.start + currentSize * focusRatio;
+        const nextStart = clampChartWindow(
+            total,
+            focus - nextSize * focusRatio,
+            nextSize,
+            MIN_VISIBLE
+        ).start;
+
+        setViewport({ start: nextStart, size: nextSize });
+    }, [containerRef, data, getTouchDistance]);
+
+    const handleTouchEnd = useCallback(() => {
+        pinchRef.current = null;
+    }, []);
+
+    const visibleRange =
+        Array.isArray(data) && data.length
+            ? `${Math.min(data.length, viewport.start + 1)}-${Math.min(data.length, viewport.start + (viewport.size || data.length))}/${data.length}`
+            : "0/0";
+
+    const mergedHandlers = {
+        ...hoverHandlers,
+        onWheel: handleWheel,
+        onPointerDown: handlePointerDown,
+        onPointerMove: handlePointerMove,
+        onPointerUp: handlePointerUp,
+        onPointerLeave: handlePointerUp,
+        onPointerCancel: handlePointerUp,
+        onTouchStart: handleTouchStart,
+        onTouchMove: handleTouchMove,
+        onTouchEnd: handleTouchEnd,
+    };
 
     return (
         <div className="hero-canvas">
@@ -660,10 +837,22 @@ export function HeroChart({
                 )}
             </div>
 
+            {!loading && chart && (
+                <div className="hero-chart-toolbar">
+                    <span className="hero-chart-range">{visibleRange}</span>
+
+                    <div className="hero-chart-controls" aria-label="Chart controls">
+                        <button type="button" className="hero-chart-btn" onClick={() => applyZoom(1.18, 0.5)} aria-label="Zoom out chart">-</button>
+                        <button type="button" className="hero-chart-btn" onClick={() => applyZoom(0.82, 0.5)} aria-label="Zoom in chart">+</button>
+                        <button type="button" className="hero-chart-btn hero-chart-btn-reset" onClick={() => setViewport({ start: 0, size: data.length })} aria-label="Reset chart view">reset</button>
+                    </div>
+                </div>
+            )}
+
             <div
                 className="hero-chart-wrap"
                 ref={containerRef}
-                {...(chart ? handlers : {})}
+                {...(chart ? mergedHandlers : {})}
             >
                 {loading ? (
                     <div className="skel hero-skel" />

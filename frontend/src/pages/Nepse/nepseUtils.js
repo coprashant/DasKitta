@@ -108,6 +108,19 @@ export function minMax(values) {
     return [min, max];
 }
 
+export function clampChartWindow(totalPoints, start = 0, size = totalPoints, minVisible = 12) {
+    const total = Math.max(0, Number(totalPoints) || 0);
+    const min = total ? Math.min(total, Math.max(2, Number(minVisible) || 2)) : 0;
+    const safeSize = total ? Math.min(total, Math.max(min, Number(size) || total)) : 0;
+    const maxStart = Math.max(0, total - safeSize);
+    const safeStart = total ? Math.min(Math.max(0, Number(start) || 0), maxStart) : 0;
+
+    return {
+        start: safeStart,
+        size: safeSize,
+    };
+}
+
 function buildPoints(values, width, height, padding = 0, ref = null) {
     const [dataMin, dataMax] = minMax(values);
     const hasRef = typeof ref === "number" && Number.isFinite(ref);

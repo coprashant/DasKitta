@@ -346,6 +346,56 @@
   max-height: 440px;
   margin-top: 12px;
   touch-action: pan-y;
+  cursor: grab;
+  user-select: none;
+}
+
+.hero-chart-wrap:active {
+  cursor: grabbing;
+}
+
+.hero-chart-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  color: var(--text-3);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hero-chart-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hero-chart-btn {
+  min-width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.hero-chart-btn:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.hero-chart-btn-reset {
+  padding: 0 10px;
+  font-size: 9px;
+  letter-spacing: 0.06em;
 }
 
 .hero-svg {
