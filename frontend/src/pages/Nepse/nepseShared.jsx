@@ -26,11 +26,11 @@ import {
     buildChart,
     buildSegments,
     useChartHover,
-    clampChartWindow,
-    SEG_RISE,
-    SEG_FALL,
+    parseInput,
 } from "./nepseUtils";
+import { pointsFromLine, sliceRange, toNum } from "./nepseMath";
 import { useDragScroll, usePriceVolume } from "./nepseHooks";
+import PriceChart from "./PriceChart.jsx";
 
 export function EmptyRow({ label }) {
     return <p className="ledger-empty">{label}</p>;
@@ -496,64 +496,18 @@ function ChartSvg({
                       width,
                       height,
                       hover,
-                      gradientId,
                       label,
-                      area = false,
                       radius = 5,
                       strokeWidth = 1.6,
                   }) {
-    const trendColor = chart.positive ? SEG_RISE : SEG_FALL;
-
     return (
         <svg
             viewBox={`0 0 ${width} ${height}`}
             preserveAspectRatio="none"
-            className={area ? "hero-svg" : "mini-spark-svg"}
+            className="mini-spark-svg"
             role="img"
             aria-label={label}
         >
-            {area && (
-                <defs>
-                    <linearGradient
-                        id={gradientId}
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                    >
-                        <stop
-                            offset="0%"
-                            stopColor={trendColor}
-                            stopOpacity="0.16"
-                        />
-                        <stop
-                            offset="100%"
-                            stopColor={trendColor}
-                            stopOpacity="0"
-                        />
-                    </linearGradient>
-                </defs>
-            )}
-
-            {area && (
-                <polygon
-                    points={chart.area}
-                    fill={`url(#${gradientId})`}
-                    stroke="none"
-                />
-            )}
-
-            {area && chart.refY != null && (
-                <line
-                    x1="0"
-                    y1={chart.refY}
-                    x2={width}
-                    y2={chart.refY}
-                    className="term-ref-line"
-                    vectorEffect="non-scaling-stroke"
-                />
-            )}
-
             {chart.segments.runs.map((run, i) => (
                 <polyline
                     key={i}
@@ -590,9 +544,13 @@ function useChartModel(data, width, height, ref) {
     }, [data, width, height, ref]);
 }
 
+const HERO_RANGES = ["1D", "1M", "3M", "6M", "1Y", "ALL"];
+
 export function HeroChart({
                               loading,
                               data,
+                              historyPoints = null,
+                              historyDerived = false,
                               value,
                               changeVal,
                               changePct,
@@ -600,261 +558,39 @@ export function HeroChart({
                               baselineLabel = "prev close",
                               eyebrow = "NEPSE INDEX",
                           }) {
-    // fix useId returns colons so strip them to keep url ids safe
-    const gradientId = useId().replace(/:/g, "");
-    const width = 1000;
-    const height = 380;
-    const MIN_VISIBLE = 12;
-
     const ref =
         typeof baseline === "number" && Number.isFinite(baseline) && baseline > 0
             ? baseline
             : null;
 
-    const [viewport, setViewport] = useState({ start: 0, size: 0 });
-    const dragRef = useRef(null);
-    const pinchRef = useRef(null);
+    const intradayPoints = useMemo(() => pointsFromLine(data), [data]);
+    const hist = historyPoints ?? [];
+    const hasHistory = hist.length >= 2;
+    const hasIntraday = intradayPoints.length >= 2;
 
-    useEffect(() => {
-        if (!Array.isArray(data) || !data.length) {
-            setViewport({ start: 0, size: 0 });
-            return;
-        }
+    const [range, setRange] = useState("1D");
 
-        setViewport((prev) => {
-            const total = data.length;
-            const nextSize = Math.max(MIN_VISIBLE, Math.min(total, prev.size || total));
-            const windowed = clampChartWindow(total, prev.start || 0, nextSize, MIN_VISIBLE);
+    // fall back to one month when there is no intraday line
+    const active = range === "1D" && !hasIntraday && hasHistory ? "1M" : range;
+    const isIntraday = active === "1D";
 
-            return windowed.size === prev.size && windowed.start === prev.start
-                ? prev
-                : windowed;
-        });
-    }, [data]);
+    const points = useMemo(
+        () => (isIntraday ? intradayPoints : sliceRange(hist, active)),
+        [isIntraday, intradayPoints, hist, active]
+    );
 
-    const visibleData = useMemo(() => {
-        if (!Array.isArray(data) || !data.length) return [];
+    const ranges = useMemo(() => {
+        if (!hasHistory) return null;
 
-        const total = data.length;
-        const safeWindow = clampChartWindow(
-            total,
-            viewport.start,
-            viewport.size || total,
-            MIN_VISIBLE
-        );
+        return HERO_RANGES.filter((r) => r !== "1D" || hasIntraday);
+    }, [hasHistory, hasIntraday]);
 
-        return data.slice(safeWindow.start, safeWindow.start + safeWindow.size);
-    }, [data, viewport]);
-
-    const chart = useChartModel(visibleData, width, height, ref);
-
-    const {
-        containerRef,
-        index: hoverIndex,
-        handlers: hoverHandlers,
-    } = useChartHover(chart?.values.length ?? 0);
-
-    const hover = getHover(chart, hoverIndex, ref, true);
     const positive = changeVal >= 0;
-
-    const applyZoom = useCallback((factor, ratio = 0.5) => {
-        if (!Array.isArray(data) || !data.length) return;
-
-        setViewport((prev) => {
-            const total = data.length;
-            const currentSize = Math.max(MIN_VISIBLE, prev.size || total);
-            const nextSize = clampChartWindow(
-                total,
-                0,
-                Math.round(currentSize * factor),
-                MIN_VISIBLE
-            ).size;
-            const focus = (prev.start || 0) + currentSize * Math.min(1, Math.max(0, ratio));
-            const nextStart = clampChartWindow(
-                total,
-                focus - nextSize * Math.min(1, Math.max(0, ratio)),
-                nextSize,
-                MIN_VISIBLE
-            ).start;
-
-            return clampChartWindow(total, nextStart, nextSize, MIN_VISIBLE);
-        });
-    }, [data]);
-
-    const handleWheel = useCallback((event) => {
-        if (!Array.isArray(data) || !data.length || !containerRef.current) return;
-
-        const rect = containerRef.current.getBoundingClientRect();
-        if (
-            event.clientX < rect.left ||
-            event.clientX > rect.right ||
-            event.clientY < rect.top ||
-            event.clientY > rect.bottom
-        ) {
-            return;
-        }
-
-        event.preventDefault();
-        const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
-        const factor = event.deltaY < 0 ? 0.8 : 1.2;
-
-        applyZoom(factor, ratio);
-    }, [applyZoom, containerRef, data]);
-
-    const handlePointerDown = useCallback((event) => {
-        if (!Array.isArray(data) || !data.length) return;
-
-        dragRef.current = {
-            x: event.clientX,
-            start: viewport.start,
-            size: viewport.size || data.length,
-        };
-
-        event.currentTarget?.setPointerCapture?.(event.pointerId);
-        hoverHandlers.onPointerDown?.(event);
-    }, [data, hoverHandlers, viewport]);
-
-    const handlePointerMove = useCallback((event) => {
-        if (!dragRef.current || !Array.isArray(data) || !data.length) {
-            hoverHandlers.onPointerMove?.(event);
-            return;
-        }
-
-        const rect = containerRef.current?.getBoundingClientRect();
-        if (!rect) return;
-
-        const delta = event.clientX - dragRef.current.x;
-        const shift = Math.round((delta / rect.width) * dragRef.current.size);
-        const nextStart = Math.min(
-            Math.max(0, dragRef.current.start - shift),
-            Math.max(0, data.length - dragRef.current.size)
-        );
-
-        setViewport((prev) => ({
-            ...prev,
-            start: nextStart,
-        }));
-    }, [containerRef, data, hoverHandlers]);
-
-    const handlePointerUp = useCallback((event) => {
-        dragRef.current = null;
-        event.currentTarget?.releasePointerCapture?.(event.pointerId);
-        hoverHandlers.onPointerLeave?.(event);
-    }, [hoverHandlers]);
-
-    const getTouchDistance = useCallback((touchA, touchB) => {
-        const dx = touchA.clientX - touchB.clientX;
-        const dy = touchA.clientY - touchB.clientY;
-        return Math.hypot(dx, dy) || 1;
-    }, []);
-
-    const handleTouchStart = useCallback((event) => {
-        if (!Array.isArray(data) || !data.length || event.touches.length !== 2) return;
-
-        const rect = containerRef.current?.getBoundingClientRect();
-        if (!rect) return;
-
-        const midpointX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
-        const midpointY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
-        if (
-            midpointX < rect.left ||
-            midpointX > rect.right ||
-            midpointY < rect.top ||
-            midpointY > rect.bottom
-        ) {
-            return;
-        }
-
-        event.preventDefault();
-
-        pinchRef.current = {
-            distance: getTouchDistance(event.touches[0], event.touches[1]),
-            start: viewport.start,
-            size: viewport.size || data.length,
-        };
-    }, [data, getTouchDistance, viewport]);
-
-    const handleTouchMove = useCallback((event) => {
-        if (!pinchRef.current || !Array.isArray(data) || !data.length || event.touches.length !== 2) return;
-
-        const rect = containerRef.current?.getBoundingClientRect();
-        if (!rect) return;
-
-        const distance = getTouchDistance(event.touches[0], event.touches[1]);
-        const ratio = distance / pinchRef.current.distance;
-        const total = data.length;
-        const currentSize = pinchRef.current.size;
-        const nextSize = clampChartWindow(total, 0, Math.round(currentSize / ratio), MIN_VISIBLE).size;
-
-        const midpoint = (event.touches[0].clientX + event.touches[1].clientX) / 2;
-        const midpointY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
-        if (
-            midpoint < rect.left ||
-            midpoint > rect.right ||
-            midpointY < rect.top ||
-            midpointY > rect.bottom
-        ) {
-            return;
-        }
-
-        event.preventDefault();
-
-        const focusRatio = Math.min(1, Math.max(0, (midpoint - rect.left) / rect.width));
-        const focus = pinchRef.current.start + currentSize * focusRatio;
-        const nextStart = clampChartWindow(
-            total,
-            focus - nextSize * focusRatio,
-            nextSize,
-            MIN_VISIBLE
-        ).start;
-
-        setViewport({ start: nextStart, size: nextSize });
-    }, [containerRef, data, getTouchDistance]);
-
-    const handleTouchEnd = useCallback(() => {
-        pinchRef.current = null;
-    }, []);
-
-    useEffect(() => {
-        const el = containerRef.current;
-        if (!el || !chart) return undefined;
-
-        const options = { passive: false };
-
-        el.addEventListener("wheel", handleWheel, options);
-        el.addEventListener("touchstart", handleTouchStart, options);
-        el.addEventListener("touchmove", handleTouchMove, options);
-        el.addEventListener("touchend", handleTouchEnd, options);
-        el.addEventListener("touchcancel", handleTouchEnd, options);
-
-        return () => {
-            el.removeEventListener("wheel", handleWheel, options);
-            el.removeEventListener("touchstart", handleTouchStart, options);
-            el.removeEventListener("touchmove", handleTouchMove, options);
-            el.removeEventListener("touchend", handleTouchEnd, options);
-            el.removeEventListener("touchcancel", handleTouchEnd, options);
-        };
-    }, [chart, containerRef, handleTouchEnd, handleTouchMove, handleTouchStart, handleWheel]);
-
-    const mergedHandlers = {
-        ...hoverHandlers,
-        onWheel: handleWheel,
-        onPointerDown: handlePointerDown,
-        onPointerMove: handlePointerMove,
-        onPointerUp: handlePointerUp,
-        onPointerLeave: handlePointerUp,
-        onPointerCancel: handlePointerUp,
-        onTouchStart: handleTouchStart,
-        onTouchMove: handleTouchMove,
-        onTouchEnd: handleTouchEnd,
-    };
 
     return (
         <div className="hero-canvas">
             <div className="hero-metrics">
-                <span className="hero-eyebrow">
-                    {eyebrow}
-                </span>
+                <span className="hero-eyebrow">{eyebrow}</span>
 
                 {loading ? (
                     <>
@@ -863,19 +599,10 @@ export function HeroChart({
                     </>
                 ) : (
                     <>
-                        <div className="hero-value">
-                            {fmt(value)}
-                        </div>
+                        <div className="hero-value">{fmt(value)}</div>
 
-                        <div
-                            className={`hero-delta ${dirClass(
-                                changeVal
-                            )}`}
-                        >
-                            <Arrow
-                                up={positive}
-                                flat={changeVal === 0}
-                            />
+                        <div className={`hero-delta ${dirClass(changeVal)}`}>
+                            <Arrow up={positive} flat={changeVal === 0} />
 
                             {positive ? "+" : ""}
                             {fmt(changeVal)}
@@ -889,52 +616,19 @@ export function HeroChart({
                 )}
             </div>
 
-            <div
-                className="hero-chart-wrap"
-                ref={containerRef}
-                {...(chart ? mergedHandlers : {})}
-            >
-                {loading ? (
-                    <div className="skel hero-skel" />
-                ) : chart ? (
-                    <>
-                        <ChartSvg
-                            key={`${viewport.start}-${viewport.size}`}
-                            chart={chart}
-                            width={width}
-                            height={height}
-                            hover={hover}
-                            gradientId={gradientId}
-                            label={`${eyebrow} price chart with ${chart.values.length} points`}
-                            area
-                        />
-
-                        {chart.refY != null && (
-                            <span
-                                className="term-ref-label"
-                                style={{
-                                    top: `${(chart.refY / height) * 100}%`,
-                                }}
-                            >
-                                {baselineLabel} {fmt(ref)}
-                            </span>
-                        )}
-
-                        <HoverTooltip
-                            hover={hover}
-                            width={width}
-                            height={height}
-                        />
-                    </>
-                ) : (
-                    <div className="hero-chart-empty">
-                        chart data unavailable
-                    </div>
-                )}
-
-                <div className="hero-baseline" />
-            </div>
-
+            <PriceChart
+                points={points}
+                loading={loading}
+                baseline={isIntraday ? ref : null}
+                baselineLabel={baselineLabel}
+                intraday={isIntraday}
+                derived={!isIntraday && historyDerived}
+                ranges={ranges}
+                range={active}
+                onRange={setRange}
+                resetKey={`${eyebrow}|${active}`}
+                label={`${eyebrow} price chart`}
+            />
         </div>
     );
 }
@@ -1209,6 +903,230 @@ export function ScrollTicker({ children }) {
             >
                 {children}
             </div>
+        </div>
+    );
+}
+
+// labeled input wrapper for small forms
+export function Field({ label, children }) {
+    return (
+        <label className="calc-field">
+            <span className="ledger-label">{label}</span>
+            {children}
+        </label>
+    );
+}
+
+// triggered alerts that were not dismissed yet
+export function AlertBanner({ alerts }) {
+    const hits = alerts.list.filter((a) => a.triggeredAt && !a.seen);
+
+    if (!hits.length) return null;
+
+    return (
+        <div className="alert-hits" role="status">
+            {hits.slice(0, 3).map((a) => (
+                <div className="alert-hit" key={a.id}>
+                    <SymbolLink symbol={a.symbol} />
+
+                    <span className="alert-hit-text">
+                        went {a.dir} {fmt(a.price)} now {fmt(a.hit)}
+                    </span>
+
+                    <button
+                        type="button"
+                        className="term-search-clear"
+                        onClick={() => alerts.dismiss(a.id)}
+                        aria-label={`Dismiss alert for ${a.symbol}`}
+                    >
+                        <ClearIcon />
+                    </button>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+// add and review price alerts for one symbol or all symbols
+export function AlertManager({ alerts, symbol = null, rows = [] }) {
+    const [sym, setSym] = useState("");
+    const [price, setPrice] = useState("");
+    const [dir, setDir] = useState(null);
+    const [msg, setMsg] = useState(null);
+    const [perm, setPerm] = useState(
+        typeof Notification === "undefined" ? "unsupported" : Notification.permission
+    );
+
+    const target = (symbol ?? sym).trim().toUpperCase();
+
+    const live = useMemo(() => {
+        const row = rows.find(
+            (r) => String(r.symbol ?? "").toUpperCase() === target
+        );
+
+        return toNum(row?.lastTradedPrice ?? row?.closePrice);
+    }, [rows, target]);
+
+    const submit = (e) => {
+        e.preventDefault();
+
+        const p = parseInput(price);
+
+        if (!target) return setMsg("enter a symbol");
+
+        if (
+            rows.length &&
+            !rows.some((r) => String(r.symbol ?? "").toUpperCase() === target)
+        ) {
+            return setMsg("unknown symbol");
+        }
+
+        if (!(p > 0)) return setMsg("enter a price above zero");
+
+        // pick the side from the live price when none is chosen
+        const side = dir ?? (live != null && p < live ? "below" : "above");
+
+        alerts.add(target, side, p);
+        setPrice("");
+        setMsg(null);
+        if (!symbol) setSym("");
+    };
+
+    const list = (
+        symbol
+            ? alerts.list.filter((a) => a.symbol === symbol.toUpperCase())
+            : alerts.list
+    )
+        .slice()
+        .reverse();
+
+    return (
+        <>
+            <p className="ledger-heading">
+                {symbol ? "price alerts" : "set a price alert"}
+            </p>
+
+            <form className="calc-form" onSubmit={submit}>
+                {!symbol && (
+                    <Field label="symbol">
+                        <input
+                            className="ledger-filter"
+                            value={sym}
+                            autoCapitalize="characters"
+                            autoComplete="off"
+                            placeholder="NABIL"
+                            onChange={(e) => setSym(e.target.value.toUpperCase())}
+                        />
+                    </Field>
+                )}
+
+                <Field label={live != null ? `price now ${fmt(live)}` : "target price"}>
+                    <input
+                        className="ledger-filter"
+                        inputMode="decimal"
+                        value={price}
+                        placeholder="target price"
+                        onChange={(e) => setPrice(e.target.value)}
+                    />
+                </Field>
+
+                <div className="calc-actions">
+                    <div className="pc-group" role="group" aria-label="Direction">
+                        {["above", "below"].map((side) => (
+                            <button
+                                key={side}
+                                type="button"
+                                className={`pc-opt ${dir === side ? "on" : ""}`}
+                                aria-pressed={dir === side}
+                                onClick={() => setDir(dir === side ? null : side)}
+                            >
+                                {side}
+                            </button>
+                        ))}
+                    </div>
+
+                    <button type="submit" className="inline-retry">
+                        add alert
+                    </button>
+                </div>
+            </form>
+
+            {msg && <p className="ledger-empty">{msg}</p>}
+
+            {perm === "default" && (
+                <button
+                    type="button"
+                    className="inline-retry alert-perm"
+                    onClick={() =>
+                        Notification.requestPermission().then(setPerm).catch(() => {})
+                    }
+                >
+                    enable notifications
+                </button>
+            )}
+
+            {list.length ? (
+                list.map((a) => (
+                    <div className="ledger-row alert-row" key={a.id}>
+                        {symbol ? (
+                            <span className="ledger-sym">{a.symbol}</span>
+                        ) : (
+                            <SymbolLink symbol={a.symbol} />
+                        )}
+
+                        <span className="ledger-num">
+                            {a.dir} {fmt(a.price)}
+                        </span>
+
+                        {a.triggeredAt ? (
+                            <button
+                                type="button"
+                                className="inline-retry"
+                                onClick={() => alerts.rearm(a.id)}
+                            >
+                                hit {fmt(a.hit)} re arm
+                            </button>
+                        ) : (
+                            <span className="ledger-label">armed</span>
+                        )}
+
+                        <button
+                            type="button"
+                            className="term-search-clear"
+                            onClick={() => alerts.remove(a.id)}
+                            aria-label={`Remove alert for ${a.symbol}`}
+                        >
+                            <ClearIcon />
+                        </button>
+                    </div>
+                ))
+            ) : (
+                <EmptyRow label="no alerts yet" />
+            )}
+        </>
+    );
+}
+
+// compact label and value cell for summary blocks
+export function Stat({ label, value, tone = "" }) {
+    return (
+        <div className="stat">
+            <span className="ledger-label">{label}</span>
+            <span className={`stat-val ${tone}`}>{value}</span>
+        </div>
+    );
+}
+
+export function StatGrid({ children }) {
+    return <div className="stat-grid">{children}</div>;
+}
+
+// label and value line for snapshot lists
+export function InfoRow({ label, value, tone = "" }) {
+    return (
+        <div className="ledger-row">
+            <span className="ledger-label">{label}</span>
+            <span className={`ledger-num ${tone}`}>{value}</span>
         </div>
     );
 }

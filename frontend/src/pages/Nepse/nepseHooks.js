@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { getPriceVolume, isNepseError } from "../../api/nepse";
+import { fmt } from "./nepseUtils";
+import { toNum } from "./nepseMath";
 
 export function useClock() {
     const [now, setNow] = useState(new Date());
@@ -212,4 +214,263 @@ export function useWatchlist() {
     );
 
     return { list, has, toggle };
+}
+
+// small local storage list store shared by portfolio and alerts
+function makeStore(key, event, normalize) {
+    const read = () => {
+        try {
+            const raw = window.localStorage.getItem(key);
+            return normalize(raw ? JSON.parse(raw) : []);
+        } catch {
+            return [];
+        }
+    };
+
+    const write = (next) => {
+        try {
+            window.localStorage.setItem(key, JSON.stringify(next));
+            window.dispatchEvent(new Event(event));
+        } catch {
+            // storage full or blocked keep state in memory only
+        }
+    };
+
+    return { read, write, event };
+}
+
+function useStore(store) {
+    const [list, setList] = useState(store.read);
+
+    useEffect(() => {
+        const sync = () => setList(store.read());
+
+        window.addEventListener(store.event, sync);
+        window.addEventListener("storage", sync);
+
+        return () => {
+            window.removeEventListener(store.event, sync);
+            window.removeEventListener("storage", sync);
+        };
+    }, [store]);
+
+    // updater returns the same array when nothing changed
+    const commit = useCallback(
+        (updater) => {
+            const current = store.read();
+            const next = updater(current);
+
+            if (next === current) return;
+
+            store.write(next);
+            setList(next);
+        },
+        [store]
+    );
+
+    return [list, commit];
+}
+
+const upper = (v) => String(v ?? "").trim().toUpperCase();
+
+// portfolio holdings
+const portfolioStore = makeStore(
+    "nepse_portfolio_v1",
+    "nepse-portfolio-change",
+    (parsed) =>
+        Array.isArray(parsed)
+            ? parsed
+                .filter(
+                    (h) =>
+                        h &&
+                        typeof h.symbol === "string" &&
+                        Number(h.qty) > 0 &&
+                        Number(h.cost) >= 0
+                )
+                .map((h) => ({
+                    symbol: upper(h.symbol),
+                    qty: Number(h.qty),
+                    cost: Number(h.cost),
+                }))
+            : []
+);
+
+export function usePortfolio() {
+    const [list, commit] = useStore(portfolioStore);
+
+    // adding to an existing symbol blends the average cost
+    const add = useCallback(
+        (symbol, qty, cost) => {
+            const sym = upper(symbol);
+            const q = Number(qty);
+            const c = Number(cost);
+
+            if (!sym || !(q > 0) || !(c >= 0)) return;
+
+            commit((cur) => {
+                const i = cur.findIndex((h) => h.symbol === sym);
+
+                if (i < 0) return [...cur, { symbol: sym, qty: q, cost: c }].slice(-60);
+
+                const old = cur[i];
+                const total = old.qty + q;
+                const avg = (old.qty * old.cost + q * c) / total;
+
+                return cur.map((h, j) =>
+                    j === i ? { ...h, qty: total, cost: avg } : h
+                );
+            });
+        },
+        [commit]
+    );
+
+    const remove = useCallback(
+        (symbol) => {
+            const sym = upper(symbol);
+            commit((cur) => cur.filter((h) => h.symbol !== sym));
+        },
+        [commit]
+    );
+
+    return { list, add, remove };
+}
+
+// price alerts
+const alertStore = makeStore(
+    "nepse_alerts_v1",
+    "nepse-alerts-change",
+    (parsed) =>
+        Array.isArray(parsed)
+            ? parsed
+                .filter(
+                    (a) =>
+                        a &&
+                        typeof a.symbol === "string" &&
+                        (a.dir === "above" || a.dir === "below") &&
+                        Number(a.price) > 0
+                )
+                .map((a) => ({
+                    id: String(a.id ?? `${a.symbol}-${a.dir}-${a.price}`),
+                    symbol: upper(a.symbol),
+                    dir: a.dir,
+                    price: Number(a.price),
+                    createdAt: Number(a.createdAt) || Date.now(),
+                    triggeredAt: a.triggeredAt ? Number(a.triggeredAt) : null,
+                    hit: a.hit != null ? Number(a.hit) : null,
+                    seen: Boolean(a.seen),
+                }))
+            : []
+);
+
+function notifyHits(hits) {
+    if (typeof Notification === "undefined") return;
+    if (Notification.permission !== "granted") return;
+
+    for (const h of hits) {
+        try {
+            new Notification(`${h.symbol} ${h.dir} ${fmt(h.price)}`, {
+                body: `last price ${fmt(h.hit)}`,
+            });
+        } catch {
+            // some browsers block the constructor ignore
+        }
+    }
+}
+
+export function useAlerts() {
+    const [list, commit] = useStore(alertStore);
+
+    const add = useCallback(
+        (symbol, dir, price) => {
+            const sym = upper(symbol);
+            const p = Number(price);
+
+            if (!sym || !(p > 0) || (dir !== "above" && dir !== "below")) return;
+
+            commit((cur) =>
+                [
+                    ...cur,
+                    {
+                        id: `${Date.now().toString(36)}${Math.random()
+                            .toString(36)
+                            .slice(2, 6)}`,
+                        symbol: sym,
+                        dir,
+                        price: p,
+                        createdAt: Date.now(),
+                        triggeredAt: null,
+                        hit: null,
+                        seen: false,
+                    },
+                ].slice(-60)
+            );
+        },
+        [commit]
+    );
+
+    const remove = useCallback(
+        (id) => commit((cur) => cur.filter((a) => a.id !== id)),
+        [commit]
+    );
+
+    const dismiss = useCallback(
+        (id) =>
+            commit((cur) =>
+                cur.map((a) => (a.id === id ? { ...a, seen: true } : a))
+            ),
+        [commit]
+    );
+
+    const rearm = useCallback(
+        (id) =>
+            commit((cur) =>
+                cur.map((a) =>
+                    a.id === id
+                        ? { ...a, triggeredAt: null, hit: null, seen: false }
+                        : a
+                )
+            ),
+        [commit]
+    );
+
+    // compare live prices with every armed alert
+    const check = useCallback(
+        (rows) => {
+            if (!Array.isArray(rows) || !rows.length) return;
+
+            const live = new Map(
+                rows.map((r) => [
+                    upper(r.symbol),
+                    toNum(r.lastTradedPrice ?? r.closePrice),
+                ])
+            );
+
+            const hits = [];
+
+            commit((cur) => {
+                const next = cur.map((a) => {
+                    if (a.triggeredAt) return a;
+
+                    const price = live.get(a.symbol);
+                    if (price == null) return a;
+
+                    const hit =
+                        a.dir === "above" ? price >= a.price : price <= a.price;
+
+                    if (!hit) return a;
+
+                    hits.push({ ...a, hit: price });
+
+                    return { ...a, triggeredAt: Date.now(), hit: price, seen: false };
+                });
+
+                return hits.length ? next : cur;
+            });
+
+            if (hits.length) notifyHits(hits);
+        },
+        [commit]
+    );
+
+    return { list, add, remove, dismiss, rearm, check };
 }

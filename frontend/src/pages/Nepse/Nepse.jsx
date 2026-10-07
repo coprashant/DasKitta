@@ -45,20 +45,36 @@ import {
     InlineNotice,
     TabStrip,
     Pagination,
+    Field,
+    Stat,
+    StatGrid,
+    AlertBanner,
+    AlertManager,
 } from "./nepseShared.jsx";
 import {
     IconRefresh,
     IconArrowUp,
     IconArrowDown,
     IconChevronDown,
+    ClearIcon,
 } from "../../components/Icons.jsx";
 import {
     fmt,
     fmtCompact,
+    fmtSigned,
     dirClass,
     resolveHeroKey,
+    downloadCsv,
+    parseInput,
 } from "./nepseUtils";
-import { useClock, usePriceVolume, useWatchlist } from "./nepseHooks";
+import { toNum, floorStats } from "./nepseMath";
+import {
+    useClock,
+    usePriceVolume,
+    useWatchlist,
+    useAlerts,
+    usePortfolio,
+} from "./nepseHooks";
 import SEO from "../../seo/SEO.jsx";
 import { NEPSE_JSONLD } from "../../seo/jsonLd.js";
 import "./Nepse.css";
@@ -86,9 +102,20 @@ const SECTOR_GRAPH_RULES = [
     { test: /trading/i, fetch: getDailyTradingSubindexGraph },
 ];
 
+const FLOOR_PAGE_SIZE = 12;
+const QTY_FILTERS = [
+    ["all", 0],
+    ["100+", 100],
+    ["1K+", 1000],
+    ["5K+", 5000],
+    ["10K+", 10000],
+];
+
 const FEEDS = [
     "Movers",
     "Stocks",
+    "Portfolio",
+    "Alerts",
     "Turnover",
     "Activity",
     "Sectors",
@@ -268,33 +295,67 @@ function sortValue(row, key) {
     return Number(row.totalTradeQuantity ?? row.shareTraded ?? row.volume);
 }
 
-// every listed stock with scope switch search and sortable columns
+// every listed stock with scope switch search filters and sortable columns
 function StocksFeed({ rows, loading, error, onRetry, watchlist }) {
     const [scope, setScope] = useState("all");
     const [query, setQuery] = useState("");
     const [sort, setSort] = useState({ key: "volume", dir: "desc" });
     const [page, setPage] = useState(0);
+    const [showFilters, setShowFilters] = useState(false);
+    const [minPrice, setMinPrice] = useState("");
+    const [maxPrice, setMaxPrice] = useState("");
+    const [minVol, setMinVol] = useState("");
 
     const source = useMemo(() => {
-        if (scope === "all") return rows;
+        if (scope === "watch") {
+            const bySymbol = new Map(
+                rows.map((row) => [String(row.symbol).toUpperCase(), row])
+            );
 
-        const bySymbol = new Map(
-            rows.map((row) => [String(row.symbol).toUpperCase(), row])
-        );
+            return watchlist.list.map(
+                (symbol) => bySymbol.get(symbol) ?? { symbol }
+            );
+        }
 
-        return watchlist.list.map((symbol) => bySymbol.get(symbol) ?? { symbol });
+        if (scope === "up") {
+            return rows.filter((row) => Number(row.percentageChange) > 0);
+        }
+
+        if (scope === "down") {
+            return rows.filter((row) => Number(row.percentageChange) < 0);
+        }
+
+        return rows;
     }, [scope, rows, watchlist.list]);
+
+    const pMin = parseInput(minPrice);
+    const pMax = parseInput(maxPrice);
+    const vMin = parseInput(minVol);
+    const activeFilters = [pMin, pMax, vMin].filter((v) => v != null).length;
 
     const visible = useMemo(() => {
         const q = query.trim().toUpperCase();
 
-        const filtered = q
-            ? source.filter(
-                (row) =>
-                    row.symbol?.toUpperCase().includes(q) ||
-                    row.securityName?.toUpperCase().includes(q)
-            )
-            : source;
+        const filtered = source.filter((row) => {
+            if (
+                q &&
+                !row.symbol?.toUpperCase().includes(q) &&
+                !row.securityName?.toUpperCase().includes(q)
+            ) {
+                return false;
+            }
+
+            if (pMin != null || pMax != null) {
+                const ltp = sortValue(row, "ltp");
+
+                if (pMin != null && !(ltp >= pMin)) return false;
+                if (pMax != null && !(ltp <= pMax)) return false;
+            }
+
+            if (vMin != null && !(sortValue(row, "volume") >= vMin)) return false;
+
+            return true;
+        });
 
         const factor = sort.dir === "asc" ? 1 : -1;
 
@@ -309,7 +370,7 @@ function StocksFeed({ rows, loading, error, onRetry, watchlist }) {
 
             return (an - bn) * factor;
         });
-    }, [source, query, sort]);
+    }, [source, query, sort, pMin, pMax, vMin]);
 
     const totalPages = Math.max(1, Math.ceil(visible.length / SCREENER_PAGE_SIZE));
     const pageSafe = Math.min(page, totalPages - 1);
@@ -332,32 +393,46 @@ function StocksFeed({ rows, loading, error, onRetry, watchlist }) {
         setPage(0);
     };
 
-    const emptyLabel = query
+    const exportCsv = () => {
+        downloadCsv("nepse-stocks.csv", [
+            ["symbol", "name", "ltp", "change_pct", "volume"],
+            ...visible.map((row) => [
+                row.symbol,
+                row.securityName ?? "",
+                sortValue(row, "ltp"),
+                sortValue(row, "change"),
+                sortValue(row, "volume"),
+            ]),
+        ]);
+    };
+
+    const emptyLabel = query || activeFilters
         ? "no stocks match"
         : scope === "watch"
             ? "star a stock to track it here"
             : "no stock data yet";
 
+    const scopes = [
+        ["all", "All"],
+        ["watch", `Watchlist${watchlist.list.length ? ` ${watchlist.list.length}` : ""}`],
+        ["up", "Gainers"],
+        ["down", "Losers"],
+    ];
+
     return (
         <>
             <div className="group-legend stocks-scope" role="group" aria-label="Stock list">
-                <button
-                    type="button"
-                    className={`group-chip ${scope === "all" ? "active" : ""}`}
-                    aria-pressed={scope === "all"}
-                    onClick={() => pick("all")}
-                >
-                    All
-                </button>
-
-                <button
-                    type="button"
-                    className={`group-chip ${scope === "watch" ? "active" : ""}`}
-                    aria-pressed={scope === "watch"}
-                    onClick={() => pick("watch")}
-                >
-                    Watchlist{watchlist.list.length ? ` ${watchlist.list.length}` : ""}
-                </button>
+                {scopes.map(([key, name]) => (
+                    <button
+                        key={key}
+                        type="button"
+                        className={`group-chip ${scope === key ? "active" : ""}`}
+                        aria-pressed={scope === key}
+                        onClick={() => pick(key)}
+                    >
+                        {name}
+                    </button>
+                ))}
             </div>
 
             <input
@@ -371,6 +446,70 @@ function StocksFeed({ rows, loading, error, onRetry, watchlist }) {
                     setPage(0);
                 }}
             />
+
+            <div className="stocks-tools">
+                <span className="ledger-label">{visible.length} stocks</span>
+
+                <span className="stocks-tools-actions">
+                    <button
+                        type="button"
+                        className="inline-retry"
+                        aria-expanded={showFilters}
+                        onClick={() => setShowFilters((v) => !v)}
+                    >
+                        filters{activeFilters ? ` ${activeFilters}` : ""}
+                    </button>
+
+                    <button
+                        type="button"
+                        className="inline-retry"
+                        onClick={exportCsv}
+                        disabled={!visible.length}
+                    >
+                        csv
+                    </button>
+                </span>
+            </div>
+
+            {showFilters && (
+                <div className="calc-form">
+                    <Field label="min price">
+                        <input
+                            className="ledger-filter"
+                            inputMode="decimal"
+                            value={minPrice}
+                            onChange={(e) => {
+                                setMinPrice(e.target.value);
+                                setPage(0);
+                            }}
+                        />
+                    </Field>
+
+                    <Field label="max price">
+                        <input
+                            className="ledger-filter"
+                            inputMode="decimal"
+                            value={maxPrice}
+                            onChange={(e) => {
+                                setMaxPrice(e.target.value);
+                                setPage(0);
+                            }}
+                        />
+                    </Field>
+
+                    <Field label="min volume">
+                        <input
+                            className="ledger-filter"
+                            inputMode="numeric"
+                            value={minVol}
+                            onChange={(e) => {
+                                setMinVol(e.target.value);
+                                setPage(0);
+                            }}
+                        />
+                    </Field>
+                </div>
+            )}
 
             {error && !rows.length && scope === "all" && (
                 <InlineNotice message={error} onRetry={onRetry} busy={loading} />
@@ -432,6 +571,314 @@ function StocksFeed({ rows, loading, error, onRetry, watchlist }) {
     );
 }
 
+// holdings with live profit and loss kept on this device
+function PortfolioFeed({ rows, loading, portfolio }) {
+    const [symbol, setSymbol] = useState("");
+    const [qty, setQty] = useState("");
+    const [cost, setCost] = useState("");
+    const [msg, setMsg] = useState(null);
+
+    const bySymbol = useMemo(
+        () => new Map(rows.map((row) => [String(row.symbol).toUpperCase(), row])),
+        [rows]
+    );
+
+    const holdings = useMemo(
+        () =>
+            portfolio.list.map((h) => {
+                const row = bySymbol.get(h.symbol);
+                const ltp = toNum(row?.lastTradedPrice ?? row?.closePrice);
+                const prev = toNum(row?.previousClose);
+                const invested = h.qty * h.cost;
+                const value = ltp != null ? h.qty * ltp : null;
+                const pl = value != null ? value - invested : null;
+
+                return {
+                    ...h,
+                    ltp,
+                    invested,
+                    value,
+                    pl,
+                    plPct: pl != null && invested ? (pl / invested) * 100 : null,
+                    day: ltp != null && prev != null ? h.qty * (ltp - prev) : null,
+                };
+            }),
+        [portfolio.list, bySymbol]
+    );
+
+    const totals = useMemo(() => {
+        let invested = 0;
+        let value = 0;
+        let day = 0;
+
+        for (const h of holdings) {
+            if (h.value == null) continue;
+
+            invested += h.invested;
+            value += h.value;
+            day += h.day ?? 0;
+        }
+
+        const pl = value - invested;
+
+        return {
+            invested,
+            value,
+            day,
+            pl,
+            plPct: invested ? (pl / invested) * 100 : null,
+        };
+    }, [holdings]);
+
+    const submit = (e) => {
+        e.preventDefault();
+
+        const sym = symbol.trim().toUpperCase();
+        const q = parseInput(qty);
+        const c = parseInput(cost);
+
+        if (!sym) return setMsg("enter a symbol");
+
+        if (rows.length && !bySymbol.has(sym)) return setMsg("unknown symbol");
+
+        if (!(q > 0)) return setMsg("enter a quantity above zero");
+
+        if (!(c >= 0)) return setMsg("enter your average cost");
+
+        portfolio.add(sym, q, c);
+        setSymbol("");
+        setQty("");
+        setCost("");
+        setMsg(null);
+    };
+
+    return (
+        <>
+            <p className="ledger-heading">portfolio</p>
+
+            {holdings.length > 0 && (
+                <StatGrid>
+                    <Stat label="invested" value={fmtCompact(totals.invested)} />
+                    <Stat label="value" value={fmtCompact(totals.value)} />
+                    <Stat
+                        label="profit and loss"
+                        value={`${fmtSigned(totals.pl, 0)}${
+                            totals.plPct != null ? ` (${fmtSigned(totals.plPct)}%)` : ""
+                        }`}
+                        tone={dirClass(totals.pl)}
+                    />
+                    <Stat
+                        label="today"
+                        value={fmtSigned(totals.day, 0)}
+                        tone={dirClass(totals.day)}
+                    />
+                </StatGrid>
+            )}
+
+            <form className="calc-form" onSubmit={submit}>
+                <Field label="symbol">
+                    <input
+                        className="ledger-filter"
+                        value={symbol}
+                        autoCapitalize="characters"
+                        autoComplete="off"
+                        placeholder="NABIL"
+                        onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+                    />
+                </Field>
+
+                <Field label="quantity">
+                    <input
+                        className="ledger-filter"
+                        inputMode="numeric"
+                        value={qty}
+                        onChange={(e) => setQty(e.target.value)}
+                    />
+                </Field>
+
+                <Field label="average cost">
+                    <input
+                        className="ledger-filter"
+                        inputMode="decimal"
+                        value={cost}
+                        onChange={(e) => setCost(e.target.value)}
+                    />
+                </Field>
+
+                <div className="calc-actions">
+                    <button type="submit" className="inline-retry">
+                        add holding
+                    </button>
+                </div>
+            </form>
+
+            {msg && <p className="ledger-empty">{msg}</p>}
+
+            {holdings.length ? (
+                <>
+                    <div className="ledger-header ledger-row-port">
+                        <span>Symbol</span>
+                        <span style={{ textAlign: "right" }}>LTP</span>
+                        <span style={{ textAlign: "right" }}>P/L</span>
+                        <span />
+                    </div>
+
+                    {holdings.map((h) => (
+                        <div className="ledger-row ledger-row-port" key={h.symbol}>
+                            <span className="ledger-stack">
+                                <SymbolLink symbol={h.symbol} />
+                                <span className="ledger-sub">
+                                    {fmt(h.qty, 0)} at {fmt(h.cost)}
+                                </span>
+                            </span>
+
+                            <span className="ledger-ltp">
+                                {h.ltp != null ? fmt(h.ltp) : loading ? "..." : "--"}
+                            </span>
+
+                            <span
+                                className={`ledger-pl ${h.pl != null ? dirClass(h.pl) : ""}`}
+                            >
+                                <span>
+                                    {h.plPct != null ? `${fmtSigned(h.plPct)}%` : "--"}
+                                </span>
+                                <span className="ledger-sub">
+                                    {h.pl != null ? fmtSigned(h.pl, 0) : ""}
+                                </span>
+                            </span>
+
+                            <button
+                                type="button"
+                                className="term-search-clear"
+                                onClick={() => portfolio.remove(h.symbol)}
+                                aria-label={`Remove ${h.symbol} from portfolio`}
+                            >
+                                <ClearIcon />
+                            </button>
+                        </div>
+                    ))}
+
+                    <p className="ledger-empty">
+                        profit and loss is before fees and tax. data stays on this device.
+                    </p>
+                </>
+            ) : (
+                <EmptyRow label="add a holding to track profit and loss" />
+            )}
+        </>
+    );
+}
+
+// market wide floorsheet with filters and paging
+function FloorFeed({ rows, loading, emptyRow }) {
+    const [query, setQuery] = useState("");
+    const [minQty, setMinQty] = useState(0);
+    const [page, setPage] = useState(0);
+
+    const filtered = useMemo(() => {
+        const q = query.trim().toUpperCase();
+
+        return rows.filter((row) => {
+            if (minQty && (toNum(row.contractQuantity) ?? 0) < minQty) return false;
+
+            if (!q) return true;
+
+            return [row.stockSymbol, row.buyerMemberId, row.sellerMemberId].some(
+                (v) => String(v ?? "").toUpperCase().includes(q)
+            );
+        });
+    }, [rows, query, minQty]);
+
+    const stats = useMemo(() => floorStats(filtered), [filtered]);
+    const totalPages = Math.max(1, Math.ceil(filtered.length / FLOOR_PAGE_SIZE));
+    const pageSafe = Math.min(page, totalPages - 1);
+    const pageRows = filtered.slice(
+        pageSafe * FLOOR_PAGE_SIZE,
+        pageSafe * FLOOR_PAGE_SIZE + FLOOR_PAGE_SIZE
+    );
+
+    return (
+        <>
+            <p className="ledger-heading">live contracts</p>
+
+            <input
+                className="ledger-filter"
+                type="search"
+                placeholder="filter by symbol or broker"
+                aria-label="Filter contracts"
+                value={query}
+                onChange={(e) => {
+                    setQuery(e.target.value);
+                    setPage(0);
+                }}
+            />
+
+            <div className="group-legend" role="group" aria-label="Minimum quantity">
+                {QTY_FILTERS.map(([name, value]) => (
+                    <button
+                        key={name}
+                        type="button"
+                        className={`group-chip ${minQty === value ? "active" : ""}`}
+                        aria-pressed={minQty === value}
+                        onClick={() => {
+                            setMinQty(value);
+                            setPage(0);
+                        }}
+                    >
+                        {name}
+                    </button>
+                ))}
+            </div>
+
+            {stats.contracts > 0 && (
+                <StatGrid>
+                    <Stat label="contracts" value={fmt(stats.contracts, 0)} />
+                    <Stat label="quantity" value={fmtCompact(stats.qty)} />
+                    <Stat label="amount" value={fmtCompact(stats.amount)} />
+                    <Stat label="largest" value={fmt(stats.largest, 0)} />
+                </StatGrid>
+            )}
+
+            <div className="ledger-header ledger-row-3">
+                <span>Symbol</span>
+                <span style={{ textAlign: "right" }}>Qty</span>
+                <span style={{ textAlign: "right" }}>Rate</span>
+            </div>
+
+            {loading && !rows.length ? (
+                <SkeletonRows count={6} columns={3} />
+            ) : pageRows.length ? (
+                <>
+                    {pageRows.map((row, index) => (
+                        <div
+                            className="ledger-row ledger-row-3"
+                            key={row.id ?? `${pageSafe}-${index}`}
+                        >
+                            <SymbolLink symbol={row.stockSymbol} />
+
+                            <span className="ledger-num">
+                                {fmt(row.contractQuantity, 0)}
+                            </span>
+
+                            <span className="ledger-ltp">{fmt(row.contractRate)}</span>
+                        </div>
+                    ))}
+
+                    <Pagination
+                        page={pageSafe}
+                        totalPages={totalPages}
+                        onChange={setPage}
+                    />
+                </>
+            ) : rows.length ? (
+                <EmptyRow label="no contracts match" />
+            ) : (
+                emptyRow
+            )}
+        </>
+    );
+}
+
 export default function Nepse() {
     const clock = useClock();
     const cacheRef = useRef(loadCache());
@@ -460,6 +907,13 @@ export default function Nepse() {
         refresh: refreshPrices,
     } = usePriceVolume(REFRESH_INTERVAL);
     const watchlist = useWatchlist();
+    const alerts = useAlerts();
+    const portfolio = usePortfolio();
+
+    // check alerts whenever fresh prices arrive
+    useEffect(() => {
+        alerts.check(priceRows);
+    }, [priceRows, alerts.check]);
 
     const [gainers, setGainers] = useState(initialCache?.gainers ?? []);
     const [losers, setLosers] = useState(initialCache?.losers ?? []);
@@ -864,6 +1318,24 @@ export default function Nepse() {
         [sectors, indices]
     );
 
+    const sectorMax = useMemo(
+        () =>
+            Math.max(
+                0.01,
+                ...sectorRows.map((sector) =>
+                    Math.abs(
+                        Number(
+                            sector.percentageChange ??
+                            sector.perChange ??
+                            sector.change ??
+                            0
+                        ) || 0
+                    )
+                )
+            ),
+        [sectorRows]
+    );
+
     const loadSectorGraph = useCallback(async (name) => {
         // clearing the entry shows the loading skeleton again
         setSectorGraphs((current) => {
@@ -999,6 +1471,8 @@ export default function Nepse() {
                         </span>
                     </div>
                 </header>
+
+                <AlertBanner alerts={alerts} />
 
                 {error && (
                     <div className="term-alert" role="alert">
@@ -1194,6 +1668,18 @@ export default function Nepse() {
                                     onRetry={refreshPrices}
                                     watchlist={watchlist}
                                 />
+                            )}
+
+                            {feed === "Portfolio" && (
+                                <PortfolioFeed
+                                    rows={priceRows}
+                                    loading={priceLoading}
+                                    portfolio={portfolio}
+                                />
+                            )}
+
+                            {feed === "Alerts" && (
+                                <AlertManager alerts={alerts} rows={priceRows} />
                             )}
 
                             {feed === "Turnover" && (
@@ -1395,13 +1881,21 @@ export default function Nepse() {
                                             const expanded =
                                                 expandedSector === name;
 
+                                            const barPct = Math.min(
+                                                100,
+                                                (Math.abs(Number(change) || 0) / sectorMax) * 100
+                                            );
+
                                             return (
                                                 <div
                                                     key={name}
                                                     className="sector-block"
                                                 >
                                                     <div
-                                                        className="ledger-row sector-row"
+                                                        className={`ledger-row sector-row depth-row depth-${
+                                                            change >= 0 ? "up" : "down"
+                                                        }`}
+                                                        style={{ "--depth": barPct }}
                                                         role="button"
                                                         tabIndex={0}
                                                         aria-expanded={expanded}
@@ -1592,51 +2086,15 @@ export default function Nepse() {
                             )}
 
                             {feed === "Floorsheet" && (
-                                <>
-                                    <p className="ledger-heading">
-                                        live contracts
-                                    </p>
-
-                                    <div className="ledger-header ledger-row-3">
-                                        <span>Symbol</span>
-                                        <span style={{ textAlign: "right" }}>Qty</span>
-                                        <span style={{ textAlign: "right" }}>Rate</span>
-                                    </div>
-
-                                    {feedLoading && !floorRows.length ? (
-                                        <SkeletonRows count={6} columns={3} />
-                                    ) : floorRows.length ? (
-                                        floorRows
-                                            .slice(0, 14)
-                                            .map((row, index) => (
-                                                <div
-                                                    className="ledger-row ledger-row-3"
-                                                    key={row.id ?? index}
-                                                >
-                                                    <SymbolLink symbol={row.stockSymbol} />
-
-                                                    <span className="ledger-num">
-                                                        {fmt(
-                                                            row.contractQuantity,
-                                                            0
-                                                        )}
-                                                    </span>
-
-                                                    <span className="ledger-ltp">
-                                                        {fmt(
-                                                            row.contractRate
-                                                        )}
-                                                    </span>
-                                                </div>
-                                            ))
-                                    ) : (
-                                        emptyRow(
-                                            floorUnavailable
-                                                ? "floorsheet temporarily unavailable"
-                                                : "no contracts yet"
-                                        )
+                                <FloorFeed
+                                    rows={floorRows}
+                                    loading={feedLoading}
+                                    emptyRow={emptyRow(
+                                        floorUnavailable
+                                            ? "floorsheet temporarily unavailable"
+                                            : "no contracts yet"
                                     )}
-                                </>
+                                />
                             )}
                         </div>
                     </aside>

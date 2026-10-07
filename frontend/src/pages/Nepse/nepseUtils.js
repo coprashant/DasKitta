@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { parseSeries } from "./nepseMath";
 
 export const fmt = (n, dec = 2) =>
     n == null || n === ""
@@ -35,64 +36,6 @@ export const dirClass = (n) =>
 
 export const tooltipAlign = (ratio) =>
     ratio < 0.15 ? "start" : ratio > 0.85 ? "end" : "center";
-
-function pickValue(point) {
-    if (typeof point !== "object") return point;
-
-    return (
-        point.value ??
-        point.close ??
-        point.index ??
-        point.currentValue ??
-        point.y ??
-        Object.values(point)[1]
-    );
-}
-
-// read a timestamp in ms when the point carries one
-function pickTime(point) {
-    if (point == null || typeof point !== "object") return null;
-
-    const raw = Array.isArray(point)
-        ? point[0]
-        : point.time ??
-        point.timestamp ??
-        point.datetime ??
-        point.date ??
-        point.businessDate;
-
-    let ms = null;
-
-    if (typeof raw === "number" && Number.isFinite(raw)) {
-        ms = raw > 1e12 ? raw : raw > 1e9 ? raw * 1000 : null;
-    } else if (typeof raw === "string") {
-        const parsed = Date.parse(raw);
-        ms = Number.isNaN(parsed) ? null : parsed;
-    }
-
-    if (ms == null) return null;
-
-    const year = new Date(ms).getUTCFullYear();
-    return year >= 2000 && year <= 2100 ? ms : null;
-}
-
-function getSeries(raw) {
-    if (!Array.isArray(raw) || raw.length < 2) return null;
-
-    const values = [];
-    const times = [];
-
-    for (const point of raw) {
-        const v = pickValue(point);
-
-        if (typeof v === "number" && !Number.isNaN(v)) {
-            values.push(v);
-            times.push(pickTime(point));
-        }
-    }
-
-    return values.length >= 2 ? { values, times } : null;
-}
 
 // fix loop instead of Math min max values a big intraday series
 // can blow the call stack when spread as arguments
@@ -145,7 +88,7 @@ function pointsToString(points) {
 }
 
 function buildLine(raw, width, height, padding = 0, ref = null) {
-    const series = getSeries(raw);
+    const series = parseSeries(raw);
     if (!series) return null;
 
     const { values, times } = series;
@@ -258,6 +201,33 @@ export function buildSparkline(raw, width, height) {
         coords: chart.coords,
         values: chart.values,
     };
+}
+
+// save rows as a csv file in the browser
+export function downloadCsv(filename, rows) {
+    const cell = (v) => {
+        const text = v == null ? "" : String(v);
+        return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    };
+
+    const body = rows.map((row) => row.map(cell).join(",")).join("\n");
+    const blob = new Blob([body], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// parse a typed number and allow commas
+export function parseInput(text) {
+    const n = Number(String(text ?? "").replace(/,/g, "").trim());
+    return String(text ?? "").trim() === "" || !Number.isFinite(n) ? null : n;
 }
 
 export function resolveHeroKey(
