@@ -3,44 +3,114 @@
 }
 
 .stg-page {
-    max-width: 640px;
+    width: min(100%, 1180px);
+}
+
+.stg-shell {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+}
+
+.stg-sidebar {
+    position: sticky;
+    top: 92px;
+    background: var(--card, rgba(255, 255, 255, 0.02));
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 18px 14px;
+    box-shadow: 0 16px 30px rgba(15, 23, 42, 0.06);
+}
+
+.stg-header {
+    margin-bottom: 18px;
+    padding: 4px 8px 0;
+}
+
+.stg-header-icon {
+    width: 38px;
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    background: var(--accent-dim);
+    color: var(--accent);
+    margin-bottom: 10px;
+}
+
+.stg-header .page-title {
+    margin: 0;
+    font-size: clamp(1.6rem, 2vw, 2rem);
+}
+
+.stg-header .page-subtitle {
+    margin: 8px 0 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-2);
 }
 
 .stg-content {
     min-width: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    box-shadow: none;
 }
 
 .stg-menu {
     display: flex;
-    gap: 4px;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 22px;
-    overflow-x: auto;
-    scrollbar-width: none;
-}
-
-.stg-menu::-webkit-scrollbar {
-    display: none;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    border: none;
+    overflow: visible;
 }
 
 .stg-menu-item {
-    padding: 9px 14px;
-    font-size: 13px;
-    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    font-weight: 600;
     color: var(--text-2);
     text-decoration: none;
     white-space: nowrap;
-    border-bottom: 2px solid transparent;
-    transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+    border: 1px solid transparent;
+    border-radius: 12px;
+    transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
 }
 
 .stg-menu-item:hover {
     color: var(--text);
+    background: rgba(148, 163, 184, 0.06);
 }
 
 .stg-menu-item-active {
     color: var(--accent);
-    border-color: var(--accent);
+    background: var(--accent-dim);
+    border-color: rgba(59, 130, 246, 0.18);
+}
+
+.stg-menu-icon {
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.stg-menu-label {
+    line-height: 1.2;
+}
+
+.stg-sidebar-toggle {
+    display: none;
 }
 
 .stg-sections {
@@ -49,8 +119,364 @@
     gap: 16px;
 }
 
+.stg-content > * + * {
+    margin-top: 18px;
+}
+
+.stg-card-head {
+    margin-bottom: 14px;
+}
+
+@media (max-width: 900px) {
+    .stg-shell {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .stg-sidebar {
+        position: static;
+        padding: 0;
+        background: transparent;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .stg-header {
+        display: block;
+        margin-bottom: 12px;
+        padding: 0;
+    }
+
+    .stg-header-icon {
+        display: none;
+    }
+
+    .stg-header .page-title {
+        margin: 0;
+        font-size: clamp(1.8rem, 6vw, 2.2rem);
+        line-height: 1.1;
+    }
+
+    .stg-header .page-subtitle {
+        display: block;
+        margin: 6px 0 0;
+        line-height: 1.45;
+    }
+
+    .stg-menu {
+        display: flex;
+        flex-direction: row;
+        gap: 6px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 2px 0 4px;
+        border-bottom: none;
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+        white-space: nowrap;
+        width: 100%;
+        scroll-behavior: smooth;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .stg-menu::-webkit-scrollbar {
+        display: none;
+        width: 0;
+        height: 0;
+    }
+
+    .stg-menu-item {
+        min-height: 36px;
+        justify-content: center;
+        padding: 7px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: rgba(148, 163, 184, 0.06);
+        white-space: nowrap;
+        flex-shrink: 0;
+        color: var(--text-2);
+        font-size: 12px;
+        line-height: 1.2;
+    }
+
+    .stg-menu-item:hover {
+        background: rgba(148, 163, 184, 0.10);
+    }
+
+    .stg-menu-item-active {
+        border-color: var(--accent-muted);
+        background: var(--accent-dim);
+        color: var(--accent);
+    }
+
+    .stg-menu-icon {
+        width: 15px;
+        height: 15px;
+    }
+
+    .stg-menu-label {
+        display: inline;
+        white-space: nowrap;
+    }
+
+    .stg-content {
+        padding: 0;
+        background: transparent;
+        border: none;
+        box-shadow: none;
+    }
+
+    .stg-content .card,
+    .stg-content .stg-card,
+    .stg-content .saved-account-card,
+    .stg-content .stg-danger-card {
+        background: transparent;
+        border: none;
+        box-shadow: none;
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    .stg-row-summary {
+        min-height: 54px;
+        padding: 14px 0;
+    }
+
+    .stg-row-value,
+    .stg-profile-email,
+    .saved-account-name,
+    .saved-account-meta,
+    .saved-account-boid,
+    .info-row-value,
+    .stg-menu-label {
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        white-space: normal;
+    }
+
+    .stg-danger-card {
+        margin-top: 14px;
+        padding: 12px 0 8px;
+        border-radius: 0;
+        background: transparent;
+    }
+
+    .btn-danger {
+        min-height: 44px;
+        width: 100%;
+    }
+}
+
 .stg-card {
     max-width: 100%;
+}
+
+.stg-theme-card,
+.stg-toggle-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 18px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: rgba(148, 163, 184, 0.04);
+    margin-bottom: 14px;
+}
+
+.stg-theme-card {
+    flex-wrap: wrap;
+    align-items: flex-start;
+}
+
+.stg-toggle-copy {
+    min-width: 0;
+    flex: 1;
+}
+
+.stg-theme-select {
+    position: relative;
+    width: min(100%, 220px);
+    z-index: 2;
+}
+
+.stg-theme-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: rgba(148, 163, 184, 0.05);
+    color: var(--text);
+    cursor: pointer;
+    transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+
+.stg-theme-trigger:hover,
+.stg-theme-trigger.is-open {
+    border-color: var(--border-strong);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
+}
+
+.stg-theme-selected,
+.stg-theme-option-main {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.stg-theme-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: inherit;
+}
+
+.stg-theme-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: inherit;
+}
+
+.stg-theme-chevron {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-3);
+    transition: transform var(--t-fast) var(--ease);
+}
+
+.stg-theme-trigger.is-open .stg-theme-chevron {
+    transform: rotate(180deg);
+}
+
+.stg-theme-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    right: 0;
+    display: grid;
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+}
+
+.stg-theme-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+    text-align: left;
+    transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+
+.stg-theme-option:hover {
+    background: rgba(148, 163, 184, 0.06);
+    border-color: var(--border);
+}
+
+.stg-theme-option.is-selected {
+    background: var(--accent-dim);
+    border-color: rgba(59, 130, 246, 0.28);
+}
+
+.stg-theme-check {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
+}
+
+@media (max-width: 576px) {
+    .stg-theme-card {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .stg-theme-card .stg-toggle-copy {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .stg-theme-select {
+        width: auto;
+        min-width: 130px;
+        max-width: 150px;
+        margin-top: 0;
+        flex-shrink: 0;
+    }
+
+    .stg-theme-menu {
+        left: auto;
+        right: 0;
+        min-width: 150px;
+        width: max-content;
+    }
+}
+
+.stg-toggle-title {
+    margin: 0 0 4px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.stg-toggle-description {
+    margin: 0;
+    color: var(--text-2);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.stg-toggle-switch {
+    position: relative;
+    width: 52px;
+    height: 30px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: rgba(148, 163, 184, 0.19);
+    transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.stg-toggle-switch.is-on {
+    background: var(--accent-dim);
+    border-color: rgba(59, 130, 246, 0.28);
+}
+
+.stg-toggle-knob {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.18);
+    transition: transform var(--t-fast) var(--ease);
+}
+
+.stg-toggle-switch.is-on .stg-toggle-knob {
+    transform: translateX(22px);
 }
 
 .stg-card-head {

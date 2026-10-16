@@ -1,10 +1,11 @@
 import { lazy, Suspense, useEffect } from "react";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Toaster, toast } from "react-hot-toast";
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { AccountProvider } from "./context/AccountContext";
 import { NotificationProvider } from "./context/NotificationContext";
+import { NepseAdvancedModeProvider } from "./context/NepseAdvancedModeContext";
 import AccountSync from "./components/AccountSync";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -42,6 +43,7 @@ const TermsOfService   = lazy(() => import("./pages/Legal/TermsOfService.jsx"));
 const Disclaimer       = lazy(() => import("./pages/Legal/Disclaimer.jsx"));
 const Settings         = lazy(() => import("./pages/Settings/Settings.jsx"));
 const ProfileSettings  = lazy(() => import("./pages/Settings/ProfileSettings.jsx"));
+const GeneralSettings  = lazy(() => import("./pages/Settings/GeneralSettings.jsx"));
 const AddAccountSettings = lazy(() => import("./pages/Settings/AddAccountSettings.jsx"));
 const AccountsSettings = lazy(() => import("./pages/Settings/AccountsSettings.jsx"));
 const AccountInfo      = lazy(() => import("./pages/Settings/AccountInfo.jsx"));
@@ -121,7 +123,9 @@ const AppContent = () => {
                         <Route path="/settings" element={
                             <ErrorBoundary><ProtectedRoute><Settings /></ProtectedRoute></ErrorBoundary>
                         }>
-                            <Route index element={<ProfileSettings />} />
+                            <Route index element={<Navigate to="/settings/profile" replace />} />
+                            <Route path="profile" element={<ProfileSettings />} />
+                            <Route path="general" element={<GeneralSettings />} />
                             <Route path="accounts" element={<AccountsSettings />} />
                             <Route path="accounts/add" element={<AddAccountSettings />} />
                             <Route path="accounts/:id/info" element={<AccountInfo />} />
@@ -163,14 +167,16 @@ const App = () => {
         <ErrorBoundary>
             <BrowserRouter>
                 <ThemeProvider>
-                    <AuthProvider>
-                        <AccountProvider>
-                            <NotificationProvider>
-                                <AccountSync />
-                                <AppContent />
-                            </NotificationProvider>
-                        </AccountProvider>
-                    </AuthProvider>
+                    <NepseAdvancedModeProvider>
+                        <AuthProvider>
+                            <AccountProvider>
+                                <NotificationProvider>
+                                    <AccountSync />
+                                    <AppContent />
+                                </NotificationProvider>
+                            </AccountProvider>
+                        </AuthProvider>
+                    </NepseAdvancedModeProvider>
                 </ThemeProvider>
             </BrowserRouter>
         </ErrorBoundary>

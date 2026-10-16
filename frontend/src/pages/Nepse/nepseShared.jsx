@@ -146,9 +146,10 @@ export function InlineNotice({ message, onRetry, busy = false }) {
 }
 
 // scrollable tab list with edge fades and arrow key support
-export function TabStrip({ tabs, active, onChange, label = "Sections" }) {
+export function TabStrip({ tabs, active, onChange, label = "Sections", disabledTabs = [] }) {
     const listRef = useRef(null);
     const [edge, setEdge] = useState({ left: false, right: false });
+    const disabledSet = useMemo(() => new Set(disabledTabs), [disabledTabs]);
 
     const update = useCallback(() => {
         const el = listRef.current;
@@ -211,15 +212,27 @@ export function TabStrip({ tabs, active, onChange, label = "Sections" }) {
         const index = tabs.indexOf(active);
         let next = -1;
 
-        if (e.key === "ArrowRight") next = (index + 1) % tabs.length;
-        else if (e.key === "ArrowLeft") next = (index - 1 + tabs.length) % tabs.length;
-        else if (e.key === "Home") next = 0;
-        else if (e.key === "End") next = tabs.length - 1;
+        const pickNext = (start, step) => {
+            for (let offset = 1; offset <= tabs.length; offset += 1) {
+                const candidate = (start + step * offset + tabs.length) % tabs.length;
+                if (!disabledSet.has(tabs[candidate])) return candidate;
+            }
+            return -1;
+        };
+
+        if (e.key === "ArrowRight") next = pickNext(index >= 0 ? index : 0, 1);
+        else if (e.key === "ArrowLeft") next = pickNext(index >= 0 ? index : 0, -1);
+        else if (e.key === "Home") next = tabs.findIndex((tab) => !disabledSet.has(tab));
+        else if (e.key === "End") next = [...tabs].reverse().findIndex((tab) => !disabledSet.has(tab));
 
         if (next < 0) return;
 
         e.preventDefault();
-        onChange(tabs[next]);
+        if (next === tabs.length - 1 && e.key === "End") {
+            onChange(tabs[tabs.length - 1]);
+        } else {
+            onChange(tabs[next]);
+        }
 
         window.requestAnimationFrame(() => {
             listRef.current?.querySelectorAll('[role="tab"]')[next]?.focus();
@@ -251,19 +264,27 @@ export function TabStrip({ tabs, active, onChange, label = "Sections" }) {
                 ref={listRef}
                 onKeyDown={onKeyDown}
             >
-                {tabs.map((tab) => (
-                    <button
-                        key={tab}
-                        type="button"
-                        role="tab"
-                        aria-selected={active === tab}
-                        tabIndex={active === tab ? 0 : -1}
-                        className={`ledger-tab ${active === tab ? "active" : ""}`}
-                        onClick={() => onChange(tab)}
-                    >
-                        {tab}
-                    </button>
-                ))}
+                {tabs.map((tab) => {
+                    const isDisabled = disabledSet.has(tab);
+
+                    return (
+                        <button
+                            key={tab}
+                            type="button"
+                            role="tab"
+                            aria-selected={active === tab}
+                            tabIndex={isDisabled ? -1 : active === tab ? 0 : -1}
+                            aria-disabled={isDisabled}
+                            disabled={isDisabled}
+                            className={`ledger-tab ${active === tab ? "active" : ""} ${isDisabled ? "is-disabled" : ""}`}
+                            onClick={() => {
+                                if (!isDisabled) onChange(tab);
+                            }}
+                        >
+                            {tab}
+                        </button>
+                    );
+                })}
             </div>
 
             {edge.right && (

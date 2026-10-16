@@ -54,6 +54,7 @@ import {
     loadPriceVolume,
     useAlerts,
 } from "./nepseHooks";
+import { useNepseAdvancedMode } from "../../context/NepseAdvancedModeContext";
 import { IconRefresh } from "../../components/Icons.jsx";
 import SEO from "../../seo/SEO.jsx";
 import { companyDetailJsonLd } from "../../seo/jsonLd.js";
@@ -108,6 +109,7 @@ function toGraphList(raw) {
 }
 
 const COMPANY_TABS = ["Depth", "History", "Floorsheet", "Brokers", "Levels", "Calc"];
+const ADVANCED_TABS = new Set(["Depth", "Floorsheet", "Brokers", "Levels", "Calc"]);
 const HISTORY_ROWS = 12;
 const HISTORY_SPARK_POINTS = 60;
 const FLOOR_ROWS = 12;
@@ -749,6 +751,7 @@ function CalcPanel({ price }) {
 export default function CompanyDetail() {
     const { symbol } = useParams();
 
+    const { isAdvancedNepseEnabled } = useNepseAdvancedMode();
     const [details, setDetails] = useState(null);
     const [quote, setQuote] = useState(null);
     const [graphData, setGraphData] = useState(null);
@@ -761,7 +764,7 @@ export default function CompanyDetail() {
     const { rows: priceRows } = usePriceVolume(LIVE_REFRESH_MS);
 
     const [loading, setLoading] = useState(true);
-    const [tab, setTab] = useState("Depth");
+    const [tab, setTab] = useState("History");
     const [tabLoading, setTabLoading] = useState(true);
     const [error, setError] = useState(null);
     const [notice, setNotice] = useState(null);
@@ -967,6 +970,28 @@ export default function CompanyDetail() {
             window.clearInterval(id);
         };
     }, [symbol, loading, error, tab]);
+
+    const visibleTabs = useMemo(
+        () =>
+            isAdvancedNepseEnabled
+                ? COMPANY_TABS
+                : COMPANY_TABS.filter((tabName) => !ADVANCED_TABS.has(tabName)),
+        [isAdvancedNepseEnabled]
+    );
+
+    const handleTabChange = (nextTab) => {
+        if (!isAdvancedNepseEnabled && ADVANCED_TABS.has(nextTab)) {
+            return;
+        }
+
+        setTab(nextTab);
+    };
+
+    useEffect(() => {
+        if (!isAdvancedNepseEnabled && ADVANCED_TABS.has(tab)) {
+            setTab("History");
+        }
+    }, [isAdvancedNepseEnabled, tab]);
 
     const info = pickDetails(details);
     const heroEntry = details?.security ?? details ?? {};
@@ -1193,9 +1218,9 @@ export default function CompanyDetail() {
 
                         <aside className="term-ledger">
                             <TabStrip
-                                tabs={COMPANY_TABS}
+                                tabs={visibleTabs}
                                 active={tab}
-                                onChange={setTab}
+                                onChange={handleTabChange}
                                 label="Company sections"
                             />
 

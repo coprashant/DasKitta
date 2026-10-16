@@ -75,14 +75,15 @@ import {
     useAlerts,
     usePortfolio,
 } from "./nepseHooks";
+import { useNepseAdvancedMode } from "../../context/NepseAdvancedModeContext";
 import SEO from "../../seo/SEO.jsx";
 import { NEPSE_JSONLD } from "../../seo/jsonLd.js";
 import "./Nepse.css";
 
 const REFRESH_INTERVAL = 30000;
 const PROMOTER_PAGE_SIZE = 20;
-const GAINER_PAGE_SIZE = 5;
-const LOSER_PAGE_SIZE = 5;
+const GAINER_PAGE_SIZE = 6;
+const LOSER_PAGE_SIZE = 6;
 const BOND_PAGE_SIZE = 10;
 const SCREENER_PAGE_SIZE = 12;
 const CACHE_KEY = "nepse_cache_v1";
@@ -123,6 +124,7 @@ const FEEDS = [
     "Promoters",
     "Floorsheet",
 ];
+const ADVANCED_FEEDS = new Set(["Bonds", "Promoters", "Floorsheet"]);
 
 function toList(raw) {
     if (isNepseError(raw)) return [];
@@ -899,6 +901,28 @@ export default function Nepse() {
 
     const [feed, setFeed] = useState("Movers");
     const [refreshing, setRefreshing] = useState(false);
+    const { isAdvancedNepseEnabled } = useNepseAdvancedMode();
+    const visibleFeeds = useMemo(
+        () =>
+            isAdvancedNepseEnabled
+                ? FEEDS
+                : FEEDS.filter((tab) => !ADVANCED_FEEDS.has(tab)),
+        [isAdvancedNepseEnabled]
+    );
+
+    const handleFeedChange = (nextTab) => {
+        if (!isAdvancedNepseEnabled && ADVANCED_FEEDS.has(nextTab)) {
+            return;
+        }
+
+        setFeed(nextTab);
+    };
+
+    useEffect(() => {
+        if (!isAdvancedNepseEnabled && ADVANCED_FEEDS.has(feed)) {
+            setFeed("Movers");
+        }
+    }, [isAdvancedNepseEnabled, feed]);
 
     const {
         rows: priceRows,
@@ -1509,7 +1533,7 @@ export default function Nepse() {
                             baseline={heroPrev}
                         />
 
-                        {summary && !loading && (
+                        {summary && !loading && isAdvancedNepseEnabled && (
                             <ScrollTicker>
                                 <TickerItems summary={summary} />
                             </ScrollTicker>
@@ -1573,9 +1597,9 @@ export default function Nepse() {
 
                     <aside className="term-ledger">
                         <TabStrip
-                            tabs={FEEDS}
+                            tabs={visibleFeeds}
                             active={feed}
-                            onChange={setFeed}
+                            onChange={handleFeedChange}
                             label="Market sections"
                         />
 

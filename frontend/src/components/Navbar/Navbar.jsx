@@ -83,7 +83,7 @@ const ProfileDropdown = ({ onClose, showDownloadApp, onDownloadApp }) => {
           <Link to="/settings/accounts" className="profile-action-btn" onClick={onClose} role="menuitem">
             <UsersIcon /><span>Manage accounts</span>
           </Link>
-          <Link to="/settings" className="profile-action-btn" onClick={onClose} role="menuitem">
+          <Link to="/settings/profile" className="profile-action-btn" onClick={onClose} role="menuitem">
             <SettingsIcon /><span>Settings</span>
           </Link>
           {showDownloadApp && (
@@ -166,7 +166,7 @@ const BellButton = () => {
 
 const Navbar = () => {
   const { user } = useAuth();
-  const { theme, toggle } = useTheme();
+  const { theme, resolvedTheme, toggle } = useTheme();
   const location = useLocation();
   const { pathname } = location;
   const [profileOpen, setProfileOpen] = useState(false);
@@ -175,6 +175,7 @@ const Navbar = () => {
   const profileButtonRef = useRef(null);
   const { isInstalled, canInstallNatively, isMobile, installGuide, handleInstallClick } = usePWAInstall();
   const showDownloadApp = !isInstalled && (canInstallNatively || isMobile);
+  const isDarkMode = resolvedTheme === "dark";
 
   const desktopLinks = user ? [...authLinks, ...secondaryLinks] : guestLinks;
 
@@ -261,10 +262,10 @@ const Navbar = () => {
               <button
                   className="navbar-theme-btn"
                   onClick={toggle}
-                  aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-                  title={theme === "dark" ? "Light mode" : "Dark mode"}
+                  aria-label={theme === "system" ? (isDarkMode ? "Switch to light mode" : "Switch to dark mode") : (isDarkMode ? "Switch to light mode" : "Switch to dark mode")}
+                  title={isDarkMode ? "Light mode" : "Dark mode"}
               >
-                {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+                {isDarkMode ? <SunIcon /> : <MoonIcon />}
               </button>
 
               {user ? (

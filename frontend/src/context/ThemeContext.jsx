@@ -1,38 +1,48 @@
 import { createContext, useContext, useState, useEffect } from "react";
 
 const ThemeContext = createContext(null);
+const THEME_OPTIONS = ["light", "dark", "system"];
+
+const getSystemTheme = () => (
+  window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+);
+
+const normalizeTheme = (value) => (THEME_OPTIONS.includes(value) ? value : "system");
 
 export const ThemeProvider = ({ children }) => {
   const [theme, setTheme] = useState(() => {
     const stored = localStorage.getItem("dk-theme");
-    if (stored) return stored;
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    return normalizeTheme(stored ?? "system");
   });
 
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem("dk-theme", theme);
-  }, [theme]);
+  const resolvedTheme = theme === "system" ? getSystemTheme() : theme;
 
-  /* sync with system when no manual override */
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", resolvedTheme);
+    localStorage.setItem("dk-theme", theme);
+  }, [theme, resolvedTheme]);
+
   useEffect(() => {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = (e) => {
-      if (!localStorage.getItem("dk-theme-manual")) {
-        setTheme(e.matches ? "dark" : "light");
+    const handler = () => {
+      if (theme === "system") {
+        document.documentElement.setAttribute("data-theme", getSystemTheme());
       }
     };
+
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
-  }, []);
+  }, [theme]);
 
   const toggle = () => {
-    localStorage.setItem("dk-theme-manual", "1");
-    setTheme((t) => (t === "dark" ? "light" : "dark"));
+    setTheme((current) => {
+      const currentTheme = current === "system" ? getSystemTheme() : current;
+      return currentTheme === "dark" ? "light" : "dark";
+    });
   };
 
   return (
-    <ThemeContext.Provider value={{ theme, toggle }}>
+    <ThemeContext.Provider value={{ theme, resolvedTheme, setTheme, toggle }}>
       {children}
     </ThemeContext.Provider>
   );

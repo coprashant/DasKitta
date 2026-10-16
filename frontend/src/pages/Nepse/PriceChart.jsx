@@ -17,6 +17,7 @@ import {
     SEG_FALL,
 } from "./nepseUtils";
 import { sma, ema, bollinger, rsi, niceTicks, groupBars } from "./nepseMath";
+import { useNepseAdvancedMode } from "../../context/NepseAdvancedModeContext";
 
 const PREF_KEY = "nepse_chart_prefs_v1";
 const MIN_VISIBLE = 8;
@@ -87,6 +88,28 @@ function fullLabel(p, intraday) {
     return p.d ?? "";
 }
 
+function xBadgeLabel(point, intraday) {
+    if (!point) return "";
+
+    if (intraday) {
+        const ms = Number(point.t);
+
+        if (Number.isFinite(ms)) {
+            return new Intl.DateTimeFormat("en-US", {
+                hour: "numeric",
+                minute: "2-digit",
+                hour12: true,
+                timeZone: "Asia/Kathmandu",
+            }).format(new Date(ms));
+        }
+
+        return String(point.t ?? point.d ?? "");
+    }
+
+    const raw = point.d ?? point.t ?? "";
+    return typeof raw === "string" ? raw : new Date(raw).toISOString().slice(0, 10);
+}
+
 function decimalsFor(span) {
     return span >= 200 ? 0 : span >= 20 ? 1 : 2;
 }
@@ -117,6 +140,7 @@ export default function PriceChart({
     const clipId = useId().replace(/:/g, "");
 
     const wrapRef = useRef(null);
+    const { isAdvancedNepseEnabled } = useNepseAdvancedMode();
     const [width, setWidth] = useState(0);
     const [prefs, setPrefs] = useState(readPrefs);
     const [vp, setVp] = useState({ start: 0, size: 0 });
@@ -139,8 +163,8 @@ export default function PriceChart({
     const plotW = Math.max(0, width - axisW);
 
     const hasVol = useMemo(() => points.some((p) => p.v != null), [points]);
-    const showVol = prefs.ind.includes("vol") && hasVol;
-    const showRsi = prefs.ind.includes("rsi") && total > 15;
+    const showVol = isAdvancedNepseEnabled && prefs.ind.includes("vol") && hasVol;
+    const showRsi = isAdvancedNepseEnabled && prefs.ind.includes("rsi") && total > 15;
 
     const priceH = clamp(Math.round(width * 0.375), 200, 400);
     const height = width
@@ -638,6 +662,12 @@ export default function PriceChart({
     }
 
     const shownBar = hoverBar ?? view?.bars[view.bars.length - 1] ?? null;
+    const shownPoint = shownBar ? points[shownBar.e] : null;
+    const xBadgeText = xBadgeLabel(shownPoint, intraday);
+    const xBadgeWidth = Math.max(52, Math.min(132, xBadgeText.length * 6.4 + 20));
+    const xBadgeX = shownBar
+        ? clamp(xOf(shownBar), xBadgeWidth / 2 + 12, plotW - xBadgeWidth / 2 - 12)
+        : 0;
 
     const changeOf = (b) => {
         if (!b) return null;
@@ -997,6 +1027,23 @@ export default function PriceChart({
                         )}
 
                         <rect
+                            x={xBadgeX - xBadgeWidth / 2}
+                            y={height - 26}
+                            width={xBadgeWidth}
+                            height="18"
+                            rx="9"
+                            className="pc-tag pc-tag-x"
+                        />
+                        <text
+                            x={xBadgeX}
+                            y={height - 13}
+                            textAnchor="middle"
+                            className="pc-tag-text pc-tag-text-x"
+                        >
+                            {xBadgeText}
+                        </text>
+
+                        <rect
                             x={plotW}
                             y={yOf(hoverBar.c) - 8}
                             width={axisW}
@@ -1028,11 +1075,9 @@ export default function PriceChart({
         if (showRsi && ind.rsi) legend.push(["rsi", "RSI", at(ind.rsi)]);
     }
 
-    const shownPoint = shownBar ? points[shownBar.e] : null;
-
     return (
         <div className="pc">
-            {canDraw && shownBar && (
+            {isAdvancedNepseEnabled && canDraw && shownBar && (
                 <div className="pc-readout">
                     <span className="pc-ro-date">
                         {fullLabel(shownPoint, intraday) || "latest"}
@@ -1158,39 +1203,41 @@ export default function PriceChart({
                         </div>
                     </div>
 
-                    <div className="pc-toolbar pc-indicators" role="group" aria-label="Indicators">
-                        {OVERLAYS.map(({ key, label: text }) => (
-                            <button
-                                key={key}
-                                type="button"
-                                className={`pc-opt ${prefs.ind.includes(key) ? "on" : ""}`}
-                                aria-pressed={prefs.ind.includes(key)}
-                                onClick={() => toggleInd(key)}
-                            >
-                                {text}
-                            </button>
-                        ))}
+                    {isAdvancedNepseEnabled && (
+                        <div className="pc-toolbar pc-indicators" role="group" aria-label="Indicators">
+                            {OVERLAYS.map(({ key, label: text }) => (
+                                <button
+                                    key={key}
+                                    type="button"
+                                    className={`pc-opt ${prefs.ind.includes(key) ? "on" : ""}`}
+                                    aria-pressed={prefs.ind.includes(key)}
+                                    onClick={() => toggleInd(key)}
+                                >
+                                    {text}
+                                </button>
+                            ))}
 
-                        {hasVol && (
+                            {hasVol && (
+                                <button
+                                    type="button"
+                                    className={`pc-opt ${prefs.ind.includes("vol") ? "on" : ""}`}
+                                    aria-pressed={prefs.ind.includes("vol")}
+                                    onClick={() => toggleInd("vol")}
+                                >
+                                    VOL
+                                </button>
+                            )}
+
                             <button
                                 type="button"
-                                className={`pc-opt ${prefs.ind.includes("vol") ? "on" : ""}`}
-                                aria-pressed={prefs.ind.includes("vol")}
-                                onClick={() => toggleInd("vol")}
+                                className={`pc-opt ${prefs.ind.includes("rsi") ? "on" : ""}`}
+                                aria-pressed={prefs.ind.includes("rsi")}
+                                onClick={() => toggleInd("rsi")}
                             >
-                                VOL
+                                RSI
                             </button>
-                        )}
-
-                        <button
-                            type="button"
-                            className={`pc-opt ${prefs.ind.includes("rsi") ? "on" : ""}`}
-                            aria-pressed={prefs.ind.includes("rsi")}
-                            onClick={() => toggleInd("rsi")}
-                        >
-                            RSI
-                        </button>
-                    </div>
+                        </div>
+                    )}
                 </>
             )}
         </div>
