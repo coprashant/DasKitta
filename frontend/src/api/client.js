@@ -15,6 +15,36 @@ const client = axios.create({
     withCredentials: true,
 });
 
+const isNetworkFailure = (error) => {
+    if (!error) return false;
+    if (error.response) return false;
+
+    const code = String(error.code || "").toUpperCase();
+    const message = String(error.message || "");
+    return [
+        "ERR_NETWORK",
+        "ERR_INTERNET_DISCONNECTED",
+        "ECONNABORTED",
+        "ECONNRESET",
+        "ECONNREFUSED",
+        "ERR_TIMEOUT",
+        "ERR_BAD_RESPONSE",
+    ].includes(code) || /network|failed to fetch|timeout|load failed/i.test(message);
+};
+
+const isRefreshRequest = (url = "") => /\/auth\/refresh(?:\?|$)/.test(String(url));
+
+const isSessionFailure = (error) => {
+    const status = error?.response?.status;
+    if (status === 401) return true;
+    if (status !== 400) return false;
+
+    const requestUrl = error?.config?.url ?? error?.request?.responseURL ?? "";
+    return isRefreshRequest(requestUrl);
+};
+
+const isPermissionFailure = (error) => error?.response?.status === 403;
+
 client.interceptors.request.use((config) => {
     const token = getToken();
     if (token) {
@@ -54,7 +84,9 @@ export const attemptRefresh = () => {
                 return data;
             })
             .catch((err) => {
-                clearToken();
+                if (isSessionFailure(err)) {
+                    clearToken();
+                }
                 throw err;
             })
             .finally(() => {
@@ -74,6 +106,10 @@ client.interceptors.response.use(
         const isAuthRequest = isPublicPath(url);
         const isAlreadyAtLogin = window.location.pathname === "/login";
 
+        if (isNetworkFailure(error) || (status >= 500 && !isAuthRequest)) {
+            return Promise.reject(error);
+        }
+
         // Access token expired, try one silent refresh then retry the request once
         if (status === 401 && !isAuthRequest && !originalRequest._retry) {
             originalRequest._retry = true;
@@ -85,15 +121,26 @@ client.interceptors.response.use(
                     return client(originalRequest);
                 }
             } catch (refreshError) {
-                // fall through to session clear below
+                if (isSessionFailure(refreshError) && !isAlreadyAtLogin) {
+                    clearSession();
+                    window.location.href = "/login";
+                }
+                return Promise.reject(refreshError);
             }
         }
 
-        const isUnauthorized = status === 401 || status === 403;
-
-        if (isUnauthorized && !isAuthRequest && !isAlreadyAtLogin) {
+        if (status === 401 && !isAuthRequest && !isAlreadyAtLogin) {
             clearSession();
             window.location.href = "/login";
+            return Promise.reject(error);
+        }
+
+        if (status === 403) {
+            if (!isAuthRequest && !isAlreadyAtLogin && isPermissionFailure(error)) {
+                // Do not force logout on permission-denied responses alone.
+                // The refresh-token flow remains authoritative for real auth invalidation.
+            }
+            return Promise.reject(error);
         }
 
         return Promise.reject(error);

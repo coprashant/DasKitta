@@ -2,7 +2,7 @@ import { createContext, useState, useCallback, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { loginApi, registerApi, deleteAccountApi, logoutApi } from "../api/auth";
 import { attemptRefresh } from "../api/client";
-import { setToken, clearToken } from "../api/tokenStore";
+import { setToken, clearToken, readCachedUser, writeCachedUser, clearCachedUser } from "../api/tokenStore";
 import { registerPushSubscription } from "../api/notifications";
 import toast from "react-hot-toast";
 export const AuthContext = createContext(null);
@@ -17,7 +17,24 @@ const hasNetworkConnection = () => {
   return navigator.onLine !== false;
 };
 
-const isNetworkError = (error) => !error?.response;
+const isNetworkLikeFailure = (error) => {
+  if (!error) return false;
+  if (error.response) {
+    return error.response.status >= 500;
+  }
+
+  const code = String(error.code || "").toUpperCase();
+  const message = String(error.message || "");
+  return [
+    "ERR_NETWORK",
+    "ERR_INTERNET_DISCONNECTED",
+    "ECONNABORTED",
+    "ECONNRESET",
+    "ECONNREFUSED",
+    "ERR_TIMEOUT",
+    "ERR_BAD_RESPONSE",
+  ].includes(code) || /network|failed to fetch|timeout|load failed/i.test(message);
+};
 
 const hasSessionHint = () => {
   try {
@@ -46,25 +63,31 @@ export const AuthProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(false);
   // true once the initial session check against the refresh cookie is done
   const [isReady, setIsReady] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isOfflineSession, setIsOfflineSession] = useState(false);
   const navigate = useNavigate();
   const onLoginRef  = useRef(null);
   const onLogoutRef = useRef(null);
-  const registerOnLogin  = useCallback((fn) => { onLoginRef.current  = fn; }, []);
-  const registerOnLogout = useCallback((fn) => { onLogoutRef.current = fn; }, []);
+  const registerOnLogin  = useCallback((fn) => { onLoginRef.current  = fn ?? null; }, []);
+  const registerOnLogout = useCallback((fn) => { onLogoutRef.current = fn ?? null; }, []);
 
   const clearSession = useCallback(() => {
     clearToken();
     clearSessionHint();
+    clearCachedUser();
+    setIsAuthenticated(false);
     setIsOfflineSession(false);
     setUser(null);
   }, []);
 
   const restoreSession = useCallback(async ({ allowOfflineFallback = false } = {}) => {
+    const cachedUser = readCachedUser();
+    if (cachedUser) {
+      setUser(cachedUser);
+    }
+
     if (!hasSessionHint()) {
-      clearToken();
-      setIsOfflineSession(false);
-      setUser(null);
+      clearSession();
       return false;
     }
 
@@ -72,6 +95,7 @@ export const AuthProvider = ({ children }) => {
       if (allowOfflineFallback) {
         setIsOfflineSession(true);
       }
+      setUser(cachedUser || null);
       return false;
     }
 
@@ -79,19 +103,56 @@ export const AuthProvider = ({ children }) => {
       const data = await attemptRefresh();
 
       if (data?.token) {
+        const nextUser = {
+          username: data.username ?? cachedUser?.username ?? null,
+          email: data.email ?? cachedUser?.email ?? null,
+        };
+
+        writeCachedUser(nextUser);
         setSessionHint();
+        setIsAuthenticated(true);
         setIsOfflineSession(false);
-        setUser({ username: data.username, email: data.email });
+        setUser(nextUser);
         return true;
       }
+
+      if (cachedUser) {
+        setUser(cachedUser);
+        setIsAuthenticated(false);
+        if (allowOfflineFallback) {
+          setIsOfflineSession(true);
+        }
+        return false;
+      }
     } catch (error) {
-      if (allowOfflineFallback && isNetworkError(error)) {
+      const status = error?.response?.status;
+      const isRefreshCookieFailure = status === 400 && /\/auth\/refresh(?:\?|$)/.test(String(error?.config?.url ?? ""));
+
+      if (status === 401 || isRefreshCookieFailure) {
+        clearSession();
+        return false;
+      }
+
+      if (status === 403) {
+        setUser(cachedUser || null);
+        setIsAuthenticated(false);
+        setIsOfflineSession(false);
+        return false;
+      }
+
+      if (allowOfflineFallback && (status >= 500 || isNetworkLikeFailure(error))) {
+        setUser(cachedUser || null);
+        setIsAuthenticated(false);
         setIsOfflineSession(true);
         return false;
       }
+
+      if (cachedUser) {
+        setUser(cachedUser);
+      }
+      setIsAuthenticated(false);
     }
 
-    clearSession();
     return false;
   }, [clearSession]);
 
@@ -119,7 +180,7 @@ export const AuthProvider = ({ children }) => {
     }
 
     const handleOnline = () => {
-      restoreSession();
+      restoreSession({ allowOfflineFallback: true });
     };
 
     window.addEventListener("online", handleOnline);
@@ -131,8 +192,11 @@ export const AuthProvider = ({ children }) => {
   const persistSession = (token, username, email) => {
     setToken(token);
     setSessionHint();
+    const nextUser = { username, email };
+    writeCachedUser(nextUser);
+    setIsAuthenticated(true);
     setIsOfflineSession(false);
-    setUser({ username, email });
+    setUser(nextUser);
   };
 
   const login = async (credentials) => {
@@ -215,6 +279,7 @@ export const AuthProvider = ({ children }) => {
         user,
         isLoading,
         isReady,
+        isAuthenticated,
         isOfflineSession,
         login,
         register,

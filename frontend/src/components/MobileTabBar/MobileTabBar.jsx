@@ -6,11 +6,11 @@ import {
 import "./MobileTabBar.css";
 
 const tabs = [
-    { path: "/dashboard",  mobileLabel: "Home",      MobileIcon: TabIconDashboard  },
-    { path: "/nepse",      mobileLabel: "Nepse",     MobileIcon: TabIconNepse      },
-    { path: "/ipo/apply",  mobileLabel: "Apply",     MobileIcon: TabIconApply      },
-    { path: "/ipo/result", mobileLabel: "Results",   MobileIcon: TabIconResults    },
-    { path: "/portfolio",  mobileLabel: "Portfolio", MobileIcon: TabIconPortfolio  },
+    { path: "/dashboard",  mobileLabel: "Home",      icon: TabIconDashboard  },
+    { path: "/nepse",      mobileLabel: "Nepse",     icon: TabIconNepse      },
+    { path: "/ipo/apply",  mobileLabel: "Apply",     icon: TabIconApply      },
+    { path: "/ipo/result", mobileLabel: "Results",   icon: TabIconResults    },
+    { path: "/portfolio",  mobileLabel: "Portfolio", icon: TabIconPortfolio  },
 ];
 
 const MobileTabBar = () => {
@@ -18,14 +18,14 @@ const MobileTabBar = () => {
 
     return (
         <nav className="mobile-tab-bar" aria-label="Mobile navigation">
-            {tabs.map(({ path, mobileLabel, MobileIcon }) => (
+            {tabs.map(({ path, mobileLabel, icon: Icon }) => (
                 <Link
                     key={path}
                     to={path}
                     className={`tab-item${pathname === path ? " active" : ""}`}
                     aria-current={pathname === path ? "page" : undefined}
                 >
-                    <MobileIcon />
+                    <Icon />
                     <span className="tab-label">{mobileLabel}</span>
                 </Link>
             ))}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, Suspense, lazy } from "react";
+import { useState, useEffect, useMemo, useRef, Suspense, lazy } from "react";
 import { Link } from "react-router-dom";
 import {
     getNepseIndex,
@@ -184,10 +184,24 @@ function useNepseIndex() {
     const [graphData, setGraphData] = useState(initialCache?.graphData ?? null);
     const [isOpen, setIsOpen] = useState(false);
     const [loading, setLoading] = useState(!initialCache?.indices && !initialCache?.graphData);
+    const inFlightRef = useRef(false);
+    const lastFailureRef = useRef(null);
 
     useEffect(() => {
         let alive = true;
+
         const loadData = async () => {
+            if (typeof navigator !== "undefined" && navigator.onLine === false) {
+                if (alive) setLoading(false);
+                return;
+            }
+
+            if (inFlightRef.current) {
+                return;
+            }
+
+            inFlightRef.current = true;
+
             try {
                 const [idx, opn, grf] = await Promise.all([
                     getNepseIndex(),
@@ -213,7 +227,19 @@ function useNepseIndex() {
                 } else if (initialCache?.graphData) {
                     setGraphData(initialCache.graphData);
                 }
+
+                lastFailureRef.current = null;
             } catch (error) {
+                const isExpectedFailure = !error?.response || (error.response.status >= 500);
+                const failureKey = isExpectedFailure ? "network" : "request";
+
+                if (isExpectedFailure && lastFailureRef.current === failureKey) {
+                    if (alive) setLoading(false);
+                    return;
+                }
+
+                lastFailureRef.current = failureKey;
+
                 if (initialCache?.indices) {
                     setIndexData((current) => current ?? initialCache.indices);
                 }
@@ -222,15 +248,28 @@ function useNepseIndex() {
                     setGraphData((current) => current ?? initialCache.graphData);
                 }
 
-                if (import.meta.env.DEV) {
+                if (import.meta.env.DEV && isExpectedFailure) {
                     console.warn("Failed to load NEPSE hero data", error);
                 }
             } finally {
                 if (alive) setLoading(false);
+                inFlightRef.current = false;
             }
         };
-        loadData();
-        return () => { alive = false; };
+
+        const handleOnline = () => {
+            if (typeof navigator === "undefined" || navigator.onLine) {
+                void loadData();
+            }
+        };
+
+        void loadData();
+        window.addEventListener("online", handleOnline);
+
+        return () => {
+            alive = false;
+            window.removeEventListener("online", handleOnline);
+        };
     }, []);
 
     return { indexData, graphData, isOpen, loading };
@@ -341,11 +380,24 @@ export default function NepseStrip() {
         const cache = loadNepseCache();
         return !(cache?.gainers?.length || cache?.losers?.length);
     });
+    const inFlightRef = useRef(false);
+    const lastFailureRef = useRef(null);
 
     useEffect(() => {
         let alive = true;
+
         const loadMovers = async () => {
+            if (typeof navigator !== "undefined" && navigator.onLine === false) {
+                if (alive) setLoading(false);
+                return;
+            }
+
+            if (inFlightRef.current) {
+                return;
+            }
+
             const cached = loadNepseCache();
+            inFlightRef.current = true;
 
             try {
                 const [gRes, lRes] = await Promise.all([getTopGainers(), getTopLosers()]);
@@ -356,7 +408,18 @@ export default function NepseStrip() {
 
                 setGainers(nextGainers.length ? nextGainers : (cached?.gainers ?? []));
                 setLosers(nextLosers.length ? nextLosers : (cached?.losers ?? []));
+                lastFailureRef.current = null;
             } catch (error) {
+                const isExpectedFailure = !error?.response || (error.response.status >= 500);
+                const failureKey = isExpectedFailure ? "network" : "request";
+
+                if (isExpectedFailure && lastFailureRef.current === failureKey) {
+                    if (alive) setLoading(false);
+                    return;
+                }
+
+                lastFailureRef.current = failureKey;
+
                 if (cached?.gainers) {
                     setGainers((current) => current ?? cached.gainers);
                 }
@@ -365,15 +428,28 @@ export default function NepseStrip() {
                     setLosers((current) => current ?? cached.losers);
                 }
 
-                if (import.meta.env.DEV) {
+                if (import.meta.env.DEV && isExpectedFailure) {
                     console.warn("Failed to load NEPSE movers", error);
                 }
             } finally {
                 if (alive) setLoading(false);
+                inFlightRef.current = false;
             }
         };
-        loadMovers();
-        return () => { alive = false; };
+
+        const handleOnline = () => {
+            if (typeof navigator === "undefined" || navigator.onLine) {
+                void loadMovers();
+            }
+        };
+
+        void loadMovers();
+        window.addEventListener("online", handleOnline);
+
+        return () => {
+            alive = false;
+            window.removeEventListener("online", handleOnline);
+        };
     }, []);
 
     const dummyArray = useMemo(() => Array(MOVERS_ROW_COUNT).fill(0), []);

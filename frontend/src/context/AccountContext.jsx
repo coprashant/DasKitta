@@ -7,6 +7,7 @@ export const AccountContext = createContext(null);
 // only the id is kept client side, not name, boid, dp code etc
 const STORAGE_KEY = "dk-active-account-id";
 const ORDER_KEY = "dk-account-order";
+const CACHE_KEY = "dk-account-cache";
 
 const readStoredId = () => {
   try {
@@ -23,6 +24,57 @@ const readOrder = () => {
   } catch {
     return [];
   }
+};
+
+const readCachedAccounts = () => {
+  try {
+    const s = localStorage.getItem(CACHE_KEY);
+    if (!s) return [];
+
+    const parsed = JSON.parse(s);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .map((account) => sanitizeAccountForCache(account))
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+};
+
+const writeCachedAccounts = (list) => {
+  try {
+    const safeList = Array.isArray(list)
+      ? list.map((account) => sanitizeAccountForCache(account)).filter(Boolean)
+      : [];
+    localStorage.setItem(CACHE_KEY, JSON.stringify(safeList));
+  } catch {
+    // storage may be unavailable in some restricted contexts
+  }
+};
+
+const clearCachedAccounts = () => {
+  try {
+    localStorage.removeItem(CACHE_KEY);
+  } catch {
+    // storage may be unavailable in some restricted contexts
+  }
+};
+
+const sanitizeAccountForCache = (account) => {
+  if (!account || typeof account !== "object") return null;
+
+  const rawId = account.id ?? account.accountId;
+  if (rawId === undefined || rawId === null || rawId === "") return null;
+
+  const username = typeof account.username === "string" ? account.username.trim() : "";
+  const fullName = typeof account.fullName === "string" ? account.fullName.trim() : "";
+
+  return {
+    id: String(rawId),
+    ...(username ? { username } : {}),
+    ...(fullName ? { fullName } : {}),
+  };
 };
 
 const applyOrder = (list, order) => {
@@ -43,7 +95,7 @@ const resolveErrorMessage = (error, fallback) => {
 };
 
 export const AccountProvider = ({ children }) => {
-  const { user, isReady } = useAuth();
+  const { isReady, isOfflineSession, isAuthenticated } = useAuth();
   const [accounts, setAccounts] = useState([]);
   const [activeAccount, setActiveAccountState] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -60,6 +112,7 @@ export const AccountProvider = ({ children }) => {
 
   const reorderAccounts = useCallback((newList) => {
     setAccounts(newList);
+    writeCachedAccounts(newList);
     localStorage.setItem(ORDER_KEY, JSON.stringify(newList.map((a) => a.id)));
   }, []);
 
@@ -69,6 +122,7 @@ export const AccountProvider = ({ children }) => {
     setActiveAccountState(null);
     setError(null);
     localStorage.removeItem(STORAGE_KEY);
+    clearCachedAccounts();
     setLoading(false);
   }, []);
 
@@ -81,6 +135,7 @@ export const AccountProvider = ({ children }) => {
       const list = Array.isArray(res?.data) ? res.data : [];
       const ordered = applyOrder(list, readOrder());
       setAccounts(ordered);
+      writeCachedAccounts(ordered);
 
       if (ordered.length === 0) {
         localStorage.removeItem(STORAGE_KEY);
@@ -104,16 +159,30 @@ export const AccountProvider = ({ children }) => {
     }
   }, []);
 
-  // wait for the real session check before the first fetch, dont trust a guess
-  // login and logout already trigger refreshAccounts through account sync
   useEffect(() => {
-    if (!isReady) return;
-    if (user) {
-      refreshAccounts();
-    } else {
-      resetAccounts();
+    if (!isReady || !isAuthenticated || accounts.length > 0) return;
+
+    const cachedAccounts = readCachedAccounts();
+    if (cachedAccounts.length) {
+      const ordered = applyOrder(cachedAccounts, readOrder());
+      setAccounts(ordered);
+
+      const storedId = readStoredId();
+      const fallback = ordered.find((a) => String(a.id) === String(storedId)) ?? ordered[0] ?? null;
+      setActiveAccountState(fallback);
     }
-  }, [isReady]);
+  }, [isReady, isAuthenticated, accounts.length]);
+
+  useEffect(() => {
+    if (!isReady || !isAuthenticated) return;
+
+    if (isOfflineSession) {
+      setLoading(false);
+      return;
+    }
+
+    refreshAccounts();
+  }, [isReady, isAuthenticated, isOfflineSession, refreshAccounts]);
 
   return (
       <AccountContext.Provider value={{

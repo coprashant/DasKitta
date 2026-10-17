@@ -75,6 +75,7 @@ export const applyIpoStreamApi = async (data, onEvent, onDone, onError, signal) 
           const dataObj = JSON.parse(dataLines.join("\n"));
           onEvent?.({ event: eventName, data: dataObj });
         } catch {
+          // Ignore malformed SSE payloads and continue processing remaining events.
         }
       }
     }
@@ -172,6 +173,7 @@ export const streamApplyJobApi = async (
           const dataObj = JSON.parse(dataLines.join("\n"));
           onEvent?.({ event: eventName, id: eventId, data: dataObj });
         } catch {
+          // Ignore malformed SSE payloads and continue processing remaining events.
         }
       }
     }

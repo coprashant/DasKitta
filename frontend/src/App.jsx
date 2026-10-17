@@ -80,10 +80,17 @@ const PageLoader = () => (
 const AppContent = () => {
     const location = useLocation();
     const background = location.state?.background;
+    const resolvedBackground =
+        background &&
+        background.pathname &&
+        !["/login", "/register"].includes(background.pathname) &&
+        background.pathname !== location.pathname
+            ? background
+            : null;
 
     useNetworkStatusToast();
 
-    const routeLocation = background || location;
+    const routeLocation = resolvedBackground || location;
     // top-level segment only, so nested settings sub-routes don't re-trigger a full page fade
     const routeKey = routeLocation.pathname.split("/")[1] || "home";
 
@@ -110,7 +117,7 @@ const AppContent = () => {
             <Suspense fallback={<PageLoader />}>
                 {/* re-keyed per top-level page so route changes get a short fade */}
                 <div className="route-fade" key={routeKey}>
-                    <Routes location={background || location}>
+                    <Routes location={resolvedBackground || location}>
                         <Route path="/"                   element={<ErrorBoundary><Home /></ErrorBoundary>} />
                         <Route path="/login"              element={<ErrorBoundary><Auth /></ErrorBoundary>} />
                         <Route path="/register"           element={<ErrorBoundary><Auth /></ErrorBoundary>} />
@@ -148,7 +155,7 @@ const AppContent = () => {
             </Suspense>
 
             {/* Render modal auth overlay above the current page */}
-            {background && (
+            {resolvedBackground && (
                 <Suspense fallback={null}>
                     <ErrorBoundary>
                         <Routes>

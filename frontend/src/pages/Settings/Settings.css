@@ -1427,11 +1427,13 @@
         white-space: normal;
         display: -webkit-box;
         -webkit-box-orient: vertical;
+        line-clamp: 1;
         -webkit-line-clamp: 1;
     }
 
     .saved-account-name {
         font-size: 13px;
+        line-clamp: 2;
         -webkit-line-clamp: 2;
     }
 

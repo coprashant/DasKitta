@@ -2,9 +2,9 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 
 const ProtectedRoute = ({ children }) => {
-    const { user, isReady, isOfflineSession } = useAuth();
+    const { isReady, isAuthenticated } = useAuth();
     const location = useLocation();
-    const canAccessProtectedRoute = Boolean(user) || isOfflineSession;
+    const canAccessProtectedRoute = Boolean(isAuthenticated);
 
     // wait for the real session check against the server, dont flash protected ui first
     if (!isReady) {
@@ -29,16 +29,27 @@ const ProtectedRoute = ({ children }) => {
     }
 
     if (!canAccessProtectedRoute) {
-        const backgroundLocation = location.state?.background || { pathname: "/", search: "", hash: "" };
+        const nextBackground = location.state?.background;
+        const backgroundLocation =
+            nextBackground &&
+            nextBackground.pathname &&
+            !["/login", "/register"].includes(nextBackground.pathname) &&
+            nextBackground.pathname !== location.pathname
+                ? nextBackground
+                : null;
 
         return (
             <Navigate
                 to="/login"
                 replace
-                state={{
-                    background: backgroundLocation,
-                    from: location,
-                }}
+                state={
+                    backgroundLocation
+                        ? {
+                            background: backgroundLocation,
+                            from: location,
+                        }
+                        : { from: location }
+                }
             />
         );
     }

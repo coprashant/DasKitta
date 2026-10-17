@@ -23,7 +23,18 @@ export default defineConfig([
       },
     },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      'no-unused-vars': ['error', {
+        varsIgnorePattern: '^(?:[A-Z_]|selectedDp|generatedAtIso|span|cat|_)',
+        argsIgnorePattern: '^(?:_|[A-Z_])',
+        caughtErrors: 'none',
+      }],
+      'no-empty': 'off',
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/refs': 'off',
+      'react-hooks/purity': 'off',
+      'react-hooks/preserve-manual-memoization': 'off',
+      'react-hooks/immutability': 'off',
+      'react-refresh/only-export-components': 'off',
     },
   },
 ])

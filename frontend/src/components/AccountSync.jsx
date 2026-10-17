@@ -9,6 +9,11 @@ const AccountSync = () => {
   useEffect(() => {
     registerOnLogin(refreshAccounts);
     registerOnLogout(resetAccounts);
+
+    return () => {
+      registerOnLogin(null);
+      registerOnLogout(null);
+    };
   }, [registerOnLogin, registerOnLogout, refreshAccounts, resetAccounts]);
 
   return null;

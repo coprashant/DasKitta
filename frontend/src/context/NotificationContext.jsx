@@ -19,6 +19,8 @@ export const NotificationProvider = ({ children }) => {
 
   const requestSeqRef = useRef(0);
   const lastFetchedAtRef = useRef(0);
+  const lastFailureRef = useRef(null);
+  const inFlightRef = useRef(false);
 
   const readIds = useMemo(
       () => new Set(notifications.filter((n) => n.isRead).map((n) => n.id)),
@@ -35,6 +37,10 @@ export const NotificationProvider = ({ children }) => {
     timestamp: notification.createdAt ?? notification.timestamp ?? null,
   }), []);
 
+  const isBrowserOffline = useCallback(() => {
+    return typeof navigator !== "undefined" && navigator.onLine === false;
+  }, []);
+
   const loadNotifications = useCallback(async (force = false) => {
     if (!user) {
       setNotifications([]);
@@ -47,7 +53,17 @@ export const NotificationProvider = ({ children }) => {
       return;
     }
 
+    if (isBrowserOffline()) {
+      setLoading(false);
+      return;
+    }
+
+    if (inFlightRef.current) {
+      return;
+    }
+
     const requestId = ++requestSeqRef.current;
+    inFlightRef.current = true;
     setLoading(true);
 
     try {
@@ -56,7 +72,20 @@ export const NotificationProvider = ({ children }) => {
       const items = Array.isArray(response?.data) ? response.data : [];
       setNotifications(items.map(normalizeNotification));
       lastFetchedAtRef.current = Date.now();
-    } catch {
+      lastFailureRef.current = null;
+    } catch (error) {
+      const isExpectedFailure = !error?.response || (error.response.status >= 500);
+      const failureKey = isExpectedFailure ? "network" : "request";
+
+      if (isExpectedFailure && lastFailureRef.current === failureKey) {
+        if (requestSeqRef.current === requestId) {
+          setLoading(false);
+        }
+        return;
+      }
+
+      lastFailureRef.current = failureKey;
+
       if (requestSeqRef.current === requestId) {
         setNotifications((current) => current);
       }
@@ -64,23 +93,35 @@ export const NotificationProvider = ({ children }) => {
       if (requestSeqRef.current === requestId) {
         setLoading(false);
       }
+      inFlightRef.current = false;
     }
-  }, [normalizeNotification, user]);
+  }, [isBrowserOffline, normalizeNotification, user]);
 
   useEffect(() => {
-    loadNotifications(true);
+    if (!user) return;
+    void loadNotifications(true);
   }, [user?.username, loadNotifications]);
 
   useEffect(() => {
+    const handleOnline = () => {
+      if (document.visibilityState === "visible" && !isBrowserOffline()) {
+        void loadNotifications(true);
+      }
+    };
+
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
+      if (document.visibilityState === "visible" && !isBrowserOffline()) {
         loadNotifications();
       }
     };
 
+    window.addEventListener("online", handleOnline);
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [loadNotifications]);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [isBrowserOffline, loadNotifications]);
 
   const markAsRead = useCallback(async (notifId) => {
     let snapshot = [];

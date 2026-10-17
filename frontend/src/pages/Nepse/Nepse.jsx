@@ -902,6 +902,8 @@ export default function Nepse() {
     const [feed, setFeed] = useState("Movers");
     const [refreshing, setRefreshing] = useState(false);
     const { isAdvancedNepseEnabled } = useNepseAdvancedMode();
+    const fetchCoreInFlightRef = useRef(false);
+    const lastFailureRef = useRef(null);
     const visibleFeeds = useMemo(
         () =>
             isAdvancedNepseEnabled
@@ -970,9 +972,21 @@ export default function Nepse() {
     const [sectorGraphs, setSectorGraphs] = useState({});
 
     const fetchCore = useCallback(async ({ force = false } = {}) => {
+        if (typeof navigator !== "undefined" && navigator.onLine === false) {
+            setIsOffline(true);
+            setLoading(false);
+            return;
+        }
+
         if (!force && document.visibilityState !== "visible") {
             return;
         }
+
+        if (fetchCoreInFlightRef.current) {
+            return;
+        }
+
+        fetchCoreInFlightRef.current = true;
 
         try {
             const results = await Promise.allSettled([
@@ -1009,6 +1023,7 @@ export default function Nepse() {
             if (loserList) setLosers(loserList);
 
             setIsOffline(false);
+            lastFailureRef.current = null;
 
             if (index) {
                 const previous = loadCache() ?? {};
@@ -1039,6 +1054,14 @@ export default function Nepse() {
                     : null
             );
         } catch {
+            const failureKey = "network";
+            if (lastFailureRef.current === failureKey) {
+                setIsOffline(true);
+                setLoading(false);
+                return;
+            }
+
+            lastFailureRef.current = failureKey;
             setIsOffline(true);
             setError(
                 cacheRef.current
@@ -1046,6 +1069,7 @@ export default function Nepse() {
                     : "Data feed unavailable"
             );
         } finally {
+            fetchCoreInFlightRef.current = false;
             setLoading(false);
         }
     }, []);
@@ -1078,9 +1102,28 @@ export default function Nepse() {
                 return;
             }
 
+            if (typeof navigator !== "undefined" && navigator.onLine === false) {
+                return;
+            }
+
             intervalId = window.setInterval(() => {
-                void fetchCore();
+                if (document.visibilityState === "visible" && (typeof navigator === "undefined" || navigator.onLine !== false)) {
+                    void fetchCore();
+                }
             }, REFRESH_INTERVAL);
+        };
+
+        const handleOffline = () => {
+            clearPolling();
+            setIsOffline(true);
+        };
+
+        const handleOnline = () => {
+            setIsOffline(false);
+            if (document.visibilityState === "visible") {
+                void fetchCore({ force: true });
+            }
+            startPolling();
         };
 
         const handleVisibilityChange = () => {
@@ -1095,10 +1138,14 @@ export default function Nepse() {
 
         void fetchCore({ force: true });
         startPolling();
+        window.addEventListener("offline", handleOffline);
+        window.addEventListener("online", handleOnline);
         document.addEventListener("visibilitychange", handleVisibilityChange);
 
         return () => {
             clearPolling();
+            window.removeEventListener("offline", handleOffline);
+            window.removeEventListener("online", handleOnline);
             document.removeEventListener("visibilitychange", handleVisibilityChange);
         };
     }, [fetchCore]);

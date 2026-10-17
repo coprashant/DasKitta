@@ -341,7 +341,7 @@ const IPOApply = () => {
                     refreshNotifications();
                 }
             },
-            async (err) => {
+            async () => {
                 if (!mountedRef.current || !applyingRef.current || activeJobRef.current !== jobId) {
                     return;
                 }
@@ -962,7 +962,7 @@ const IPOApply = () => {
 
         if (!hasPrimary) {
             const fallbackEntry = Object.entries(groupedIpos).find(
-                ([cat, items]) => Array.isArray(items) && items.length > 0
+                ([, items]) => Array.isArray(items) && items.length > 0
             );
             if (fallbackEntry) {
                 activeCategory = fallbackEntry[0];
@@ -970,7 +970,7 @@ const IPOApply = () => {
             }
         }
         const otherCategories = Object.entries(groupedIpos).filter(
-            ([cat, items]) => cat !== activeCategory && Array.isArray(items) && items.length > 0
+            ([category, items]) => category !== activeCategory && Array.isArray(items) && items.length > 0
         );
 
         const otherCount = otherCategories.reduce(

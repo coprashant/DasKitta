@@ -106,7 +106,7 @@ const Auth = () => {
         if (background) {
             navigate(background.pathname + background.search + background.hash, { replace: true });
         } else {
-            navigate("/", { replace: true });
+            navigate("/dashboard", { replace: true });
         }
     };
 
