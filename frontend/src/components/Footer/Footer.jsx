@@ -4,6 +4,26 @@ import { usePWAInstall } from "../PWAInstall.js";
 import { ArrowIcon, CodeIcon } from "../Icons.jsx";
 import "./Footer.css";
 
+const resourceGroups = [
+  {
+    title: "Trading & accounts",
+    links: [
+      { label: "MeroShare", href: "https://meroshare.cdsc.com.np/" },
+      { label: "NEPSE", href: "https://www.nepalstock.com.np/" },
+      { label: "Find your TMS", href: "https://www.nepalstock.com.np/brokers", title: "NEPSE broker directory for your broker's TMS" },
+      { label: "IPO allotment results", href: "https://iporesult.cdsc.com.np/" },
+    ],
+  },
+  {
+    title: "Investor resources",
+    links: [
+      { label: "CDSC", href: "https://cdsc.com.np/" },
+      { label: "SEBON", href: "https://www.sebon.gov.np/" },
+      { label: "Nepal Rastra Bank", href: "https://www.nrb.org.np/" },
+    ],
+  },
+];
+
 const Footer = () => {
   const { user } = useAuth();
   const { isInstallable, handleInstallClick } = usePWAInstall();
@@ -18,30 +38,8 @@ const Footer = () => {
               !isHomePage ? " hide-on-mobile" : ""
           }`}
       >
-        {/* compact link row mobile only */}
-        <nav className="footer-mobile-bar" aria-label="Quick links">
-          {user ? (
-              <Link to="/history" className="footer-mobile-link">
-                History
-              </Link>
-          ) : (
-              <Link to="/nepse" className="footer-mobile-link">
-                Nepse
-              </Link>
-          )}
-          <Link to="/privacy" className="footer-mobile-link">
-            Privacy
-          </Link>
-          <Link to="/terms" className="footer-mobile-link">
-            Terms
-          </Link>
-          <Link to="/disclaimer" className="footer-mobile-link">
-            Disclaimer
-          </Link>
-        </nav>
-
         <div className="footer-inner">
-          {/* Brand Header */}
+          <div className="footer-main">
           <div className="footer-brand">
             <Link to="/" className="footer-logo-link">
               <img
@@ -54,8 +52,9 @@ const Footer = () => {
             <span className="footer-tagline">Built for NEPSE investors.</span>
           </div>
 
-          {/* Navigation and Legal Links */}
-          <nav className="footer-links" aria-label="Footer Navigation">
+          <nav className="footer-links" aria-label="DasKitta">
+            <h2 className="footer-heading">DasKitta</h2>
+            <Link to="/nepse" className="footer-link">NEPSE market</Link>
             {user ? (
                 <>
                   <Link to="/dashboard" className="footer-link">
@@ -75,18 +74,6 @@ const Footer = () => {
                   </Link>
                 </>
             )}
-
-            {/* Legal Links */}
-            <Link to="/privacy" className="footer-link">
-              Privacy Policy
-            </Link>
-            <Link to="/terms" className="footer-link">
-              Terms of Service
-            </Link>
-            <Link to="/disclaimer" className="footer-link">
-              Disclaimer
-            </Link>
-
             {isInstallable && (
                 <button
                     type="button"
@@ -96,7 +83,38 @@ const Footer = () => {
                   Install App
                 </button>
             )}
+          </nav>
 
+          {resourceGroups.map(({ title, links }) => (
+            <nav className="footer-links" aria-label={title} key={title}>
+              <h2 className="footer-heading">{title}</h2>
+              {links.map(({ label, href, title: linkTitle }) => (
+                <a
+                  key={href}
+                  className="footer-link footer-external-link"
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={linkTitle || `${label} (opens in a new tab)`}
+                >
+                  <span>{label}</span>
+                  <span className="footer-external-icon" aria-hidden="true"><ArrowIcon /></span>
+                  <span className="footer-sr-only"> (opens in a new tab)</span>
+                </a>
+              ))}
+            </nav>
+          ))}
+          </div>
+
+          <div className="footer-bottom">
+            <p className="footer-copy">
+              &copy; {new Date().getFullYear()} DasKitta
+            </p>
+            <nav className="footer-legal" aria-label="Legal">
+              <Link to="/privacy" className="footer-link">Privacy Policy</Link>
+              <Link to="/terms" className="footer-link">Terms of Service</Link>
+              <Link to="/disclaimer" className="footer-link">Disclaimer</Link>
+            </nav>
             <a
                 className="footer-link footer-link--dev"
                 href="https://prasant-bhattarai.com.np"
@@ -108,12 +126,7 @@ const Footer = () => {
               <span className="dev-name">Prasant Bhattarai</span>
               <ArrowIcon />
             </a>
-          </nav>
-
-          {/* Copyright */}
-          <p className="footer-copy">
-            &copy; {new Date().getFullYear()} DasKitta
-          </p>
+          </div>
         </div>
       </footer>
   );
